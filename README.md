@@ -3,7 +3,7 @@
 **Synapse** is an AI-powered Knowledge Graph extraction and GraphRAG exploration platform. 
 It ingests unstructured documents (like PDFs, CVs, and technical docs), processes them through Large Language Models (LLMs), and automatically builds a queryable Neo4j property graph of entities and relationships.
 
-![Project Synapse Dashboard](./screenshot.png)
+![Project Synapse Dashboard](./synpase_project.png)
 
 Featuring a highly utilitarian, Vercel/Linear-inspired SaaS UI, Synapse allows you to chat directly with your entire connected knowledge base.
 
