@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.18
+pypdf==5.1.0
+langchain==0.3.14
+langchain-ollama==0.2.3
+langchain-community==0.3.14
+neo4j==5.27.0
+python-dotenv==1.0.1
+pydantic-settings==2.7.0

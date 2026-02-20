@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/* ── Base Styles (Linear/Vercel Practical SaaS) ── */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #09090b;
+  /* zinc-950 */
+  color: #fafafa;
+  /* zinc-50 */
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+/* ── Typography Fullbacks ───────────────────────── */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+/* ── Scrollbar ──────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  /* zinc-800 */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+  /* zinc-700 */
+}
+
+/* ── Linear Loading Bar (Vercel Style) ──────────── */
+.loading-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 100%;
+  background: transparent;
+  overflow: hidden;
+  z-index: 50;
+}
+
+.loading-indicator {
+  position: absolute;
+  height: 100%;
+  width: 30%;
+  background: #fafafa;
+  /* stark white */
+  animation: indeterminate 1.5s infinite linear;
+}
+
+@keyframes indeterminate {
+  0% {
+    left: -30%;
+    width: 30%;
+  }
+
+  100% {
+    left: 100%;
+    width: 30%;
+  }
+}
+
+/* ── Custom Utilities ───────────────────────────── */
+.glass-border {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}

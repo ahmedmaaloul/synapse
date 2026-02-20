@@ -1,0 +1,1 @@
+# Project Synapse — FastAPI Backend
