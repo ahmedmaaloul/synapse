@@ -14,7 +14,7 @@ langchain==0.3.14
 langchain-core>=0.3.33,<0.4
 langchain-community==0.3.14
 langchain-ollama==0.2.3          # local models
-langchain-google-genai>=2.0,<3   # Google Gemini (cloud)
+langchain-google-genai>=4.2.7,<5   # Google Gemini (cloud)
 langchain-anthropic>=0.3,<0.4    # Anthropic Claude (cloud)
 # langchain-openai also powers LLM_PROVIDER=azure_openai and, via a custom
 # base_url, LLM_PROVIDER=openai_compatible (OpenRouter / Together / DeepSeek /
