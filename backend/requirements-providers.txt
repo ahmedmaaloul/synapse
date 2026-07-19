@@ -40,7 +40,7 @@
 # LOAD-BEARING guard, restated so this file is safe installed on its own.
 # The floor is raised from >=0.3.33 to >=0.3.62 (langchain-aws needs it) which
 # also collapses pip's search space to a single candidate, 0.3.63.
-langchain-core>=0.3.62,<0.4
+langchain-core>=0.3.86,<0.4
 
 # ── Google Vertex AI (GCP) ───────────────────────────
 # LLM_PROVIDER=vertex, EMBEDDING_PROVIDER=vertex

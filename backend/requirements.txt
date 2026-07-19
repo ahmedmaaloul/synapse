@@ -11,7 +11,7 @@ pypdf==5.1.0
 # bearing: without it, pip upgrades core to 1.x for the provider packages and
 # breaks langchain/community/ollama (which require core <0.4).
 langchain==0.3.14
-langchain-core>=0.3.33,<0.4
+langchain-core>=0.3.86,<0.4
 langchain-community==0.3.14
 langchain-ollama==0.2.3          # local models
 langchain-google-genai>=2.0,<3   # Google Gemini (cloud)
