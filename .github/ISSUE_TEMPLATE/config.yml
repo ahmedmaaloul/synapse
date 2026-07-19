@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 💬 Questions & ideas (Discussions)
+    url: https://github.com/ahmedmaaloul/synapse/discussions
+    about: Setup help, "how do I…", design debates, and show-and-tell. Not a bug? Start here.
+  - name: 📚 Documentation
+    url: https://github.com/ahmedmaaloul/synapse#readme
+    about: Quickstart, provider configuration, architecture and deployment guides.
+  - name: 💼 Commercial licensing
+    url: mailto:maaloulahmed25@gmail.com?subject=Synapse%20commercial%20license
+    about: Synapse is AGPL-3.0-or-later. For closed-source, proprietary or SaaS use, email Ahmed Maaloul for a commercial licence.
+  - name: 🔐 Report a security vulnerability
+    url: mailto:maaloulahmed25@gmail.com?subject=Synapse%20security%20report
+    about: Please disclose privately to Ahmed Maaloul rather than opening a public issue.

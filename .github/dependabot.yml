@@ -1,0 +1,70 @@
+# Dependabot configuration for Synapse
+# Maintainer: Ahmed Maaloul <maaloulahmed25@gmail.com>
+#
+# IMPORTANT: the LangChain stack is pinned to the langchain-core 0.3.x line
+# ("langchain-core>=0.3.33,<0.4" in backend/requirements.txt). That cap is
+# load-bearing — provider SDKs otherwise pull langchain-core 1.x and break
+# langchain / langchain-community / langchain-ollama. Major-version bumps of
+# every langchain* package are therefore ignored below and must be done by hand,
+# with `make test` and `make test-int` green before merging.
+version: 2
+updates:
+  # ── Backend (pip) ────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      langchain:
+        patterns: ["langchain*"]
+        update-types: ["minor", "patch"]
+      dev-tooling:
+        patterns: ["pytest*", "ruff", "httpx", "anyio"]
+    ignore:
+      # Never let an automated PR cross the langchain-core 0.3.x boundary.
+      - dependency-name: "langchain*"
+        update-types: ["version-update:semver-major"]
+
+  # ── Frontend (npm) ───────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      react-next:
+        patterns: ["react", "react-dom", "next", "eslint-config-next", "@types/react*"]
+      types-and-linting:
+        patterns: ["@types/*", "eslint*", "typescript"]
+        update-types: ["minor", "patch"]
+
+  # ── GitHub Actions ───────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "ci"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -15,10 +15,41 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap",
 });
 
+const SITE_TITLE = "Synapse — GraphRAG Knowledge Explorer";
+const SITE_DESCRIPTION =
+  "Turn documents into a queryable Neo4j knowledge graph and chat with it using vector-grounded GraphRAG.";
+const SITE_URL = "https://github.com/ahmedmaaloul/synapse";
+
 export const metadata: Metadata = {
-  title: "Synapse — GraphRAG Knowledge Explorer",
-  description:
-    "Turn documents into a queryable Neo4j knowledge graph and chat with it using vector-grounded GraphRAG.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  applicationName: "Synapse",
+  authors: [
+    { name: "Ahmed Maaloul", url: "https://github.com/ahmedmaaloul" },
+  ],
+  creator: "Ahmed Maaloul",
+  publisher: "Ahmed Maaloul",
+  keywords: [
+    "GraphRAG",
+    "knowledge graph",
+    "Neo4j",
+    "RAG",
+    "LLM",
+    "Ahmed Maaloul",
+  ],
+  openGraph: {
+    type: "website",
+    url: SITE_URL,
+    siteName: "Synapse",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    creator: "@ahmedmaaloul",
+  },
 };
 
 export default function RootLayout({

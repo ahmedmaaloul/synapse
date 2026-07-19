@@ -16,12 +16,26 @@ langchain-community==0.3.14
 langchain-ollama==0.2.3          # local models
 langchain-google-genai>=2.0,<3   # Google Gemini (cloud)
 langchain-anthropic>=0.3,<0.4    # Anthropic Claude (cloud)
+# langchain-openai also powers LLM_PROVIDER=azure_openai and, via a custom
+# base_url, LLM_PROVIDER=openai_compatible (OpenRouter / Together / DeepSeek /
+# Fireworks / vLLM / LM Studio / llama.cpp). The <0.4 cap keeps core on 0.3.x —
+# langchain-openai 1.x requires langchain-core 1.x.
+langchain-openai>=0.3,<0.4       # OpenAI + Azure OpenAI + OpenAI-compatible
+
+# Heavier, cloud-specific SDKs (Vertex AI, Bedrock, Groq, Mistral, Cohere) are
+# opt-in — see requirements-providers.txt — so the default image stays small.
 
 # ── Embeddings (local, no API key) ──────────────────
 fastembed>=0.4,<0.8
 
 # ── Database ────────────────────────────────────────
 neo4j==5.27.0
+
+# ── Graph algorithms ────────────────────────────────
+# Louvain community detection runs in Python: the Neo4j image is
+# neo4j:5-community, which ships APOC but NOT the GDS plugin, so gds.* is
+# unavailable. networkx keeps the algorithms portable and testable.
+networkx>=3.2,<4
 
 # ── Config ──────────────────────────────────────────
 python-dotenv==1.0.1

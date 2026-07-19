@@ -16,11 +16,20 @@ type SLink = LinkObject<GraphNode, GraphLink>;
 type FGMethods = ForceGraphMethods<SNode, SLink>;
 type ForceGraphComponent = (typeof import("react-force-graph-2d"))["default"];
 
+/** Ring color for chat citations (indigo) vs. a selected community (amber). */
+const CITATION_RING = "#818cf8";
+const COMMUNITY_RING = "#fbbf24";
+const SEARCH_RING = "#fafafa";
+
 interface GraphPanelProps {
   ingesting: boolean;
   refreshSignal: number;
   clearSignal: number;
   highlightedNames: string[];
+  /** Member names of the community selected in ThemesPanel, if any. */
+  communityNames?: string[];
+  /** Title of that community, shown as an overlay badge. */
+  communityTitle?: string | null;
   focusTarget: { name: string; nonce: number } | null;
   onNodeSelected: (node: GraphNode | null) => void;
   onClearComplete?: () => void;
@@ -44,6 +53,8 @@ export default function GraphPanel({
   refreshSignal,
   clearSignal,
   highlightedNames,
+  communityNames,
+  communityTitle,
   focusTarget,
   onNodeSelected,
   onClearComplete,
@@ -160,7 +171,24 @@ export default function GraphPanel({
     [highlightedNames],
   );
 
+  // Same mechanism as citations, different accent — so a user can tell "the
+  // answer used this" apart from "this theme contains this".
+  const communitySet = useMemo(
+    () => new Set((communityNames ?? []).map((n) => n.toLowerCase())),
+    [communityNames],
+  );
+
   const searchLower = search.trim().toLowerCase();
+
+  // Frame the selected community once, so picking a theme actually *shows* it.
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (!fg || communitySet.size === 0) return;
+    const inCommunity = (node: SNode) =>
+      communitySet.has(node.label.toLowerCase());
+    if (graphData.nodes.some(inCommunity)) fg.zoomToFit(600, 80, inCommunity);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [communitySet]);
 
   // ── Focus a node when a citation chip / inspector button fires ──
   useEffect(() => {
@@ -196,23 +224,40 @@ export default function GraphPanel({
       const y = node.y ?? 0;
       const active = activeTypes.size === 0 || activeTypes.has(node.type);
       const cited = citedSet.has(node.label.toLowerCase());
+      const inCommunity = communitySet.has(node.label.toLowerCase());
       const searchHit =
         searchLower !== "" && node.label.toLowerCase().includes(searchLower);
       const neighborHi =
         hoverId != null &&
         (hoverId === node.id || (neighbors.get(hoverId)?.has(node.id) ?? false));
-      const dim = !active || (hoverId != null && !neighborHi);
+      // A selected theme also dims everything outside it, so the cluster reads
+      // as a shape rather than as a handful of scattered rings.
+      const outsideCommunity = communitySet.size > 0 && !inCommunity;
+      const emphasized = cited || searchHit || inCommunity;
+      const dim =
+        !active || (hoverId != null && !neighborHi) || (outsideCommunity && !cited);
 
       const color = colorForType(node.type);
-      const r = cited || searchHit ? 6 : 4.5;
+      const r = emphasized ? 6 : 4.5;
 
       ctx.globalAlpha = dim ? 0.18 : 1;
 
-      if (cited || searchHit) {
+      if (emphasized) {
+        if (inCommunity) {
+          // Soft halo under the ring — the "premium" cue for a picked theme.
+          ctx.beginPath();
+          ctx.arc(x, y, r + 6, 0, 2 * Math.PI);
+          ctx.fillStyle = "rgba(251, 191, 36, 0.12)";
+          ctx.fill();
+        }
         ctx.beginPath();
         ctx.arc(x, y, r + 3.5, 0, 2 * Math.PI);
-        ctx.strokeStyle = cited ? "#818cf8" : "#fafafa";
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = cited
+          ? CITATION_RING
+          : inCommunity
+            ? COMMUNITY_RING
+            : SEARCH_RING;
+        ctx.lineWidth = inCommunity ? 1.8 : 1.5;
         ctx.stroke();
       }
 
@@ -225,7 +270,7 @@ export default function GraphPanel({
       ctx.stroke();
 
       const fontSize = Math.max(10 / scale, 2.6);
-      if (scale > 1.2 || cited || searchHit || neighborHi) {
+      if (scale > 1.2 || emphasized || neighborHi) {
         ctx.font = `500 ${fontSize}px var(--font-inter), sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
@@ -234,7 +279,7 @@ export default function GraphPanel({
       }
       ctx.globalAlpha = 1;
     },
-    [activeTypes, citedSet, searchLower, hoverId, neighbors],
+    [activeTypes, citedSet, communitySet, searchLower, hoverId, neighbors],
   );
 
   const linkColor = useCallback(
@@ -268,6 +313,20 @@ export default function GraphPanel({
           <h2 className="text-[12px] font-semibold uppercase tracking-wider text-[#e4e4e7]">
             Topology
           </h2>
+          {communityTitle && communitySet.size > 0 && (
+            <div className="ml-1.5 flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 py-0.5 pl-1.5 pr-2.5">
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: COMMUNITY_RING }}
+              />
+              <span className="max-w-[220px] truncate text-[11px] font-medium text-amber-200/90">
+                {communityTitle}
+              </span>
+              <span className="font-mono text-[10px] text-amber-200/50">
+                {communitySet.size}
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

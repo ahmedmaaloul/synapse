@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — FastAPI Application
+Synapse — FastAPI Application
 
 Entry point: logging, CORS, lifespan (Neo4j driver + schema bootstrap), routers,
 and health/readiness probes.
@@ -39,10 +42,16 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Neo4j driver closed")
 
 
+APP_VERSION = "0.2.0"
+AUTHOR = "Ahmed Maaloul"
+AUTHOR_EMAIL = "maaloulahmed25@gmail.com"
+REPO_URL = "https://github.com/ahmedmaaloul/synapse"
+LICENSE_ID = "AGPL-3.0-or-later"
+
 app = FastAPI(
-    title="Project Synapse API",
+    title="Synapse API",
     description="Interactive GraphRAG Knowledge Explorer",
-    version="0.2.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -78,6 +87,33 @@ app.include_router(chat.router, prefix="/api", tags=["Chat"])
 async def health():
     """Liveness probe — is the process up?"""
     return {"status": "ok", "service": "synapse-backend"}
+
+
+@app.get("/api/about", tags=["About"])
+async def about():
+    """Project, authorship and licensing metadata.
+
+    Also satisfies AGPL-3.0 §13: users interacting with this instance over a
+    network are told exactly where to obtain the corresponding source.
+    """
+    return {
+        "name": settings.app_name,
+        "version": APP_VERSION,
+        "description": "Interactive GraphRAG Knowledge Explorer",
+        "author": AUTHOR,
+        "author_email": AUTHOR_EMAIL,
+        "repository": REPO_URL,
+        "source_code": REPO_URL,
+        "license": LICENSE_ID,
+        "license_url": f"{REPO_URL}/blob/main/LICENSE",
+        "commercial_license": {
+            "required_for": "closed-source, proprietary or SaaS use",
+            "contact": AUTHOR_EMAIL,
+            "granted_by": AUTHOR,
+        },
+        "llm_provider": settings.llm_provider,
+        "embedding_provider": settings.embedding_provider,
+    }
 
 
 @app.get("/health/ready", tags=["Health"])

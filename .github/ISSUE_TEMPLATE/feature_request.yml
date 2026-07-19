@@ -1,0 +1,82 @@
+name: ✨ Feature request
+description: Suggest a capability or improvement for Synapse.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome. The bar is simple: does it make Synapse a better
+        **GraphRAG knowledge explorer** without bloating the core?
+
+        Requesting support for a new AI provider? Use the
+        [provider request template](https://github.com/ahmedmaaloul/synapse/issues/new?template=provider_request.yml) instead.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and discussions for this idea.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the friction you hit, not the solution you have in mind.
+      placeholder: |
+        When I ingest 20 documents, I can't tell which document a given entity came from,
+        so I can't scope a question to a single source.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see? Sketch the API, env var, or UI if you have one in mind.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch?
+      multiple: true
+      options:
+        - Ingestion / parsing
+        - Extraction & graph schema
+        - Embeddings / vector retrieval
+        - Retrieval quality & eval harness
+        - Chat / citations
+        - Frontend & graph visualisation
+        - API surface
+        - Deployment / DevX / CI
+        - Documentation
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried, or other designs you rejected and why.
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you be willing to implement this?
+      description: No pressure — this just helps sequencing.
+      options:
+        - "Yes, I'd like to open a PR"
+        - "Yes, with some guidance on where to start"
+        - "No, just proposing the idea"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Prior art in other GraphRAG projects, papers, mockups, links.

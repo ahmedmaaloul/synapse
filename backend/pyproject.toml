@@ -1,13 +1,35 @@
 [project]
 name = "synapse-backend"
-version = "0.2.0"
-description = "Project Synapse — GraphRAG Knowledge Explorer backend"
+version = "0.3.0"
+description = "Synapse — GraphRAG Knowledge Explorer backend"
 requires-python = ">=3.11"
+# PEP 639: an SPDX `license` expression and the legacy
+# "License :: OSI Approved :: ..." classifier are mutually exclusive —
+# setuptools>=77 hard-fails the build if both are present.
+license = "AGPL-3.0-or-later"
+license-files = ["../LICENSE", "../NOTICE"]
+authors = [{ name = "Ahmed Maaloul", email = "maaloulahmed25@gmail.com" }]
+maintainers = [{ name = "Ahmed Maaloul", email = "maaloulahmed25@gmail.com" }]
+keywords = ["graphrag", "knowledge-graph", "neo4j", "rag", "fastapi", "llm"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Framework :: FastAPI",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://github.com/ahmedmaaloul/synapse"
+Repository = "https://github.com/ahmedmaaloul/synapse"
+Issues = "https://github.com/ahmedmaaloul/synapse/issues"
+License = "https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "-q"
+# NOTE: deliberately no "-q" here. The Makefile, CI and CONTRIBUTING all invoke
+# `pytest -q`; combining the two yields `-qq`, which suppresses the
+# "N passed" summary line entirely and makes CI logs unreadable.
+addopts = ""
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = [
     "integration: end-to-end tests requiring a live Neo4j (set SYNAPSE_IT=1)",

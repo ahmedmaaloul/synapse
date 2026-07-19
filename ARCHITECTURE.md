@@ -1,6 +1,6 @@
 # Architecture
 
-Project Synapse is a GraphRAG system in three tiers: a **Next.js** client, a
+Synapse is a GraphRAG system in three tiers: a **Next.js** client, a
 **FastAPI** engine, and **Neo4j** as both the knowledge store and the retrieval
 index. This document covers the data flow, the graph model, and the design
 decisions worth defending.
@@ -22,7 +22,7 @@ flowchart TB
         API --> CE[chat_engine]
         GB --> LP[llm_provider]
         CE --> LP
-        LP --> EXT{{Gemini · Claude · Ollama}}
+        LP --> EXT{{"10 chat providers · 9 embedding providers<br/>Gemini · Claude · OpenAI · Azure · Vertex<br/>Bedrock · Groq · Mistral · Ollama · OpenAI-compatible"}}
     end
 
     subgraph Data [Neo4j 5]
@@ -35,6 +35,45 @@ flowchart TB
     CE --> VIDX
     CE --> FIDX
 ```
+
+## The provider layer
+
+Everything AI-related is funnelled through one module,
+`backend/app/services/llm_provider.py`, which exposes exactly two entry points:
+
+- `get_chat_llm(streaming=…, json_mode=…, temperature=…)` → a LangChain
+  `BaseChatModel` for the provider named by `LLM_PROVIDER`.
+- `get_embeddings()` → a LangChain `Embeddings` for `EMBEDDING_PROVIDER`.
+
+```mermaid
+flowchart LR
+    GB[graph_builder] --> F
+    CE[chat_engine] --> F
+    F[llm_provider factory] --> C{LLM_PROVIDER}
+    F --> E{EMBEDDING_PROVIDER}
+    C --> BUILTIN["shipped in requirements.txt<br/>gemini · claude · openai<br/>azure_openai · ollama<br/>openai_compatible"]
+    C --> OPTIN["requirements-providers.txt<br/>vertex · bedrock<br/>groq · mistral"]
+    E --> LOCAL["fastembed (default, keyless)<br/>ollama · fake"]
+    E --> CLOUD["gemini · openai · azure_openai<br/>vertex · bedrock · cohere"]
+```
+
+Three properties make this seam cheap to extend:
+
+- **Lazy imports.** Each provider's SDK is imported *inside* its branch, so the
+  app boots and the whole unit suite runs with none of the optional packages
+  installed.
+- **Credentials validated before the import.** A missing key raises a
+  `ProviderConfigError` naming the env var and where to get one — which also
+  means every branch is testable hermetically, with no network and no key.
+- **Cached embeddings on primitives.** `_load_embeddings` is `@lru_cache`d over
+  scalar arguments (not the `Settings` object, which isn't hashable) because
+  model init — fastembed in particular — is expensive.
+
+`openai_compatible` is a deliberate escape hatch: `ChatOpenAI` with a custom
+`base_url` covers OpenRouter, Together, DeepSeek, Fireworks, vLLM, LM Studio and
+llama.cpp with no extra dependency, so most "please add X" requests are already
+satisfied. See [CONTRIBUTING.md](./CONTRIBUTING.md#add-a-new-ai-provider-in-20-lines)
+for the walkthrough of adding a first-party branch.
 
 ## Ingestion pipeline
 
@@ -125,8 +164,10 @@ erDiagram
 
 | Decision | Why |
 | --- | --- |
-| **Provider factory with lazy imports** | The app boots even if `langchain-anthropic` isn't installed; a missing key raises an *actionable* error only when that provider is invoked — not at startup. |
+| **Provider factory with lazy imports** | The app boots even if `langchain-aws` isn't installed; a missing key raises an *actionable* error only when that provider is invoked — not at startup. Ten chat backends behind one function, selected by one env var. |
+| **Two requirements files** | `requirements.txt` ships the providers that add no weight (Gemini, Claude, OpenAI, Azure, Ollama, OpenAI-compatible). The heavy first-party SDKs — `google-cloud-aiplatform`, `boto3`, `cohere` — are opt-in via `requirements-providers.txt`, keeping the default image small. |
 | **`fastembed` as default embeddings** | Real semantic retrieval with **no API key and no GPU** — the demo works offline. A `fake` deterministic embedder keeps tests hermetic. |
+| **Pre-extracted demo graph** | `backend/scripts/seed_demo.py` loads a curated graph through the *production* write path (`ensure_schema` → `_embed_entities` → `_write_entities` → `_write_relationships`), skipping only the LLM extraction step. A fresh clone therefore shows a real, populated graph with **no API key** — see `make demo`. |
 | **SSE over WebSockets** | Streaming is one-directional (server→client). SSE is simpler, proxy-friendly, and needs no extra client library. |
 | **In-memory job bus** | Single-replica-appropriate and dependency-free. The interface is deliberately small so swapping in Redis pub/sub for horizontal scaling is mechanical. |
 | **Best-effort degradation** | No vector index yet? Fall back to full-text. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
@@ -134,11 +175,30 @@ erDiagram
 
 ## Known coupling & limits
 
-- **Embedding dimension is coupled to the model.** `EMBEDDING_DIM` must match the
-  active embedder (bge-small = 384, Gemini = 768). Changing providers requires
-  re-ingestion so vectors share a space. This is enforced by config, documented
-  in `.env.example`, and a natural place for a future migration command.
-- **Retrieval is 1-hop.** Multi-hop reasoning paths are on the roadmap.
+- **Embedding dimension is coupled to the model.** `EMBEDDING_DIM` sizes the
+  Neo4j vector index and must match the active embedder (bge-small = 384,
+  Gemini / Vertex / nomic = 768, Titan / Cohere = 1024, OpenAI
+  `text-embedding-3-small` = 1536). Changing providers requires re-ingestion (or
+  a re-run of `make demo`) so vectors share one space. This is documented in
+  `.env.example` and the README table, and is a natural place for a future
+  migration command.
+- **The dependency tree is pinned to `langchain-core` 0.3.x.** The `<0.4` cap in
+  `requirements.txt` is load-bearing: provider SDKs otherwise pull core to 1.x
+  and break `langchain` / `langchain-community` / `langchain-ollama`. That cap,
+  not the code, is what bounds which provider SDK versions are reachable —
+  `requirements-providers.txt` documents the resolution per package.
+- **Retrieval is bounded to `retrieval_max_hops` (default 2).** Deeper traversal is
+  possible but the path search is deliberately capped: on a dense graph the
+  candidate-path count grows fast, and beyond two hops the retrieved context
+  starts adding noise rather than evidence.
+- **Community detection runs in Python, not Neo4j.** The shipped
+  `neo4j:5-community` image has APOC but *not* the Graph Data Science plugin, so
+  `gds.louvain` is unavailable. We use `networkx` (`seed=42`, sorted input rows)
+  which is dependency-light, portable, and reproducible. For very large graphs,
+  moving to GDS is the natural scale-up.
+- **Entity resolution is conservative by design.** A merge needs *two* agreeing
+  signals and identical entity types, because a wrong merge silently corrupts the
+  graph while a missed merge only leaves a duplicate.
 - **Job state is per-process.** Fine for one backend replica; see the bus note above.
 
 ## Scaling notes

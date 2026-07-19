@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """End-to-end GraphRAG data-layer test against a REAL Neo4j.
 
 Exercises the parts that mocks can't prove: vector index creation, writing node

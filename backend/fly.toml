@@ -1,13 +1,23 @@
 # Fly.io deployment for the Synapse backend.
-# Usage:
-#   fly launch --no-deploy         # once, to create the app
-#   fly secrets set GOOGLE_API_KEY=... NEO4J_URI=... NEO4J_PASSWORD=...
-#   fly deploy
+#
+# IMPORTANT — run every command from the REPO ROOT, not from ./backend.
+# `fly deploy` uses the directory containing fly.toml as the Docker build
+# context by default, but backend/Dockerfile now builds from the repo root so
+# it can `COPY LICENSE NOTICE` (required by NOTICE for container images).
+# Deploying from ./backend would put those files outside the context and the
+# build would fail. Pass --config/--dockerfile so the context stays the root:
+#
+#   fly launch --no-deploy --config backend/fly.toml
+#   fly secrets set --config backend/fly.toml GOOGLE_API_KEY=... NEO4J_URI=... NEO4J_PASSWORD=...
+#   fly deploy --config backend/fly.toml --dockerfile backend/Dockerfile
+#
+# See DEPLOYMENT.md § "Backend — Fly.io".
 app = "synapse-backend"
 primary_region = "cdg"
 
 [build]
-  dockerfile = "Dockerfile"
+  # Relative to the build context (the repo root), not to this file.
+  dockerfile = "backend/Dockerfile"
 
 [env]
   LLM_PROVIDER = "gemini"

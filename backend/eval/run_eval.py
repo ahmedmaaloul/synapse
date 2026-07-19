@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — Retrieval Evaluation Harness
+Synapse — Retrieval Evaluation Harness
 
 Measures how well hybrid GraphRAG retrieval surfaces the *right* entities for a
 question. Seeds a fixture graph into Neo4j, runs ``retrieve_subgraph`` for each

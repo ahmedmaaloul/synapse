@@ -1,0 +1,91 @@
+================================================================================
+                                SYNAPSE
+                             ATTRIBUTION NOTICE
+================================================================================
+
+Synapse — a GraphRAG knowledge-graph explorer (FastAPI + Neo4j + Next.js)
+
+Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+
+Canonical repository: https://github.com/ahmedmaaloul/synapse
+
+Licensed under the GNU Affero General Public License, version 3 or later.
+SPDX-License-Identifier: AGPL-3.0-or-later
+
+--------------------------------------------------------------------------------
+LICENSE
+--------------------------------------------------------------------------------
+
+This product is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version.
+
+This product is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License along
+with this product, in the file named LICENSE. If not, see
+<https://www.gnu.org/licenses/>.
+
+If you run a modified version of this software as a network service, AGPL
+section 13 requires you to offer its users access to the complete corresponding
+source code of your modified version.
+
+A separate commercial license, which removes the AGPL copyleft obligations, is
+available from the copyright holder for closed-source and proprietary use. It
+can be granted only by Ahmed Maaloul. See COMMERCIAL-LICENSE.md, or contact
+maaloulahmed25@gmail.com.
+
+--------------------------------------------------------------------------------
+ATTRIBUTION REQUIREMENT
+--------------------------------------------------------------------------------
+
+Attribution to Ahmed Maaloul is a condition of the license and MUST be
+preserved. Specifically:
+
+  1. This NOTICE file, the LICENSE file, and all copyright notices in the
+     source code MUST be retained, unmodified and unobscured, in:
+       - all copies of this software, in source or binary form;
+       - all forks and mirrors;
+       - all modified versions and derivative works;
+       - all distributions, packages, container images, and bundles that
+         include this software or a substantial part of it.
+
+  2. If your product, fork, or deployment presents a user-facing "About",
+     "Credits", "Legal", "Open Source Licenses", or equivalent surface, it MUST
+     include an attribution substantially in the following form:
+
+         Based on Synapse
+         Copyright (c) 2026 Ahmed Maaloul
+         https://github.com/ahmedmaaloul/synapse
+         Licensed under AGPL-3.0-or-later
+
+     If your product has no such surface, the attribution MUST appear in the
+     accompanying documentation (for example, the README).
+
+  3. If you modify this software, you MUST carry forward the notices above and
+     mark your own changes as yours, as required by AGPL section 5. You may add
+     your own copyright notice for your contributions; you may not remove or
+     replace the copyright notice of Ahmed Maaloul.
+
+  4. Removing, replacing, or obscuring this attribution terminates your rights
+     under the license (see AGPL section 8).
+
+Nothing in this NOTICE grants permission to use the name "Synapse" or
+the name of the author to endorse or promote derived products. Factual
+statements of origin ("derived from Synapse") are always permitted and
+encouraged.
+
+--------------------------------------------------------------------------------
+THIRD-PARTY COMPONENTS
+--------------------------------------------------------------------------------
+
+This product includes third-party open source software, each governed by its
+own license. Those licenses continue to apply to their respective components
+and are unaffected by this NOTICE. See the dependency manifests
+(backend/requirements.txt and frontend/package.json) for the authoritative
+list of dependencies.
+
+================================================================================

@@ -27,8 +27,10 @@ services:
   # ──────────────────────────────────────────────
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      # Repo root, NOT ./backend — the image has to COPY LICENSE and NOTICE,
+      # which live at the root. See .dockerignore for what's kept out.
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: synapse-backend
     ports:
       # Override BACKEND_PORT in .env if 8000 is taken by another project.
@@ -57,8 +59,9 @@ services:
   # ──────────────────────────────────────────────
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      # Repo root, NOT ./frontend — same LICENSE/NOTICE reason as the backend.
+      context: .
+      dockerfile: frontend/Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: synapse-frontend

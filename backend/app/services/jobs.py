@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — In-memory Job Bus
+Synapse — In-memory Job Bus
 
 A tiny pub/sub so a long-running ingestion (background task) can stream progress
 events to a Server-Sent-Events endpoint the browser subscribes to.

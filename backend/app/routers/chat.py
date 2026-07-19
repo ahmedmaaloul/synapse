@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — Chat Router
+Synapse — Chat Router
 
 GraphRAG conversational endpoint. Streams Server-Sent Events so the client
 receives, in order: a ``citations`` event (entities that ground the answer),

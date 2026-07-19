@@ -1,0 +1,100 @@
+{
+  // Synapse — one-click dev environment (GitHub Codespaces / VS Code Dev Containers).
+  // Maintainer: Ahmed Maaloul <maaloulahmed25@gmail.com>
+  //
+  // Open in Codespaces, wait for postCreate, then:
+  //   docker compose up -d neo4j     # graph database
+  //   make backend-dev               # FastAPI on :8000  (needs NEO4J_URI=bolt://localhost:7687)
+  //   make frontend-dev              # Next.js on :3000
+  // Everything runs with EMBEDDING_PROVIDER=fastembed by default — no API key needed to boot.
+  "name": "Synapse (GraphRAG)",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.12",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "dockerDashComposeVersion": "v2"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "forwardPorts": [3000, 8000, 7474, 7687],
+  "portsAttributes": {
+    "3000": { "label": "Frontend · Next.js UI", "onAutoForward": "openPreview" },
+    "8000": { "label": "Backend · FastAPI (/docs)", "onAutoForward": "notify" },
+    "7474": { "label": "Neo4j Browser", "onAutoForward": "silent" },
+    "7687": { "label": "Neo4j Bolt", "onAutoForward": "silent" }
+  },
+
+  // Backend deps (runtime + dev), frontend deps, and a ready-to-edit .env.
+  "postCreateCommand": "bash -lc 'set -e; [ -f .env ] || cp .env.example .env; python -m pip install --upgrade pip; pip install -r backend/requirements.txt -r backend/requirements-dev.txt; npm --prefix frontend ci || npm --prefix frontend install; echo \"\\nSynapse ready. Next: docker compose up -d neo4j && make backend-dev\"'",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "charliermarsh.ruff",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "neo4j-extensions.neo4j-for-vscode",
+        "redhat.vscode-yaml",
+        "editorconfig.editorconfig",
+        "github.vscode-github-actions",
+        "bierner.markdown-mermaid"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/python/current/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["backend/tests"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll": "explicit",
+          "source.organizeImports": "explicit"
+        },
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        },
+        "[typescript]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "[typescriptreact]": { "editor.defaultFormatter": "esbenp.prettier-vscode" },
+        "files.eol": "\n",
+        "files.exclude": {
+          "**/__pycache__": true,
+          "**/.pytest_cache": true,
+          "**/.ruff_cache": true,
+          "**/.next": true
+        }
+      }
+    }
+  },
+
+  "remoteEnv": {
+    // Inside the devcontainer the API runs next to Neo4j on localhost, not on the
+    // compose network — so override the Docker-facing default from .env.example.
+    "NEO4J_URI": "bolt://localhost:7687",
+    "NEO4J_USER": "neo4j",
+    "NEO4J_PASSWORD": "synapse_secret",
+    "EMBEDDING_PROVIDER": "fastembed",
+    "EMBEDDING_DIM": "384",
+    "NEXT_PUBLIC_API_URL": "http://localhost:8000",
+    "PYTHONDONTWRITEBYTECODE": "1"
+  },
+
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "8gb",
+    "storage": "32gb"
+  },
+
+  "remoteUser": "vscode"
+}

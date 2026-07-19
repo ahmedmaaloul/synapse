@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — Neo4j Driver
+Synapse — Neo4j Driver
 Manages the Neo4j async driver lifecycle.
 """
 

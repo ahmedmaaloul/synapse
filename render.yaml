@@ -5,8 +5,10 @@ services:
   - type: web
     name: synapse-backend
     runtime: docker
+    # Context is the repo root (not ./backend) so the image can COPY the
+    # root-level LICENSE and NOTICE, as NOTICE requires for container images.
     dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerContext: .
     healthCheckPath: /health
     plan: starter
     envVars:

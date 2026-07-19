@@ -1,0 +1,72 @@
+# Synapse — OPTIONAL AI provider SDKs
+# ============================================
+# These are NOT needed to run Synapse. requirements.txt already ships the
+# "batteries-included" providers:
+#
+#   LLM_PROVIDER = gemini | claude | ollama | openai | azure_openai
+#                | openai_compatible
+#
+# openai_compatible is deliberately powerful: it is ChatOpenAI pointed at a
+# custom OPENAI_COMPATIBLE_BASE_URL, so OpenRouter, Together, DeepSeek,
+# Fireworks, vLLM, LM Studio and llama.cpp all work with zero extra installs.
+#
+# Install this file only if you want a first-party cloud SDK — Vertex AI,
+# Bedrock, Groq, Mistral or Cohere. They pull large transitive trees
+# (google-cloud-aiplatform, boto3, cohere, …), which is why they stay out of
+# the default Docker image.
+#
+#   pip install -r backend/requirements.txt            # always
+#   pip install -r backend/requirements-providers.txt  # opt-in extras
+#
+# ── Why exact pins, and why not the latest releases? ─────────────────────────
+# The whole stack is held on the langchain-core 0.3.x line (see requirements.txt).
+# Two chained constraints decide exactly which core version that is:
+#
+#   langchain==0.3.14 / langchain-community==0.3.14  →  langsmith<0.3
+#   langchain-core>=0.3.64                           →  langsmith>=0.3.45
+#
+# ...so langchain-core 0.3.63 is the ceiling. Every provider release that
+# requires core>=0.3.64 is therefore unreachable here, and every 1.x release
+# requires core>=1.0, which would break langchain/community/ollama outright.
+# The pins below are the NEWEST version of each SDK that resolves against
+# langchain-core 0.3.63. They are exact because open ranges make pip explore
+# the entire langchain 0.3 matrix and abort with "resolution-too-deep".
+#
+# To move to newer provider SDKs you must first relax langchain and
+# langchain-community in requirements.txt (their langsmith<0.3 cap is the real
+# blocker) — deliberately not done here, as those pins are load-bearing for the
+# rest of the app.
+
+# LOAD-BEARING guard, restated so this file is safe installed on its own.
+# The floor is raised from >=0.3.33 to >=0.3.62 (langchain-aws needs it) which
+# also collapses pip's search space to a single candidate, 0.3.63.
+langchain-core>=0.3.62,<0.4
+
+# ── Google Vertex AI (GCP) ───────────────────────────
+# LLM_PROVIDER=vertex, EMBEDDING_PROVIDER=vertex
+# Auth: `gcloud auth application-default login`, or GOOGLE_APPLICATION_CREDENTIALS.
+# 2.0.25+ requires langchain-core>=0.3.65; 3.x requires core 1.x.
+langchain-google-vertexai==2.0.24
+
+# ── AWS Bedrock ──────────────────────────────────────
+# LLM_PROVIDER=bedrock (ChatBedrockConverse), EMBEDDING_PROVIDER=bedrock
+# Auth: the standard AWS chain (env keys, AWS_PROFILE, or an instance role).
+# 0.2.25+ requires langchain-core>=0.3.64; 1.x requires core 1.x.
+langchain-aws==0.2.24
+
+# ── Groq (fast open-weights inference) ───────────────
+# LLM_PROVIDER=groq — key: https://console.groq.com/keys
+# 0.3.3+ requires langchain-core>=0.3.66; 1.x requires core 1.x.
+langchain-groq==0.3.2
+
+# ── Mistral AI ───────────────────────────────────────
+# LLM_PROVIDER=mistral — key: https://console.mistral.ai/api-keys/
+# 0.2.11+ requires langchain-core>=0.3.68; 1.x requires core 1.x.
+langchain-mistralai==0.2.10
+
+# ── Cohere (embeddings) ──────────────────────────────
+# EMBEDDING_PROVIDER=cohere — key: https://dashboard.cohere.com/api-keys
+# Depends on langchain-community>=0.3.0, already pinned to 0.3.14 by
+# requirements.txt — install that file first (or both together) so its pin wins.
+# 0.4.6 requires langchain-core>=0.3.76; 0.5+ requires core 1.x.
+langchain-cohere==0.4.5

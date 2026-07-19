@@ -3,8 +3,8 @@
 import { useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Loader2, Upload } from "lucide-react";
 import { subscribeIngest, uploadDocument } from "../lib/api";
-import { INGEST_STAGE_LABEL, THEMES } from "../lib/constants";
-import type { IngestResult, Theme } from "../lib/types";
+import { INGEST_STAGE_LABEL, INGEST_STAGE_PCT, THEMES } from "../lib/constants";
+import type { IngestResult, IngestStage, Theme } from "../lib/types";
 
 interface FileUploadProps {
   onComplete: (result: IngestResult) => void;
@@ -15,24 +15,31 @@ interface Progress {
   stage: string;
   processed?: number;
   total?: number;
+  /** "resolving_entities" only — duplicate entities collapsed so far. */
+  merged?: number;
   pct: number;
 }
 
-// Rough mapping of pipeline stages onto a 0–100 bar.
-function computePct(stage: string, processed?: number, total?: number): number {
+/**
+ * Map a pipeline stage onto the 0–100 bar.
+ *
+ * Only "extracting" is fraction-driven (it dominates the wall-clock cost); the
+ * later stages snap to fixed, increasing slots from `INGEST_STAGE_PCT`. An
+ * unknown stage holds the previous value rather than resetting to 0 — a bar
+ * that rewinds mid-ingest reads as a failure.
+ */
+function computePct(
+  stage: string,
+  processed?: number,
+  total?: number,
+  previous = 0,
+): number {
   const frac = total && total > 0 ? (processed ?? 0) / total : 0;
-  switch (stage) {
-    case "extracting":
-      return Math.round(frac * 70);
-    case "embedding":
-      return 75;
-    case "writing_nodes":
-      return 88;
-    case "writing_edges":
-      return 96;
-    default:
-      return 0;
+  if (stage === "extracting") {
+    return Math.max(previous, Math.round(frac * INGEST_STAGE_PCT.extracting));
   }
+  const slot = INGEST_STAGE_PCT[stage as IngestStage];
+  return Math.max(previous, slot ?? previous);
 }
 
 export default function FileUpload({
@@ -63,12 +70,18 @@ export default function FileUpload({
 
       await subscribeIngest(job.job_id, (event) => {
         if (event.type === "progress") {
-          setProgress({
+          setProgress((prev) => ({
             stage: event.stage,
             processed: event.processed,
             total: event.total,
-            pct: computePct(event.stage, event.processed, event.total),
-          });
+            merged: event.merged,
+            pct: computePct(
+              event.stage,
+              event.processed,
+              event.total,
+              prev?.pct ?? 0,
+            ),
+          }));
         } else if (event.type === "done") {
           const result = event.data as IngestResult;
           setProgress({ stage: "done", pct: 100 });
@@ -161,7 +174,9 @@ export default function FileUpload({
             <span className="font-mono text-[#71717a]">
               {progress.stage === "extracting" && progress.total
                 ? `${progress.processed ?? 0}/${progress.total}`
-                : `${progress.pct}%`}
+                : progress.stage === "resolving_entities" && progress.merged
+                  ? `−${progress.merged}`
+                  : `${progress.pct}%`}
             </span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#18181b]">

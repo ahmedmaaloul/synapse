@@ -1,0 +1,165 @@
+name: 🐛 Bug report
+description: Something in Synapse behaves incorrectly — ingestion, retrieval, graph, or UI.
+title: "bug: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug against **Synapse**.
+
+        Before you start, two quick things that resolve most reports:
+        - Check the [open issues](https://github.com/ahmedmaaloul/synapse/issues) for a duplicate.
+        - Re-run with `EMBEDDING_PROVIDER=fastembed` (local, no API key) to rule out a provider quota/auth problem.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: I searched existing issues and this is not a duplicate.
+          required: true
+        - label: I am running the latest `main` (or I state the version/commit below).
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear, concise description of the bug and what you expected instead.
+      placeholder: |
+        Uploading a 40-page PDF finishes ingestion, but the graph view stays empty.
+        I expected the extracted entities to render after the SSE job reports "done".
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, ordered steps. Include the document/question if the bug is content-dependent.
+      placeholder: |
+        1. `cp .env.example .env`, set `LLM_PROVIDER=gemini` + `GOOGLE_API_KEY`
+        2. `docker compose up -d --build`
+        3. Upload `paper.pdf` at http://localhost:3000
+        4. Wait for progress to reach 100%
+        5. Graph panel renders 0 nodes
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the pipeline?
+      description: Best guess is fine — this only helps with triage.
+      options:
+        - Ingestion (PDF parsing / chunking)
+        - Extraction (LLM entity & relationship extraction)
+        - Embeddings / vector index
+        - Retrieval (hybrid vector + full-text)
+        - Chat / answer generation / citations
+        - Graph visualisation (frontend)
+        - SSE streaming (progress or tokens)
+        - Docker / deployment / config
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: llm_provider
+    attributes:
+      label: LLM provider in use
+      description: The value of `LLM_PROVIDER` in your `.env`.
+      options:
+        - gemini
+        - claude
+        - openai
+        - azure_openai
+        - vertex
+        - bedrock
+        - groq
+        - mistral
+        - ollama
+        - openai_compatible
+        - not applicable / unknown
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Chat model
+      description: The exact model id you configured (e.g. `gemini-flash-latest`, `claude-sonnet-5`, `mistral`).
+      placeholder: gemini-flash-latest
+
+  - type: dropdown
+    id: embedding_provider
+    attributes:
+      label: Embedding provider
+      description: The value of `EMBEDDING_PROVIDER`. Remember `EMBEDDING_DIM` must match the model.
+      options:
+        - fastembed (local default, 384-dim)
+        - gemini
+        - ollama
+        - fake (tests only)
+        - other / not listed
+        - unknown
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running Synapse?
+      options:
+        - Docker Compose (`make up`)
+        - Local dev (`make backend-dev` / `make frontend-dev`)
+        - Hosted / cloud (Render, Fly.io, other)
+        - GitHub Codespaces / devcontainer
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: neo4j_version
+    attributes:
+      label: Neo4j version
+      description: "`neo4j:5-community` is the bundled default. Run `docker exec synapse-neo4j neo4j --version` if unsure."
+      placeholder: "5-community (bundled)"
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: OS, Python and Node versions
+      description: Only needed if you are running outside Docker.
+      placeholder: "macOS 15.5 · Python 3.12.4 · Node 20.11"
+
+  - type: input
+    id: version
+    attributes:
+      label: Synapse version or commit SHA
+      placeholder: "0.3.0 / 91ee2f2"
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: |
+        Backend logs (`docker compose logs backend` or `make logs`), plus the browser console for UI bugs.
+        This is automatically formatted as code — no backticks needed.
+        **Redact your API keys before pasting.**
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Screenshots, a sample PDF, the failing question, or a link to your fork.

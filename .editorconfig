@@ -1,0 +1,47 @@
+# EditorConfig — https://editorconfig.org
+# Synapse · maintained by Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Keeps whitespace consistent across editors so diffs stay about the code.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+max_line_length = 100
+
+# ── Python: 4 spaces, ruff enforces the rest (line-length 100) ──
+[*.{py,pyi}]
+indent_size = 4
+
+# ── TypeScript / JavaScript / styles ──
+[*.{ts,tsx,js,jsx,mjs,cjs,css,scss}]
+indent_size = 2
+
+# ── Data & config ──
+[*.{json,jsonc,json5,yml,yaml,toml}]
+indent_size = 2
+
+# ── Shell & Docker ──
+[*.{sh,bash,zsh}]
+indent_size = 2
+[{Dockerfile,Dockerfile.*,*.dockerfile}]
+indent_size = 2
+
+# ── Makefiles require literal tabs ──
+[{Makefile,makefile,*.mk}]
+indent_style = tab
+indent_size = 4
+
+# ── Markdown: trailing double-space is a hard line break ──
+[*.md]
+trim_trailing_whitespace = false
+max_line_length = off
+
+# ── Generated / vendored: leave exactly as the tool wrote it ──
+[{package-lock.json,*.lock,*.min.js,*.min.css}]
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_size = unset

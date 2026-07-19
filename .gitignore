@@ -1,5 +1,9 @@
-# Environments
+# Environments — never commit real credentials.
+# Covers .env, .env.local, .env.bak.<ts>, .env.production, etc.
+# .env.example is the ONLY one that must stay tracked.
 .env
+.env.*
+!.env.example
 
 # Python
 __pycache__/

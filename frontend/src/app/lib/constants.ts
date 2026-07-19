@@ -1,4 +1,4 @@
-import type { Theme } from "./types";
+import type { IngestStage, Theme } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -49,9 +49,35 @@ export const THEMES: { value: Theme; label: string }[] = [
   { value: "Business/Legal", label: "Business / Legal" },
 ];
 
+// Pipeline stage → human label. Keep in sync with `IngestStage` and with
+// `INGEST_STAGE_PCT` below; a missing stage would leave the bar unlabeled.
 export const INGEST_STAGE_LABEL: Record<string, string> = {
   extracting: "Extracting entities",
+  resolving_entities: "Resolving duplicates",
   embedding: "Embedding for retrieval",
   writing_nodes: "Writing nodes",
   writing_edges: "Linking relationships",
+  storing_chunks: "Storing source text",
+};
+
+/**
+ * Where each stage lands on the 0–100 bar.
+ *
+ * graph_builder emits, in order: extracting → embedding → resolving_entities →
+ * writing_nodes → writing_edges → done, plus a *trailing* resolving_entities
+ * event for the cross-document pass that runs after the edges are written.
+ * The slots below are non-decreasing in that order; the trailing event is
+ * absorbed by the monotonic clamp in `computePct`, which also keeps the bar
+ * honest if the pipeline is ever reordered.
+ * "extracting" is the fraction-driven ramp and owns everything up to its slot.
+ */
+export const INGEST_STAGE_PCT: Record<IngestStage, number> = {
+  extracting: 70,
+  embedding: 76,
+  resolving_entities: 82,
+  writing_nodes: 88,
+  writing_edges: 96,
+  // Source chunks are persisted after the edges are written; the trailing
+  // cross-document resolving_entities event is absorbed by the monotonic clamp.
+  storing_chunks: 98,
 };

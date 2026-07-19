@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — PDF Parser Service
+Synapse — PDF Parser Service
 
 Extracts text from a PDF and splits it into overlapping, sentence-aware chunks
 so each chunk carries enough context for good entity extraction.

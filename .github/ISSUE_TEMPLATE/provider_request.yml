@@ -1,0 +1,126 @@
+name: 🔌 New AI provider request
+description: Request (or propose) support for an LLM / embedding provider Synapse doesn't ship yet.
+title: "provider: add <provider name>"
+labels: ["provider", "enhancement", "good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Synapse is **deliberately provider-agnostic**. Chat and embedding backends live behind one
+        small factory in `backend/app/services/llm_provider.py`, selected by the `LLM_PROVIDER` /
+        `EMBEDDING_PROVIDER` env vars. Adding a provider is usually a contained change:
+
+        1. A branch in the provider factory returning a LangChain chat/embeddings object.
+        2. Settings + `.env.example` entries for its key and model.
+        3. A hermetic unit test (no network) proving the factory wires it correctly.
+        4. A row in the README provider table.
+
+        **This is one of the best first contributions to the project** — small, self-contained,
+        and immediately useful to someone else.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Pre-flight
+      options:
+        - label: This provider isn't already supported or requested in an open issue.
+          required: true
+        - label: I checked whether the provider is already usable via the OpenAI-compatible endpoint (`openai_compatible`).
+          required: true
+
+  - type: input
+    id: provider_name
+    attributes:
+      label: Provider name
+      description: The vendor or gateway you want supported.
+      placeholder: "Together AI"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: capability
+    attributes:
+      label: What should it provide?
+      multiple: true
+      options:
+        - Chat / generation (LLM_PROVIDER)
+        - Embeddings (EMBEDDING_PROVIDER)
+    validations:
+      required: true
+
+  - type: input
+    id: package
+    attributes:
+      label: LangChain integration package
+      description: |
+        The pip package that exposes it, e.g. `langchain-together`.
+        ⚠️ It **must** resolve against `langchain-core >=0.3.33,<0.4` — that cap is load-bearing for this repo.
+      placeholder: "langchain-together"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: core_compat
+    attributes:
+      label: Does it support langchain-core 0.3.x?
+      description: Check the package's own metadata on PyPI before answering.
+      options:
+        - "Yes — confirmed compatible with langchain-core 0.3.x"
+        - "No — it requires langchain-core 1.x"
+        - "Unknown / haven't checked"
+    validations:
+      required: true
+
+  - type: input
+    id: models
+    attributes:
+      label: Models you'd use
+      description: The default model ids that should be documented for this provider.
+      placeholder: "meta-llama/Llama-3.3-70B-Instruct-Turbo, BAAI/bge-large-en-v1.5 (768-dim)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How does it authenticate?
+      options:
+        - Single API key
+        - API key + endpoint/base URL
+        - Cloud IAM (AWS credentials, GCP ADC, Azure AD)
+        - No auth (local / self-hosted)
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this provider?
+      description: Cost, latency, data residency, on-prem requirement, a model only they serve — what does it unlock?
+    validations:
+      required: true
+
+  - type: input
+    id: docs
+    attributes:
+      label: Link to the provider's API docs
+      placeholder: "https://docs.example.com/api"
+
+  - type: dropdown
+    id: contribution
+    attributes:
+      label: Would you implement it?
+      options:
+        - "Yes — I'll open a PR (I have access to test it)"
+        - "Yes, if someone points me at the factory + test to copy"
+        - "No, I'm requesting it"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: embedding_dim
+    attributes:
+      label: Embeddings checklist (skip if chat-only)
+      options:
+        - label: I know the embedding dimension and understand `EMBEDDING_DIM` must match it for the Neo4j vector index.

@@ -1,0 +1,63 @@
+# Both images build from the REPO ROOT so they can COPY LICENSE and NOTICE
+# (see backend/Dockerfile and frontend/Dockerfile). That makes the whole repo
+# the build context, so everything the images don't need must be excluded here
+# or every `docker build` uploads hundreds of MB (node_modules alone is ~500MB).
+
+# VCS
+.git
+.github
+.gitignore
+
+# Secrets — never bake real credentials into a layer.
+.env
+.env.*
+!.env.example
+
+# Node / Next.js — reinstalled from package-lock.json, rebuilt in the image.
+node_modules
+**/node_modules
+.next
+**/.next
+out
+**/out
+.vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python build/caches
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+**/*.egg-info
+.venv
+venv
+env
+**/.venv
+.pytest_cache
+**/.pytest_cache
+.mypy_cache
+**/.mypy_cache
+.ruff_cache
+**/.ruff_cache
+dist
+build
+
+# Docs & screenshots — pure weight, nothing imports them.
+docs/*.png
+docs/*.jpg
+docs/*.gif
+
+# Local scratch / editor / OS noise
+.scratch
+scratch
+tmp
+.DS_Store
+.vscode
+.idea
+.devcontainer
+
+# Compose/deploy manifests aren't needed inside an image.
+docker-compose.yml
+docker-compose.*.yml

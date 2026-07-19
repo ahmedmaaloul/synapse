@@ -1,0 +1,400 @@
+{
+  "document_name": "A Brief History of Artificial Intelligence (demo)",
+  "theme": "Generic",
+  "description": "A pre-extracted knowledge graph tracing computing from Babbage's Analytical Engine to modern GraphRAG. Loaded by `python -m scripts.seed_demo` so a fresh clone shows a real graph without any AI provider key.",
+  "entities": [
+    {
+      "name": "Ada Lovelace",
+      "type": "PERSON",
+      "description": "English mathematician who published the first algorithm intended for a machine, in 1843."
+    },
+    {
+      "name": "Charles Babbage",
+      "type": "PERSON",
+      "description": "Victorian mathematician who designed the Difference and Analytical Engines."
+    },
+    {
+      "name": "Alan Turing",
+      "type": "PERSON",
+      "description": "British mathematician who formalised computation and founded modern computer science."
+    },
+    {
+      "name": "John von Neumann",
+      "type": "PERSON",
+      "description": "Hungarian-American polymath who defined the stored-program computer architecture."
+    },
+    {
+      "name": "Claude Shannon",
+      "type": "PERSON",
+      "description": "American engineer who founded information theory and digital circuit design."
+    },
+    {
+      "name": "John McCarthy",
+      "type": "PERSON",
+      "description": "Computer scientist who coined the term artificial intelligence and created Lisp."
+    },
+    {
+      "name": "Frank Rosenblatt",
+      "type": "PERSON",
+      "description": "Psychologist who built the Perceptron, the first trainable neural network machine."
+    },
+    {
+      "name": "Geoffrey Hinton",
+      "type": "PERSON",
+      "description": "Cognitive scientist known as a godfather of deep learning; Turing Award 2018."
+    },
+    {
+      "name": "Yann LeCun",
+      "type": "PERSON",
+      "description": "French computer scientist who developed convolutional neural networks."
+    },
+    {
+      "name": "Yoshua Bengio",
+      "type": "PERSON",
+      "description": "Canadian researcher whose lab advanced deep learning and neural attention."
+    },
+    {
+      "name": "Fei-Fei Li",
+      "type": "PERSON",
+      "description": "Stanford professor who created ImageNet and co-directs the Stanford HAI institute."
+    },
+    {
+      "name": "Ashish Vaswani",
+      "type": "PERSON",
+      "description": "Lead author of the 2017 paper that introduced the Transformer architecture."
+    },
+    {
+      "name": "Ilya Sutskever",
+      "type": "PERSON",
+      "description": "Deep learning researcher, AlexNet co-author and OpenAI co-founder."
+    },
+    {
+      "name": "Demis Hassabis",
+      "type": "PERSON",
+      "description": "Neuroscientist and chess prodigy who co-founded DeepMind in London."
+    },
+
+    {
+      "name": "Turing Machine",
+      "type": "CONCEPT",
+      "description": "Abstract model of computation defining what any algorithm can compute."
+    },
+    {
+      "name": "Turing Test",
+      "type": "CONCEPT",
+      "description": "Imitation game proposed in 1950 to judge machine intelligence by conversation."
+    },
+    {
+      "name": "Artificial Intelligence",
+      "type": "CONCEPT",
+      "description": "Field devoted to building machines that perform tasks requiring human intelligence."
+    },
+    {
+      "name": "Information Theory",
+      "type": "CONCEPT",
+      "description": "Mathematical theory of entropy, compression and reliable communication."
+    },
+    {
+      "name": "Perceptron",
+      "type": "CONCEPT",
+      "description": "Single-layer learning algorithm for binary classification, introduced in 1958."
+    },
+    {
+      "name": "Neural Network",
+      "type": "CONCEPT",
+      "description": "Layered network of weighted units that learns representations from data."
+    },
+    {
+      "name": "Backpropagation",
+      "type": "CONCEPT",
+      "description": "Gradient algorithm that assigns error credit through a network's layers."
+    },
+    {
+      "name": "Deep Learning",
+      "type": "CONCEPT",
+      "description": "Machine learning with many-layered neural networks trained on large datasets."
+    },
+    {
+      "name": "Convolutional Neural Network",
+      "type": "CONCEPT",
+      "description": "Network using shared convolution filters, dominant in computer vision."
+    },
+    {
+      "name": "Attention Mechanism",
+      "type": "CONCEPT",
+      "description": "Lets a model weight the most relevant parts of its input dynamically."
+    },
+    {
+      "name": "Transformer",
+      "type": "CONCEPT",
+      "description": "Attention-only architecture that parallelises sequence modelling."
+    },
+    {
+      "name": "Large Language Model",
+      "type": "CONCEPT",
+      "description": "Transformer trained on internet-scale text to predict and generate language."
+    },
+    {
+      "name": "Hallucination",
+      "type": "CONCEPT",
+      "description": "Fluent but factually wrong model output, the core reliability problem of LLMs."
+    },
+    {
+      "name": "Retrieval-Augmented Generation",
+      "type": "CONCEPT",
+      "description": "Grounding a language model on documents fetched at query time."
+    },
+    {
+      "name": "Knowledge Graph",
+      "type": "CONCEPT",
+      "description": "Graph of typed entities and relationships that machines can traverse and reason over."
+    },
+    {
+      "name": "Vector Embedding",
+      "type": "CONCEPT",
+      "description": "Dense numeric vector placing similar meanings close together in space."
+    },
+
+    {
+      "name": "Analytical Engine",
+      "type": "PROJECT",
+      "description": "Babbage's never-completed mechanical general-purpose computer, designed from 1837."
+    },
+    {
+      "name": "ENIAC",
+      "type": "PROJECT",
+      "description": "1945 US machine, the first programmable general-purpose electronic computer."
+    },
+    {
+      "name": "ImageNet",
+      "type": "PROJECT",
+      "description": "Dataset of 14 million labelled images that made large-scale vision benchmarking possible."
+    },
+    {
+      "name": "AlexNet",
+      "type": "PROJECT",
+      "description": "2012 GPU-trained network that crushed the ImageNet benchmark and launched the deep learning boom."
+    },
+    {
+      "name": "AlphaGo",
+      "type": "PROJECT",
+      "description": "DeepMind system that defeated world champion Lee Sedol at Go in 2016."
+    },
+    {
+      "name": "Attention Is All You Need",
+      "type": "PROJECT",
+      "description": "2017 paper introducing the Transformer, now the most cited work in modern AI."
+    },
+    {
+      "name": "GPT-3",
+      "type": "PROJECT",
+      "description": "175-billion-parameter model that demonstrated few-shot learning at scale in 2020."
+    },
+    {
+      "name": "Synapse",
+      "type": "PROJECT",
+      "description": "GraphRAG explorer that turns documents into a queryable Neo4j knowledge graph."
+    },
+
+    {
+      "name": "NVIDIA",
+      "type": "COMPANY",
+      "description": "Chip designer whose GPUs became the default hardware for training neural networks."
+    },
+    {
+      "name": "OpenAI",
+      "type": "COMPANY",
+      "description": "San Francisco lab behind the GPT model family and ChatGPT."
+    },
+    {
+      "name": "Anthropic",
+      "type": "COMPANY",
+      "description": "AI safety company founded in 2021, developer of the Claude model family."
+    },
+    {
+      "name": "Google DeepMind",
+      "type": "COMPANY",
+      "description": "London-founded lab behind AlphaGo, AlphaFold and the Gemini models."
+    },
+    {
+      "name": "Google Brain",
+      "type": "ORGANIZATION",
+      "description": "Google research team that produced TensorFlow and the Transformer paper."
+    },
+    {
+      "name": "Meta AI",
+      "type": "ORGANIZATION",
+      "description": "Meta's research division, home of PyTorch and the Llama open-weight models."
+    },
+
+    {
+      "name": "University of Cambridge",
+      "type": "UNIVERSITY",
+      "description": "English university where Turing studied and Babbage held the Lucasian chair."
+    },
+    {
+      "name": "University of Toronto",
+      "type": "UNIVERSITY",
+      "description": "Canadian university whose lab produced backpropagation research and AlexNet."
+    },
+
+    {
+      "name": "Dartmouth Workshop",
+      "type": "EVENT",
+      "description": "1956 summer project that named artificial intelligence and founded the field."
+    },
+    {
+      "name": "AI Winter",
+      "type": "EVENT",
+      "description": "Periods in the 1970s and late 1980s when AI funding and interest collapsed."
+    },
+
+    {
+      "name": "Bletchley Park",
+      "type": "LOCATION",
+      "description": "Wartime British codebreaking site where Turing helped break the Enigma cipher."
+    },
+
+    {
+      "name": "GPU",
+      "type": "TOOL",
+      "description": "Massively parallel processor whose matrix throughput makes deep learning practical."
+    },
+    {
+      "name": "CUDA",
+      "type": "FRAMEWORK",
+      "description": "NVIDIA's parallel computing platform that opened GPUs to general-purpose code."
+    },
+    {
+      "name": "PyTorch",
+      "type": "FRAMEWORK",
+      "description": "Define-by-run deep learning framework that became the research standard."
+    },
+    {
+      "name": "Neo4j",
+      "type": "DATABASE",
+      "description": "Native graph database with Cypher queries, full-text and vector indexes."
+    }
+  ],
+  "relationships": [
+    { "source": "Charles Babbage", "target": "Analytical Engine", "type": "DESIGNED", "description": "Drew up the mechanical general-purpose computer from 1837 onward." },
+    { "source": "Ada Lovelace", "target": "Analytical Engine", "type": "WROTE_PROGRAM_FOR", "description": "Published notes containing the first machine algorithm." },
+    { "source": "Ada Lovelace", "target": "Charles Babbage", "type": "COLLABORATED_WITH", "description": "Translated and vastly extended Menabrea's account of his engine." },
+    { "source": "Ada Lovelace", "target": "Artificial Intelligence", "type": "ANTICIPATED", "description": "Foresaw machines manipulating symbols beyond mere numbers." },
+    { "source": "Charles Babbage", "target": "University of Cambridge", "type": "WORKED_AT", "description": "Held the Lucasian Professorship of Mathematics." },
+    { "source": "Analytical Engine", "target": "Turing Machine", "type": "PRECEDED", "description": "Mechanical design that anticipated universal computation by a century." },
+
+    { "source": "Alan Turing", "target": "Turing Machine", "type": "INVENTED", "description": "Defined the universal machine in his 1936 paper on computable numbers." },
+    { "source": "Alan Turing", "target": "Turing Test", "type": "PROPOSED", "description": "Introduced the imitation game in Computing Machinery and Intelligence." },
+    { "source": "Alan Turing", "target": "University of Cambridge", "type": "STUDIED_AT", "description": "Read mathematics at King's College and was elected a fellow at 22." },
+    { "source": "Alan Turing", "target": "Bletchley Park", "type": "WORKED_AT", "description": "Led Hut 8 and designed the Bombe against naval Enigma traffic." },
+    { "source": "Alan Turing", "target": "John von Neumann", "type": "INFLUENCED", "description": "The 1936 universality result shaped von Neumann's stored-program design." },
+    { "source": "Alan Turing", "target": "Artificial Intelligence", "type": "FOUNDED", "description": "Framed machine intelligence as a scientific question." },
+    { "source": "Turing Machine", "target": "Artificial Intelligence", "type": "FOUNDATION_OF", "description": "Gives the theoretical limits of what any AI system can compute." },
+    { "source": "Turing Machine", "target": "ENIAC", "type": "THEORETICAL_BASIS_OF", "description": "Universality justified building one machine for every task." },
+    { "source": "Turing Test", "target": "Artificial Intelligence", "type": "DEFINES_GOAL_OF", "description": "Set conversational indistinguishability as an early success criterion." },
+    { "source": "Turing Test", "target": "Large Language Model", "type": "EVALUATES", "description": "Chatbot fluency revived debate about what the test really measures." },
+    { "source": "Bletchley Park", "target": "ENIAC", "type": "CONTEMPORARY_OF", "description": "Parallel wartime computing effort on the other side of the Atlantic." },
+
+    { "source": "John von Neumann", "target": "ENIAC", "type": "CONSULTED_ON", "description": "Wrote the report that turned it into a stored-program machine." },
+    { "source": "ENIAC", "target": "Artificial Intelligence", "type": "ENABLED", "description": "Made programmable computation fast enough to attempt reasoning tasks." },
+    { "source": "ENIAC", "target": "GPU", "type": "PRECEDED", "description": "Room-sized ancestor of today's parallel accelerators." },
+
+    { "source": "Claude Shannon", "target": "Information Theory", "type": "FOUNDED", "description": "Established entropy and channel capacity in his 1948 paper." },
+    { "source": "Claude Shannon", "target": "Dartmouth Workshop", "type": "PARTICIPATED_IN", "description": "Was one of the four organisers of the 1956 meeting." },
+    { "source": "Information Theory", "target": "Artificial Intelligence", "type": "INFLUENCED", "description": "Gave the field its language of uncertainty and coding." },
+    { "source": "Information Theory", "target": "Neural Network", "type": "INFLUENCED", "description": "Cross-entropy loss comes directly from Shannon's entropy." },
+
+    { "source": "John McCarthy", "target": "Artificial Intelligence", "type": "COINED_TERM", "description": "Named the field in the 1955 Dartmouth proposal." },
+    { "source": "John McCarthy", "target": "Dartmouth Workshop", "type": "ORGANIZED", "description": "Convened the summer research project at Dartmouth College." },
+    { "source": "Dartmouth Workshop", "target": "Artificial Intelligence", "type": "LAUNCHED", "description": "Marks the conventional birth of AI as a discipline." },
+
+    { "source": "Frank Rosenblatt", "target": "Perceptron", "type": "INVENTED", "description": "Built the Mark I Perceptron at Cornell in 1958." },
+    { "source": "Perceptron", "target": "Neural Network", "type": "PRECURSOR_OF", "description": "First trainable unit that later networks stacked into layers." },
+    { "source": "Perceptron", "target": "AI Winter", "type": "CONTRIBUTED_TO", "description": "Minsky and Papert's 1969 critique of its limits helped stall funding." },
+    { "source": "AI Winter", "target": "Artificial Intelligence", "type": "SLOWED", "description": "Two funding collapses pushed neural research to the margins." },
+    { "source": "Backpropagation", "target": "AI Winter", "type": "HELPED_END", "description": "Made multi-layer networks trainable and revived the field." },
+
+    { "source": "Geoffrey Hinton", "target": "Backpropagation", "type": "POPULARIZED", "description": "Co-authored the 1986 paper that made the method mainstream." },
+    { "source": "Backpropagation", "target": "Neural Network", "type": "TRAINS", "description": "Propagates error gradients backwards to update every weight." },
+    { "source": "Neural Network", "target": "Deep Learning", "type": "FOUNDATION_OF", "description": "Deep learning is simply neural networks made deep and wide." },
+    { "source": "Geoffrey Hinton", "target": "Deep Learning", "type": "PIONEERED", "description": "One of the three researchers awarded the 2018 Turing Award for it." },
+    { "source": "Yann LeCun", "target": "Deep Learning", "type": "PIONEERED", "description": "Shared the 2018 Turing Award for deep learning breakthroughs." },
+    { "source": "Yoshua Bengio", "target": "Deep Learning", "type": "PIONEERED", "description": "Shared the 2018 Turing Award for deep learning breakthroughs." },
+    { "source": "Geoffrey Hinton", "target": "University of Toronto", "type": "WORKED_AT", "description": "Ran the lab where AlexNet and modern deep learning took shape." },
+    { "source": "Geoffrey Hinton", "target": "Yann LeCun", "type": "MENTORED", "description": "LeCun did his postdoctoral work in Hinton's Toronto lab." },
+    { "source": "Geoffrey Hinton", "target": "Ilya Sutskever", "type": "ADVISED", "description": "Supervised Sutskever's doctoral research in Toronto." },
+    { "source": "Geoffrey Hinton", "target": "Google Brain", "type": "WORKED_AT", "description": "Joined Google in 2013 and stayed a decade." },
+
+    { "source": "Yann LeCun", "target": "Convolutional Neural Network", "type": "INVENTED", "description": "Applied backpropagation to convolutions for handwritten digit reading." },
+    { "source": "Convolutional Neural Network", "target": "Neural Network", "type": "IS_A", "description": "A network whose layers share local convolution filters." },
+    { "source": "Yann LeCun", "target": "Meta AI", "type": "WORKED_AT", "description": "Founded and led Facebook AI Research from 2013." },
+    { "source": "Yoshua Bengio", "target": "Attention Mechanism", "type": "CONTRIBUTED_TO", "description": "His lab introduced neural attention for translation in 2014." },
+    { "source": "Yoshua Bengio", "target": "Neural Network", "type": "ADVANCED", "description": "Pushed forward representation learning and language modelling." },
+
+    { "source": "Fei-Fei Li", "target": "ImageNet", "type": "CREATED", "description": "Led the crowdsourced effort to label fourteen million images." },
+    { "source": "ImageNet", "target": "Deep Learning", "type": "ACCELERATED", "description": "Provided the data scale that deep models needed to shine." },
+    { "source": "AlexNet", "target": "ImageNet", "type": "TRAINED_ON", "description": "Cut top-5 error by ten points at the 2012 challenge." },
+    { "source": "AlexNet", "target": "Convolutional Neural Network", "type": "IMPLEMENTS", "description": "An eight-layer convolutional network with ReLU and dropout." },
+    { "source": "Ilya Sutskever", "target": "AlexNet", "type": "CO_CREATED", "description": "Co-authored the 2012 result with Krizhevsky and Hinton." },
+    { "source": "Geoffrey Hinton", "target": "AlexNet", "type": "CO_CREATED", "description": "Supervised the work that proved GPU-trained depth wins." },
+    { "source": "AlexNet", "target": "University of Toronto", "type": "DEVELOPED_AT", "description": "Built in Hinton's lab on two consumer graphics cards." },
+    { "source": "AlexNet", "target": "GPU", "type": "RUNS_ON", "description": "Trained on two NVIDIA GTX 580 cards for about a week." },
+    { "source": "AlexNet", "target": "Deep Learning", "type": "SPARKED_BOOM_IN", "description": "Its margin of victory redirected the whole field overnight." },
+    { "source": "Ilya Sutskever", "target": "University of Toronto", "type": "STUDIED_AT", "description": "Earned his PhD under Geoffrey Hinton." },
+
+    { "source": "NVIDIA", "target": "GPU", "type": "MANUFACTURES", "description": "Designs the accelerators that train nearly every large model." },
+    { "source": "NVIDIA", "target": "CUDA", "type": "CREATED", "description": "Released the toolkit in 2007, making GPUs generally programmable." },
+    { "source": "CUDA", "target": "GPU", "type": "PROGRAMS", "description": "Exposes thousands of GPU cores to ordinary C-like code." },
+    { "source": "GPU", "target": "Deep Learning", "type": "ENABLED", "description": "Parallel matrix maths turned month-long training runs into days." },
+    { "source": "GPU", "target": "Large Language Model", "type": "POWERS", "description": "Frontier models are trained on clusters of tens of thousands of GPUs." },
+    { "source": "PyTorch", "target": "CUDA", "type": "USES", "description": "Dispatches tensor operations to CUDA kernels on the GPU." },
+    { "source": "PyTorch", "target": "Deep Learning", "type": "IMPLEMENTS", "description": "Provides autograd and layers for building trainable networks." },
+    { "source": "PyTorch", "target": "Transformer", "type": "IMPLEMENTS", "description": "Ships attention layers used by most open model code." },
+    { "source": "Meta AI", "target": "PyTorch", "type": "CREATED", "description": "Released the framework in 2016 and later moved it to a foundation." },
+
+    { "source": "Ashish Vaswani", "target": "Attention Is All You Need", "type": "AUTHORED", "description": "Lead author of the eight-person 2017 Transformer paper." },
+    { "source": "Ashish Vaswani", "target": "Google Brain", "type": "WORKED_AT", "description": "Was a researcher there when the Transformer was designed." },
+    { "source": "Google Brain", "target": "Attention Is All You Need", "type": "PUBLISHED", "description": "The paper came out of Google's research teams in 2017." },
+    { "source": "Attention Is All You Need", "target": "Transformer", "type": "INTRODUCED", "description": "Showed attention alone beats recurrence and convolution." },
+    { "source": "Transformer", "target": "Attention Mechanism", "type": "USES", "description": "Stacks multi-head self-attention as its only sequence operator." },
+    { "source": "Attention Mechanism", "target": "Neural Network", "type": "PART_OF", "description": "A differentiable layer inside a larger trained network." },
+    { "source": "Transformer", "target": "Convolutional Neural Network", "type": "REPLACED", "description": "Displaced convolution and recurrence across most sequence tasks." },
+    { "source": "Transformer", "target": "Large Language Model", "type": "ARCHITECTURE_OF", "description": "Every frontier language model is a scaled-up Transformer." },
+    { "source": "Transformer", "target": "Vector Embedding", "type": "PRODUCES", "description": "Its hidden states are the embeddings used for semantic search." },
+    { "source": "Google DeepMind", "target": "Google Brain", "type": "MERGED_WITH", "description": "The two labs combined into a single organisation in 2023." },
+
+    { "source": "OpenAI", "target": "GPT-3", "type": "CREATED", "description": "Trained and released the model through an API in 2020." },
+    { "source": "GPT-3", "target": "Transformer", "type": "BASED_ON", "description": "A 96-layer decoder-only Transformer." },
+    { "source": "GPT-3", "target": "Large Language Model", "type": "IS_A", "description": "The model that made the LLM category mainstream." },
+    { "source": "GPT-3", "target": "GPU", "type": "TRAINED_ON", "description": "Required thousands of accelerator-years of compute." },
+    { "source": "Ilya Sutskever", "target": "OpenAI", "type": "CO_FOUNDED", "description": "Served as chief scientist from 2015 to 2024." },
+    { "source": "OpenAI", "target": "NVIDIA", "type": "PARTNERS_WITH", "description": "Depends on NVIDIA silicon for training and serving." },
+    { "source": "Anthropic", "target": "OpenAI", "type": "SPUN_OUT_OF", "description": "Founded in 2021 by former OpenAI research leaders." },
+    { "source": "Anthropic", "target": "Large Language Model", "type": "DEVELOPS", "description": "Builds the Claude family with a safety-first research agenda." },
+    { "source": "Demis Hassabis", "target": "Google DeepMind", "type": "CO_FOUNDED", "description": "Started DeepMind in London in 2010; acquired by Google in 2014." },
+    { "source": "Google DeepMind", "target": "AlphaGo", "type": "CREATED", "description": "Built the system that beat Lee Sedol four games to one." },
+    { "source": "AlphaGo", "target": "Deep Learning", "type": "USES", "description": "Combines policy and value networks with tree search." },
+    { "source": "AlphaGo", "target": "GPU", "type": "RUNS_ON", "description": "Ran its networks on large GPU and TPU clusters." },
+    { "source": "Google DeepMind", "target": "Large Language Model", "type": "DEVELOPS", "description": "Builds the Gemini family of frontier models." },
+
+    { "source": "Large Language Model", "target": "Hallucination", "type": "SUFFERS_FROM", "description": "Generates confident text unsupported by any source." },
+    { "source": "Retrieval-Augmented Generation", "target": "Hallucination", "type": "MITIGATES", "description": "Forces answers to cite retrieved evidence instead of memory." },
+    { "source": "Retrieval-Augmented Generation", "target": "Large Language Model", "type": "GROUNDS", "description": "Injects fresh, private context the model never saw in training." },
+    { "source": "Retrieval-Augmented Generation", "target": "Vector Embedding", "type": "USES", "description": "Finds relevant passages by nearest-neighbour search." },
+    { "source": "Retrieval-Augmented Generation", "target": "Knowledge Graph", "type": "COMBINES_WITH", "description": "Graph traversal adds multi-hop structure that flat search misses." },
+    { "source": "Vector Embedding", "target": "Neural Network", "type": "PRODUCED_BY", "description": "Encoder networks map text into dense semantic vectors." },
+    { "source": "Knowledge Graph", "target": "Artificial Intelligence", "type": "PART_OF", "description": "The symbolic half of AI, now paired with neural retrieval." },
+    { "source": "Large Language Model", "target": "Knowledge Graph", "type": "EXTRACTS", "description": "Modern extraction pipelines let an LLM build the graph itself." },
+    { "source": "Knowledge Graph", "target": "Neo4j", "type": "STORED_IN", "description": "Nodes and typed relationships persist natively in the graph store." },
+    { "source": "Neo4j", "target": "Vector Embedding", "type": "INDEXES", "description": "Supports cosine vector indexes alongside full-text search." },
+
+    { "source": "Synapse", "target": "Knowledge Graph", "type": "BUILDS", "description": "Turns uploaded PDFs into an explorable typed graph." },
+    { "source": "Synapse", "target": "Retrieval-Augmented Generation", "type": "IMPLEMENTS", "description": "Answers questions with hybrid vector plus graph retrieval." },
+    { "source": "Synapse", "target": "Neo4j", "type": "USES", "description": "Stores every entity and relationship in a Neo4j database." },
+    { "source": "Synapse", "target": "Large Language Model", "type": "USES", "description": "Pluggable backend: Gemini, Claude or a fully local Ollama model." },
+    { "source": "Synapse", "target": "Vector Embedding", "type": "USES", "description": "Embeds every entity so semantic search works without a cloud key." },
+    { "source": "Synapse", "target": "Anthropic", "type": "SUPPORTS", "description": "Claude is one of the selectable chat providers." },
+    { "source": "Synapse", "target": "Artificial Intelligence", "type": "APPLIES", "description": "A working demonstration of applied GraphRAG." }
+  ]
+}

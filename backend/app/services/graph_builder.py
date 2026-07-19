@@ -1,5 +1,8 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Synapse — https://github.com/ahmedmaaloul/synapse
 """
-Project Synapse — Graph Builder Service
+Synapse — Graph Builder Service
 
 Turns raw text chunks into a knowledge graph:
 
@@ -7,7 +10,16 @@ Turns raw text chunks into a knowledge graph:
      (Gemini / Claude / Ollama — see ``llm_provider``).
   2. Deduplicate entities by canonical name.
   3. Embed each entity (name + description) for vector retrieval.
-  4. Write nodes (with embeddings) and typed relationships to Neo4j.
+  4. Resolve near-duplicate entities ("Ahmed" / "Ahmed Maaloul") onto a single
+     canonical node and re-point the extracted edges at it — see
+     ``entity_resolution``.
+  5. Write nodes (with embeddings) and typed relationships to Neo4j.
+  6. Persist the source chunks themselves as ``:Chunk`` text units, linked to
+     the entities extracted from them — see ``chunk_store``. Step 1 compresses
+     prose into 15-word descriptions; keeping the original passages is what lets
+     retrieval return the graph *and* the evidence it was built from.
+  7. Resolve the freshly written entities against those earlier documents left
+     in the graph, so duplicates cannot accumulate across ingests.
 
 The extraction schema is theme-aware so a CV, a research paper, and a contract
 each get domain-appropriate entity/relationship types.
@@ -23,8 +35,9 @@ from collections.abc import Awaitable, Callable
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from app.config import get_settings
+from app.config import Settings, get_settings
 from app.neo4j_driver import execute_query
+from app.services import chunk_store, entity_resolution
 from app.services.llm_provider import get_chat_llm, get_embeddings
 
 logger = logging.getLogger(__name__)
@@ -200,6 +213,161 @@ async def _embed_entities(entities: list[dict]) -> dict[str, list[float]]:
     return {e["name"]: vec for e, vec in zip(entities, vectors, strict=False) if e.get("name")}
 
 
+def _collapse_duplicate_entities(
+    entities: list[dict],
+    relationships: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    settings: Settings,
+) -> tuple[list[dict], list[dict], int, dict[str, str]]:
+    """Merge near-duplicates *before* anything touches Neo4j.
+
+    Collapsing in memory means the duplicate node is never written in the first
+    place, and it lets us rewrite the extracted relationship endpoints onto the
+    canonical names so every edge follows its node.
+
+    Pure CPU, no I/O — deliberately kept synchronous and called through
+    :func:`asyncio.to_thread` so its blocking/union-find sweep never stalls the
+    event loop of the API server.
+
+    Returns ``(entities, relationships, merged_count, alias_map)``; the canonical
+    entity inherits a description if it had none, plus an ``aliases`` list.
+    ``alias_map`` maps every absorbed name to its canonical one — relationships
+    are rewritten here, but the caller needs the same map to re-point the
+    per-chunk entity name lists (see :func:`_canonicalize_chunk_names`).
+    """
+    clusters = entity_resolution.find_duplicate_clusters(
+        entities, embeddings_by_name, settings=settings
+    )
+    if not clusters:
+        return entities, relationships, 0, {}
+
+    by_name = {str(e.get("name", "")): e for e in entities}
+    canonical_of: dict[str, str] = {}
+    for cluster in clusters:
+        canonical = entity_resolution.choose_canonical(cluster)
+        target = by_name.get(canonical)
+        if target is None:
+            continue
+        aliases = sorted({n for n in cluster if n != canonical})
+        for dup in aliases:
+            canonical_of[dup] = canonical
+            inherited = str(by_name.get(dup, {}).get("description", "")).strip()
+            if inherited and not str(target.get("description", "")).strip():
+                target["description"] = inherited
+        target["aliases"] = sorted(set(target.get("aliases") or []) | set(aliases))
+        logger.info("🧬 Resolved %s -> '%s'", aliases, canonical)
+
+    kept = [e for e in entities if str(e.get("name", "")) not in canonical_of]
+
+    rewritten: list[dict] = []
+    for rel in relationships:
+        source = str(rel.get("source", "")).strip()
+        target_name = str(rel.get("target", "")).strip()
+        new_source = canonical_of.get(source, source)
+        new_target = canonical_of.get(target_name, target_name)
+        if new_source and new_source == new_target:
+            continue  # the merge turned this edge into a self-loop
+        rewritten.append({**rel, "source": new_source, "target": new_target})
+
+    return kept, rewritten, len(canonical_of), canonical_of
+
+
+def _canonicalize_chunk_names(
+    names_per_chunk: list[list[str]],
+    survivor_by_lower: dict[str, str],
+    alias_map: dict[str, str],
+    kept_names: set[str],
+) -> list[list[str]]:
+    """Re-point per-chunk entity names onto the nodes that were actually written.
+
+    A name travels through two collapses between extraction and Neo4j:
+    :func:`_dedupe_entities` folds case/whitespace variants together, then entity
+    resolution merges near-duplicates onto a canonical node. A chunk link built
+    from the *raw extracted* name would therefore point at a node that no longer
+    exists ("Postgres" after it was merged into "PostgreSQL"), and the excerpt
+    would be silently unreachable from the surviving entity — the exact evidence
+    loss this whole feature exists to prevent.
+
+    Names that survive neither collapse are dropped rather than linked blindly,
+    so ``store_chunks`` never asks for an edge to a node we did not write.
+    """
+    resolved_per_chunk: list[list[str]] = []
+    for names in names_per_chunk:
+        resolved: list[str] = []
+        for raw in names:
+            name = survivor_by_lower.get(raw.lower(), raw)
+            name = alias_map.get(name, name)
+            if name in kept_names and name not in resolved:
+                resolved.append(name)
+        resolved_per_chunk.append(resolved)
+    return resolved_per_chunk
+
+
+async def _store_source_chunks(
+    chunks: list[str],
+    names_per_chunk: list[list[str]],
+    document_name: str,
+    report: Callable[[dict], Awaitable[None]],
+) -> int:
+    """Persist the source text units, streaming a progress event around the write."""
+    total = len(chunks)
+    await report(
+        {"type": "progress", "stage": "storing_chunks", "processed": 0, "total": total}
+    )
+    result = await chunk_store.store_chunks(document_name, chunks, names_per_chunk)
+    stored = int(result.get("chunks", 0))
+    await report(
+        {"type": "progress", "stage": "storing_chunks", "processed": stored, "total": total}
+    )
+    logger.info("🧾 Stored %s source chunks (%s entity links)", stored, result.get("links", 0))
+    return stored
+
+
+async def _resolve_against_graph(
+    fresh_entities: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    settings: Settings,
+) -> int:
+    """Merge the just-written entities into equivalents from earlier documents.
+
+    The in-memory pass only sees this document; this pass compares the fresh
+    entities against everything already in Neo4j, so "Postgres" from document 1
+    and "PostgreSQL" from document 2 still end up as one node. Only clusters that
+    involve at least one fresh entity are merged — the rest of the graph is left
+    exactly as previous ingests decided.
+    """
+    graph_entities, graph_embeddings = await entity_resolution.fetch_graph_entities()
+    if not graph_entities:
+        return 0
+
+    fresh_names = {str(e.get("name", "")) for e in fresh_entities if str(e.get("name", "")).strip()}
+    # Fresh embeddings win: the node's stored vector may be missing when the
+    # Neo4j build lacks the vector procedures.
+    combined_embeddings = {**graph_embeddings, **embeddings_by_name}
+    combined_entities = {str(e.get("name", "")): e for e in graph_entities}
+    for entity in fresh_entities:
+        name = str(entity.get("name", ""))
+        if name.strip():
+            combined_entities[name] = entity
+
+    # Clustering is CPU-bound (blocking + union-find over every candidate pair)
+    # and scales with the whole graph, not just this document. Running it inline
+    # would freeze the event loop — and with it every other request the API is
+    # serving — so it is offloaded to a worker thread.
+    clusters = await asyncio.to_thread(
+        entity_resolution.find_duplicate_clusters,
+        list(combined_entities.values()),
+        combined_embeddings,
+        settings=settings,
+    )
+    clusters = [c for c in clusters if fresh_names.intersection(c)]
+    if not clusters:
+        return 0
+
+    result = await entity_resolution.merge_entity_clusters(clusters)
+    return int(result.get("merged", 0))
+
+
 ProgressCallback = Callable[[dict], Awaitable[None]]
 
 
@@ -260,9 +428,20 @@ async def build_knowledge_graph(
 
     all_entities: list[dict] = []
     all_relationships: list[dict] = []
+    # ``asyncio.gather`` preserves argument order, so ``results[i]`` is chunk i —
+    # which is what lets us remember *which chunk each entity came from* and
+    # later wire (:Entity)-[:MENTIONED_IN]->(:Chunk).
+    names_per_chunk: list[list[str]] = []
     for parsed in results:
         all_entities.extend(parsed["entities"])
         all_relationships.extend(parsed["relationships"])
+        names_per_chunk.append(
+            [
+                str(e.get("name", "")).strip()
+                for e in parsed["entities"]
+                if str(e.get("name", "")).strip()
+            ]
+        )
 
     logger.info(
         "📊 Extraction complete: %s entities, %s rels",
@@ -273,8 +452,37 @@ async def build_knowledge_graph(
     unique_entities = _dedupe_entities(all_entities)
     logger.info("🧹 Deduplicated to %s unique entities", len(unique_entities))
 
+    # Snapshot the case-folding collapse *before* resolution rebinds the list, so
+    # a chunk that said "python" can still find the "Python" node that survived.
+    survivor_by_lower = {
+        str(e.get("name", "")).strip().lower(): str(e.get("name", "")).strip()
+        for e in unique_entities
+    }
+
     await report({"type": "progress", "stage": "embedding", "total": len(unique_entities)})
     embeddings_by_name = await _embed_entities(unique_entities)
+
+    entities_merged = 0
+    alias_map: dict[str, str] = {}
+    if settings.entity_resolution_enabled:
+        await report(
+            {
+                "type": "progress",
+                "stage": "resolving_entities",
+                "processed": 0,
+                "total": len(unique_entities),
+                "merged": 0,
+            }
+        )
+        # CPU-bound and synchronous by design — see _collapse_duplicate_entities.
+        unique_entities, all_relationships, entities_merged, alias_map = await asyncio.to_thread(
+            _collapse_duplicate_entities,
+            unique_entities,
+            all_relationships,
+            embeddings_by_name,
+            settings,
+        )
+        logger.info("🧬 Resolved %s duplicate entities within this document", entities_merged)
 
     await report({"type": "progress", "stage": "writing_nodes", "total": len(unique_entities)})
     nodes_created = await _write_entities(unique_entities, document_name, embeddings_by_name)
@@ -284,11 +492,50 @@ async def build_knowledge_graph(
     rels_created = await _write_relationships(all_relationships)
     logger.info("✅ Wrote %s relationships to Neo4j", rels_created)
 
+    # Chunks are stored here — after the entity nodes exist (so MENTIONED_IN has
+    # something to attach to) but *before* the whole-graph resolution pass below.
+    # That pass merges nodes in the database and re-points every relationship a
+    # duplicate held, MENTIONED_IN included; storing first therefore lets the
+    # merge carry the chunk links along. Storing afterwards would look up names
+    # the merge had already deleted and silently drop those excerpts.
+    chunks_stored = 0
+    if settings.store_source_chunks:
+        chunks_stored = await _store_source_chunks(
+            chunks,
+            _canonicalize_chunk_names(
+                names_per_chunk,
+                survivor_by_lower,
+                alias_map,
+                {str(e.get("name", "")).strip() for e in unique_entities},
+            ),
+            document_name,
+            report,
+        )
+
+    if settings.entity_resolution_enabled:
+        # Edges are written first so their endpoints still exist; this pass then
+        # re-points them onto entities from earlier documents.
+        entities_merged += await _resolve_against_graph(
+            unique_entities, embeddings_by_name, settings
+        )
+        await report(
+            {
+                "type": "progress",
+                "stage": "resolving_entities",
+                "processed": len(unique_entities),
+                "total": len(unique_entities),
+                "merged": entities_merged,
+            }
+        )
+        logger.info("🧬 Entity resolution merged %s duplicates in total", entities_merged)
+
     return {
         "nodes_created": nodes_created,
         "relationships_created": rels_created,
         "entities_extracted": len(all_entities),
         "unique_entities": len(unique_entities),
+        "entities_merged": entities_merged,
+        "chunks_stored": chunks_stored,
     }
 
 
@@ -297,12 +544,17 @@ async def _write_entities(
     document_name: str,
     embeddings_by_name: dict[str, list[float]],
 ) -> int:
-    """MERGE each entity node, storing type, description, source doc, embedding."""
+    """MERGE each entity node, storing type, description, source doc, embedding.
+
+    ``aliases`` (the names entity resolution folded into this one) are appended
+    rather than replaced, so a node keeps every alias it has ever absorbed.
+    """
     query = """
     MERGE (n:Entity {name: $name})
     SET n.type = $type,
         n.description = $description,
-        n.document = $document
+        n.document = $document,
+        n.aliases = [a IN coalesce(n.aliases, []) WHERE NOT a IN $aliases] + $aliases
     WITH n
     CALL {
         WITH n
@@ -315,17 +567,23 @@ async def _write_entities(
     MERGE (n:Entity {name: $name})
     SET n.type = $type,
         n.description = $description,
-        n.document = $document
+        n.document = $document,
+        n.aliases = [a IN coalesce(n.aliases, []) WHERE NOT a IN $aliases] + $aliases
     """
     created = 0
     for entity in entities:
-        name = entity.get("name", "Unknown")
+        # MUST match the normalization used everywhere else (_dedupe_entities and
+        # _canonicalize_chunk_names both strip). Writing " Ada " here while the
+        # chunk linker looks up "Ada" creates a node no MENTIONED_IN edge can
+        # ever match, silently losing that entity's source excerpts.
+        name = str(entity.get("name", "Unknown")).strip() or "Unknown"
         params = {
             "name": name,
             "type": entity.get("type", "UNKNOWN"),
             "description": entity.get("description", ""),
             "document": document_name,
             "embedding": embeddings_by_name.get(name),
+            "aliases": sorted(entity.get("aliases") or []),
         }
         try:
             await execute_query(query, params)

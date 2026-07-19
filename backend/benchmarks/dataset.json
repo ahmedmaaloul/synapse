@@ -1,0 +1,478 @@
+{
+  "name": "Synapse Multi-Hop Benchmark v1",
+  "description": "A hand-written corpus on the history of computing and AI, plus bridge-style multi-hop questions. 18 'core' passages carry every fact the questions need; 16 'distractor' passages are on adjacent topics, so top-k retrieval has to compete for its slots the way it does on a real corpus. Eight of those distractors do mention a required entity in passing (IBM in d04 and d05, Stanford University in d07, Deep Blue in d10, Google in d11, Retrieval-Augmented Generation in d12, GPU in d13, Transformer in d14). That is deliberate and realistic: no distractor is ever NEEDED to answer a question, and a mention a distractor leaks can only help the passage baseline, never GraphRAG — the 'distractors_leaking_required_facts' list below is asserted by a test so the count cannot silently drift. Three design rules make the questions honestly multi-hop: (1) no single passage contains all of a question's required facts; (2) a question may name at most ONE of its required facts — the anchor — and shares no stemmed content word with the NAME or the DESCRIPTION of any other required fact, so the rest cannot be reached by lexical overlap; (3) no entity description names another entity, so relationships live in the graph rather than being smuggled into the text every system reads. The entity/relationship extraction ships pre-computed, so the benchmark is deterministic and needs no LLM; the only model involved is the local fastembed embedder, used identically by every system under test.",
+  "distractors_leaking_required_facts": ["d04", "d05", "d07", "d10", "d11", "d12", "d13", "d14"],
+  "license": "AGPL-3.0-or-later",
+  "author": "Ahmed Maaloul <maaloulahmed25@gmail.com>",
+  "document_name": "Synapse Multi-Hop Benchmark",
+  "passages": [
+    {
+      "id": "p01",
+      "role": "core",
+      "text": "Ada Lovelace, a British mathematician, published the first algorithm ever written for a machine. Her 1843 notes argued that the Analytical Engine could manipulate arbitrary symbols, not merely numbers.",
+      "entities": ["Ada Lovelace", "Analytical Engine"]
+    },
+    {
+      "id": "p02",
+      "role": "core",
+      "text": "The Analytical Engine was a mechanical general-purpose computer designed by Charles Babbage in 1837. It was never completed in his lifetime, yet its design already contained a mill, a store, and punched cards for input.",
+      "entities": ["Analytical Engine", "Charles Babbage", "Punched Cards"]
+    },
+    {
+      "id": "p03",
+      "role": "core",
+      "text": "Punched cards were borrowed from the Jacquard Loom, a weaving machine steered by holes in stiff cardboard. Herman Hollerith adapted them for the 1890 United States census and founded the Tabulating Machine Company on the proceeds.",
+      "entities": ["Punched Cards", "Jacquard Loom", "Herman Hollerith", "Tabulating Machine Company"]
+    },
+    {
+      "id": "p04",
+      "role": "core",
+      "text": "The Tabulating Machine Company merged with three rivals in 1911, and the combined firm was renamed IBM in 1924. IBM went on to dominate business computing for most of the twentieth century.",
+      "entities": ["Tabulating Machine Company", "IBM"]
+    },
+    {
+      "id": "p05",
+      "role": "core",
+      "text": "Deep Blue was a chess-playing machine built by IBM. In 1997 it beat the reigning world champion Garry Kasparov over six games, a result widely read as a milestone for Artificial Intelligence.",
+      "entities": ["Deep Blue", "IBM", "Garry Kasparov", "Artificial Intelligence"]
+    },
+    {
+      "id": "p06",
+      "role": "core",
+      "text": "Alan Turing formalised computation in 1936 with the Turing Machine, an abstract device that reads and writes symbols on an endless tape. During the Second World War he worked at Bletchley Park, where he helped break the Enigma cipher.",
+      "entities": ["Alan Turing", "Turing Machine", "Bletchley Park", "Enigma"]
+    },
+    {
+      "id": "p07",
+      "role": "core",
+      "text": "In 1950 Alan Turing proposed the imitation game, known today as the Turing Test, as an operational replacement for the question of whether machines can think.",
+      "entities": ["Alan Turing", "Turing Test"]
+    },
+    {
+      "id": "p08",
+      "role": "core",
+      "text": "The Dartmouth Workshop of 1956 gave the field of Artificial Intelligence its name, six years after Alan Turing had published his imitation game. It was organised by John McCarthy, who also created the Lisp programming language.",
+      "entities": ["Dartmouth Workshop", "Artificial Intelligence", "Alan Turing", "John McCarthy", "Lisp"]
+    },
+    {
+      "id": "p09",
+      "role": "core",
+      "text": "Frank Rosenblatt built the Perceptron, an early trainable classifier wired up in hardware at the Cornell Aeronautical Laboratory. A 1969 book by Marvin Minsky dwelt on what it could not learn, and the disillusionment that followed became the first AI Winter.",
+      "entities": ["Frank Rosenblatt", "Perceptron", "Cornell Aeronautical Laboratory", "Marvin Minsky", "AI Winter"]
+    },
+    {
+      "id": "p10",
+      "role": "core",
+      "text": "Backpropagation, popularised by Geoffrey Hinton and his co-authors in 1986, made it practical to train the multi-layer networks whose absence had doomed the Perceptron. Cheap gradients pulled the field out of its first slump.",
+      "entities": ["Backpropagation", "Geoffrey Hinton", "Perceptron"]
+    },
+    {
+      "id": "p11",
+      "role": "core",
+      "text": "AlexNet won the 2012 ImageNet competition by a margin no hand-engineered system could match. It was trained on a pair of consumer GPU cards by Alex Krizhevsky and Ilya Sutskever, supervised by Geoffrey Hinton.",
+      "entities": ["AlexNet", "ImageNet", "GPU", "Alex Krizhevsky", "Ilya Sutskever", "Geoffrey Hinton"]
+    },
+    {
+      "id": "p12",
+      "role": "core",
+      "text": "ImageNet is a labelled image database assembled under the direction of Fei-Fei Li at Stanford University. Its annual contest became the yardstick by which progress in Computer Vision was measured.",
+      "entities": ["ImageNet", "Fei-Fei Li", "Stanford University", "Computer Vision"]
+    },
+    {
+      "id": "p13",
+      "role": "core",
+      "text": "The Transformer architecture was introduced in the 2017 paper Attention Is All You Need, written by researchers at Google. It threw out recurrence in favour of Self-Attention, letting every token attend to every other token in parallel.",
+      "entities": ["Transformer", "Attention Is All You Need", "Google", "Self-Attention"]
+    },
+    {
+      "id": "p14",
+      "role": "core",
+      "text": "BERT and GPT are both stacks of Transformer blocks. BERT was released by Google and reads a sentence in both directions at once, while GPT predicts the next token strictly left to right.",
+      "entities": ["BERT", "GPT", "Transformer", "Google"]
+    },
+    {
+      "id": "p15",
+      "role": "core",
+      "text": "OpenAI was founded in 2015 as a research laboratory, with Ilya Sutskever as its first chief scientist. It went on to release the GPT family of models.",
+      "entities": ["OpenAI", "Ilya Sutskever", "GPT"]
+    },
+    {
+      "id": "p16",
+      "role": "core",
+      "text": "Retrieval-Augmented Generation grounds a Large Language Model in passages fetched at query time. It cuts hallucination, but each passage is ranked on its own, so facts that only make sense together are often retrieved apart.",
+      "entities": ["Retrieval-Augmented Generation", "Large Language Model", "Hallucination"]
+    },
+    {
+      "id": "p17",
+      "role": "core",
+      "text": "GraphRAG first extracts a Knowledge Graph from the corpus, then walks its edges instead of ranking isolated passages. That traversal is what lets it answer questions Retrieval-Augmented Generation cannot.",
+      "entities": ["GraphRAG", "Knowledge Graph", "Retrieval-Augmented Generation"]
+    },
+    {
+      "id": "p18",
+      "role": "core",
+      "text": "Neo4j is a graph database queried with Cypher. Synapse keeps its Knowledge Graph in Neo4j and expands outward from seed entities to assemble reasoning paths.",
+      "entities": ["Neo4j", "Cypher", "Knowledge Graph", "Synapse"]
+    },
+    {
+      "id": "d01",
+      "role": "distractor",
+      "text": "ENIAC was unveiled in 1946 at the University of Pennsylvania as the first general-purpose electronic computer. Programming it meant rewiring plugboards by hand, and its builders pointed at the Turing Machine as the model of what such a device could in principle compute.",
+      "entities": ["ENIAC", "University of Pennsylvania", "Turing Machine"]
+    },
+    {
+      "id": "d02",
+      "role": "distractor",
+      "text": "Colossus was a family of code-breaking machines put into service at Bletchley Park in 1944. Built from thermionic valves, they attacked the Lorenz teleprinter traffic rather than the naval ciphers.",
+      "entities": ["Colossus", "Bletchley Park"]
+    },
+    {
+      "id": "d03",
+      "role": "distractor",
+      "text": "The stored-program idea was set out in a 1945 report on EDVAC written by John von Neumann. Keeping instructions in the same memory as the data became the standard layout for every machine that followed ENIAC.",
+      "entities": ["EDVAC", "John von Neumann", "ENIAC"]
+    },
+    {
+      "id": "d04",
+      "role": "distractor",
+      "text": "The Transistor was demonstrated at Bell Labs in 1947 and swiftly displaced the fragile valve. IBM shipped its first fully transistorised computer just over a decade later.",
+      "entities": ["Transistor", "Bell Labs", "IBM"]
+    },
+    {
+      "id": "d05",
+      "role": "distractor",
+      "text": "Fortran, released by IBM in 1957, was the first widely used high-level programming language. It let scientists write formulas instead of raw machine instructions.",
+      "entities": ["Fortran", "IBM"]
+    },
+    {
+      "id": "d06",
+      "role": "distractor",
+      "text": "Grace Hopper championed English-like programming and drove the design of Cobol at the end of the 1950s. Cobol arrived two years after Fortran and was aimed squarely at business data processing.",
+      "entities": ["Grace Hopper", "Cobol", "Fortran"]
+    },
+    {
+      "id": "d07",
+      "role": "distractor",
+      "text": "ARPANET carried its first packets in 1969 between four American research sites, one of them Stanford University. Packet switching rather than dedicated circuits is what made the network resilient.",
+      "entities": ["ARPANET", "Stanford University"]
+    },
+    {
+      "id": "d08",
+      "role": "distractor",
+      "text": "Tim Berners-Lee wrote the first browser and the first server at CERN in 1990, creating the World Wide Web. It rode on the packet protocols that ARPANET had established two decades earlier.",
+      "entities": ["Tim Berners-Lee", "CERN", "World Wide Web", "ARPANET"]
+    },
+    {
+      "id": "d09",
+      "role": "distractor",
+      "text": "Expert Systems encoded human rules of thumb as long if-then chains, and MYCIN diagnosed blood infections that way in the 1970s. Their brittleness outside the encoded rules disappointed buyers and deepened the second AI Winter.",
+      "entities": ["Expert Systems", "MYCIN", "AI Winter"]
+    },
+    {
+      "id": "d10",
+      "role": "distractor",
+      "text": "Claude Shannon sketched how a machine might play chess in a 1950 paper, decades before any hardware could do it, and his sketch anticipated systems like Deep Blue. He had already founded Information Theory two years earlier.",
+      "entities": ["Claude Shannon", "Deep Blue", "Information Theory"]
+    },
+    {
+      "id": "d11",
+      "role": "distractor",
+      "text": "AlphaGo beat a professional Go player in 2016 using Reinforcement Learning and millions of self-played games. It was built by DeepMind, which Google had acquired two years earlier.",
+      "entities": ["AlphaGo", "Reinforcement Learning", "DeepMind", "Google"]
+    },
+    {
+      "id": "d12",
+      "role": "distractor",
+      "text": "Word2Vec showed in 2013 that words could be placed in a space where distance means similarity. Vector Search over such Embeddings is what Retrieval-Augmented Generation ranks passages with.",
+      "entities": ["Word2Vec", "Vector Search", "Embeddings", "Retrieval-Augmented Generation"]
+    },
+    {
+      "id": "d13",
+      "role": "distractor",
+      "text": "NVIDIA released CUDA in 2007, letting ordinary code run on graphics hardware. Cheap parallel arithmetic on a GPU is what made deep networks affordable to train at all.",
+      "entities": ["NVIDIA", "CUDA", "GPU"]
+    },
+    {
+      "id": "d14",
+      "role": "distractor",
+      "text": "LSTM networks handled sequences by carrying a gated memory across time steps. They dominated machine translation until the Transformer made recurrence unnecessary.",
+      "entities": ["LSTM", "Transformer"]
+    },
+    {
+      "id": "d15",
+      "role": "distractor",
+      "text": "Fine-Tuning adapts a pretrained network to a narrow task with a small labelled set. It competes with prompting as a way to steer a Large Language Model.",
+      "entities": ["Fine-Tuning", "Large Language Model"]
+    },
+    {
+      "id": "d16",
+      "role": "distractor",
+      "text": "A Vector Database such as FAISS indexes Embeddings so that nearest-neighbour lookup stays fast at scale. It is the storage layer most retrieval pipelines reach for first.",
+      "entities": ["Vector Database", "FAISS", "Embeddings"]
+    }
+  ],
+  "entities": [
+    {"name": "Ada Lovelace", "type": "PERSON", "description": "British mathematician who wrote the first machine algorithm"},
+    {"name": "Analytical Engine", "type": "PROJECT", "description": "Unbuilt general-purpose mechanical computer of 1837"},
+    {"name": "Charles Babbage", "type": "PERSON", "description": "Victorian inventor who worked on programmable calculating machinery"},
+    {"name": "Punched Cards", "type": "TOOL", "description": "Stiff sheets encoding data as patterns of holes"},
+    {"name": "Jacquard Loom", "type": "TOOL", "description": "Weaving apparatus steered by holes in stiff cardboard"},
+    {"name": "Herman Hollerith", "type": "PERSON", "description": "Engineer who mechanised the 1890 national headcount"},
+    {"name": "Tabulating Machine Company", "type": "COMPANY", "description": "Early manufacturer of census tabulating equipment"},
+    {"name": "IBM", "type": "COMPANY", "description": "Corporation that dominated commercial data processing in the twentieth century"},
+    {"name": "Deep Blue", "type": "PROJECT", "description": "Chess-playing computer that beat a reigning world champion"},
+    {"name": "Garry Kasparov", "type": "PERSON", "description": "World chess champion defeated by a machine in 1997"},
+    {"name": "Artificial Intelligence", "type": "CONCEPT", "description": "Research field aimed at machines that reason"},
+    {"name": "Alan Turing", "type": "PERSON", "description": "Mathematician who formalised computation and worked on wartime cryptanalysis"},
+    {"name": "Turing Machine", "type": "CONCEPT", "description": "Abstract model of computation reading symbols on a tape"},
+    {"name": "Bletchley Park", "type": "LOCATION", "description": "British wartime codebreaking establishment"},
+    {"name": "Enigma", "type": "THING", "description": "German wartime cipher machine broken by Allied cryptanalysts"},
+    {"name": "Turing Test", "type": "CONCEPT", "description": "Imitation game offered as a practical criterion for machine intelligence"},
+    {"name": "Dartmouth Workshop", "type": "EVENT", "description": "1956 summer gathering that gave a research field its name"},
+    {"name": "John McCarthy", "type": "PERSON", "description": "Computer scientist known for symbolic-reasoning research in the 1950s"},
+    {"name": "Lisp", "type": "TOOL", "description": "Symbolic programming language created in 1958"},
+    {"name": "Frank Rosenblatt", "type": "PERSON", "description": "Psychologist who built the first trainable classifier hardware"},
+    {"name": "Perceptron", "type": "PROJECT", "description": "Single-layer trainable classifier realised in electronic hardware"},
+    {"name": "Cornell Aeronautical Laboratory", "type": "ORGANIZATION", "description": "Research laboratory where early classifier hardware was built"},
+    {"name": "Marvin Minsky", "type": "PERSON", "description": "Researcher whose 1969 book exposed single-layer limits"},
+    {"name": "AI Winter", "type": "EVENT", "description": "Period of collapsed funding and interest in the field"},
+    {"name": "Backpropagation", "type": "CONCEPT", "description": "Gradient method for training layered networks"},
+    {"name": "Geoffrey Hinton", "type": "PERSON", "description": "Researcher central to the revival of neural network training"},
+    {"name": "AlexNet", "type": "PROJECT", "description": "Deep convolutional image classifier developed in 2012"},
+    {"name": "ImageNet", "type": "PROJECT", "description": "Large labelled collection of photographs and its annual challenge"},
+    {"name": "GPU", "type": "TOOL", "description": "Graphics processor also used for large-scale numerical work"},
+    {"name": "Alex Krizhevsky", "type": "PERSON", "description": "Graduate student who trained the 2012 winning network"},
+    {"name": "Ilya Sutskever", "type": "PERSON", "description": "Researcher in deep learning, active from the early 2010s onward"},
+    {"name": "Fei-Fei Li", "type": "PERSON", "description": "Computer scientist who directed a large image archive project"},
+    {"name": "Stanford University", "type": "UNIVERSITY", "description": "Private research institution in California"},
+    {"name": "Computer Vision", "type": "SKILL", "description": "Field of teaching machines to interpret images"},
+    {"name": "Transformer", "type": "CONCEPT", "description": "Sequence model resting entirely on attention"},
+    {"name": "Attention Is All You Need", "type": "THING", "description": "2017 publication describing an attention-only design"},
+    {"name": "Google", "type": "COMPANY", "description": "Technology corporation whose researchers published on attention"},
+    {"name": "Self-Attention", "type": "CONCEPT", "description": "Operation letting each token weigh every token in a sequence"},
+    {"name": "BERT", "type": "PROJECT", "description": "Bidirectional language model built from attention blocks"},
+    {"name": "GPT", "type": "PROJECT", "description": "Left-to-right generative language model family"},
+    {"name": "OpenAI", "type": "COMPANY", "description": "Research organisation founded in 2015 to work on machine intelligence"},
+    {"name": "Retrieval-Augmented Generation", "type": "CONCEPT", "description": "Grounding a language model in passages fetched at query time"},
+    {"name": "Large Language Model", "type": "CONCEPT", "description": "Neural model trained to predict text at scale"},
+    {"name": "Hallucination", "type": "CONCEPT", "description": "Fluent but unsupported output from a language model"},
+    {"name": "GraphRAG", "type": "CONCEPT", "description": "Context assembly that follows graph edges rather than ranking isolated passages"},
+    {"name": "Knowledge Graph", "type": "CONCEPT", "description": "Entities and typed relationships extracted from a corpus"},
+    {"name": "Neo4j", "type": "DATABASE", "description": "Native graph store keeping nodes and typed relationships"},
+    {"name": "Cypher", "type": "TOOL", "description": "Declarative query language for graph databases"},
+    {"name": "Synapse", "type": "PROJECT", "description": "Knowledge-graph explorer built on a graph database"},
+    {"name": "ENIAC", "type": "PROJECT", "description": "First general-purpose electronic computer, unveiled in 1946"},
+    {"name": "University of Pennsylvania", "type": "UNIVERSITY", "description": "American university where early electronic computing was built"},
+    {"name": "Colossus", "type": "PROJECT", "description": "Valve-based codebreaking machines of the Second World War"},
+    {"name": "EDVAC", "type": "PROJECT", "description": "Early stored-program computer described in a 1945 report"},
+    {"name": "John von Neumann", "type": "PERSON", "description": "Mathematician who set out the stored-program architecture"},
+    {"name": "Transistor", "type": "TOOL", "description": "Solid-state switch that displaced the vacuum valve"},
+    {"name": "Bell Labs", "type": "ORGANIZATION", "description": "Industrial research laboratory of the American telephone system"},
+    {"name": "Fortran", "type": "TOOL", "description": "First widely used high-level programming language"},
+    {"name": "Grace Hopper", "type": "PERSON", "description": "Computer scientist behind early compilers and business languages"},
+    {"name": "Cobol", "type": "TOOL", "description": "English-like language for business data processing"},
+    {"name": "ARPANET", "type": "PROJECT", "description": "Packet-switched research network that preceded the internet"},
+    {"name": "Tim Berners-Lee", "type": "PERSON", "description": "Physicist who wrote the first browser and web server"},
+    {"name": "CERN", "type": "ORGANIZATION", "description": "European particle-physics laboratory"},
+    {"name": "World Wide Web", "type": "PROJECT", "description": "Hypertext system layered on top of internet protocols"},
+    {"name": "Expert Systems", "type": "CONCEPT", "description": "Rule-based programs encoding human decision procedures"},
+    {"name": "MYCIN", "type": "PROJECT", "description": "Rule-based system that diagnosed blood infections"},
+    {"name": "Claude Shannon", "type": "PERSON", "description": "Engineer who founded the mathematical study of communication and sketched machine chess"},
+    {"name": "Information Theory", "type": "CONCEPT", "description": "Mathematical theory of communication and entropy"},
+    {"name": "AlphaGo", "type": "PROJECT", "description": "System that beat a professional Go player in 2016"},
+    {"name": "Reinforcement Learning", "type": "CONCEPT", "description": "Learning a policy from rewards rather than labels"},
+    {"name": "DeepMind", "type": "COMPANY", "description": "London research laboratory acquired by a search company"},
+    {"name": "Word2Vec", "type": "PROJECT", "description": "Method placing words in a vector space by context"},
+    {"name": "Vector Search", "type": "CONCEPT", "description": "Ranking documents by distance between dense vectors"},
+    {"name": "Embeddings", "type": "CONCEPT", "description": "Dense numeric representations of text"},
+    {"name": "NVIDIA", "type": "COMPANY", "description": "Manufacturer of graphics processors"},
+    {"name": "CUDA", "type": "TOOL", "description": "Toolkit for running general code on graphics hardware"},
+    {"name": "LSTM", "type": "CONCEPT", "description": "Recurrent network carrying a gated memory across time steps"},
+    {"name": "Fine-Tuning", "type": "CONCEPT", "description": "Adapting a pretrained model to a narrow task"},
+    {"name": "Vector Database", "type": "DATABASE", "description": "Store indexing dense vectors for nearest-neighbour lookup"},
+    {"name": "FAISS", "type": "TOOL", "description": "Library for fast similarity search over dense vectors"}
+  ],
+  "relationships": [
+    {"source": "Ada Lovelace", "target": "Analytical Engine", "type": "WROTE_ALGORITHM_FOR", "description": "Published the first algorithm intended for the machine"},
+    {"source": "Charles Babbage", "target": "Analytical Engine", "type": "DESIGNED", "description": "Designed the machine in 1837"},
+    {"source": "Analytical Engine", "target": "Punched Cards", "type": "READ_INPUT_FROM", "description": "Took its program and data from cards"},
+    {"source": "Punched Cards", "target": "Jacquard Loom", "type": "DERIVED_FROM", "description": "Borrowed from a card-controlled weaving machine"},
+    {"source": "Herman Hollerith", "target": "Punched Cards", "type": "ADAPTED", "description": "Adapted cards for census tabulation"},
+    {"source": "Herman Hollerith", "target": "Tabulating Machine Company", "type": "FOUNDED", "description": "Founded the firm on census proceeds"},
+    {"source": "Tabulating Machine Company", "target": "IBM", "type": "RENAMED_AS", "description": "Merged and renamed in 1924"},
+    {"source": "IBM", "target": "Deep Blue", "type": "BUILT", "description": "Built the chess-playing machine"},
+    {"source": "Deep Blue", "target": "Garry Kasparov", "type": "DEFEATED", "description": "Won the 1997 six-game match"},
+    {"source": "Deep Blue", "target": "Artificial Intelligence", "type": "MILESTONE_FOR", "description": "Read as a landmark result for the field"},
+    {"source": "Alan Turing", "target": "Turing Machine", "type": "DEFINED", "description": "Formalised computation in 1936"},
+    {"source": "Alan Turing", "target": "Bletchley Park", "type": "WORKED_AT", "description": "Worked there during the Second World War"},
+    {"source": "Alan Turing", "target": "Enigma", "type": "HELPED_BREAK", "description": "Helped break the cipher"},
+    {"source": "Alan Turing", "target": "Turing Test", "type": "PROPOSED", "description": "Proposed the imitation game in 1950"},
+    {"source": "Alan Turing", "target": "Artificial Intelligence", "type": "INFLUENCED", "description": "Framed the field's central question before it was named"},
+    {"source": "Dartmouth Workshop", "target": "Artificial Intelligence", "type": "NAMED", "description": "Gave the field its name in 1956"},
+    {"source": "John McCarthy", "target": "Dartmouth Workshop", "type": "ORGANISED", "description": "Organised the 1956 summer meeting"},
+    {"source": "John McCarthy", "target": "Lisp", "type": "CREATED", "description": "Created the symbolic programming language"},
+    {"source": "Marvin Minsky", "target": "Dartmouth Workshop", "type": "ATTENDED", "description": "Took part in the 1956 meeting"},
+    {"source": "Marvin Minsky", "target": "Perceptron", "type": "CRITICISED", "description": "His 1969 book exposed its limits"},
+    {"source": "Frank Rosenblatt", "target": "Perceptron", "type": "BUILT", "description": "Built the trainable classifier"},
+    {"source": "Perceptron", "target": "Cornell Aeronautical Laboratory", "type": "BUILT_AT", "description": "Wired up in hardware at the laboratory"},
+    {"source": "Perceptron", "target": "AI Winter", "type": "TRIGGERED", "description": "Disillusionment with its limits started the slump"},
+    {"source": "Geoffrey Hinton", "target": "Backpropagation", "type": "POPULARISED", "description": "Popularised the gradient algorithm in 1986"},
+    {"source": "Backpropagation", "target": "Perceptron", "type": "OVERCAME_LIMITS_OF", "description": "Trained the multi-layer networks the classifier lacked"},
+    {"source": "Geoffrey Hinton", "target": "Alex Krizhevsky", "type": "SUPERVISED", "description": "Supervised the student who trained the network"},
+    {"source": "Geoffrey Hinton", "target": "Ilya Sutskever", "type": "SUPERVISED", "description": "Supervised the co-author of the network"},
+    {"source": "Alex Krizhevsky", "target": "AlexNet", "type": "BUILT", "description": "Trained the winning network"},
+    {"source": "Ilya Sutskever", "target": "AlexNet", "type": "BUILT", "description": "Co-authored the winning network"},
+    {"source": "AlexNet", "target": "ImageNet", "type": "WON", "description": "Won the 2012 contest"},
+    {"source": "AlexNet", "target": "GPU", "type": "TRAINED_ON", "description": "Trained on two consumer graphics cards"},
+    {"source": "Fei-Fei Li", "target": "ImageNet", "type": "CREATED", "description": "Directed the assembly of the image database"},
+    {"source": "Fei-Fei Li", "target": "Stanford University", "type": "WORKED_AT", "description": "Led the project from the university"},
+    {"source": "ImageNet", "target": "Computer Vision", "type": "BENCHMARK_FOR", "description": "Its contest measured progress in the field"},
+    {"source": "Transformer", "target": "Attention Is All You Need", "type": "INTRODUCED_IN", "description": "Introduced by the 2017 paper"},
+    {"source": "Attention Is All You Need", "target": "Google", "type": "WRITTEN_AT", "description": "Written by researchers at the company"},
+    {"source": "Transformer", "target": "Self-Attention", "type": "USES", "description": "Replaces recurrence with attention"},
+    {"source": "BERT", "target": "Transformer", "type": "BUILT_FROM", "description": "A stack of attention blocks"},
+    {"source": "GPT", "target": "Transformer", "type": "BUILT_FROM", "description": "A stack of attention blocks"},
+    {"source": "Google", "target": "BERT", "type": "RELEASED", "description": "Released the bidirectional model"},
+    {"source": "OpenAI", "target": "GPT", "type": "RELEASED", "description": "Released the generative model family"},
+    {"source": "Ilya Sutskever", "target": "OpenAI", "type": "WORKED_AT", "description": "First chief scientist of the laboratory"},
+    {"source": "GPT", "target": "Large Language Model", "type": "IS_A", "description": "An instance of the model class"},
+    {"source": "Retrieval-Augmented Generation", "target": "Large Language Model", "type": "GROUNDS", "description": "Grounds the model in fetched passages"},
+    {"source": "Retrieval-Augmented Generation", "target": "Hallucination", "type": "REDUCES", "description": "Cuts unsupported output"},
+    {"source": "GraphRAG", "target": "Retrieval-Augmented Generation", "type": "EXTENDS", "description": "Adds graph traversal to passage retrieval"},
+    {"source": "GraphRAG", "target": "Knowledge Graph", "type": "TRAVERSES", "description": "Walks entity edges to gather context"},
+    {"source": "Synapse", "target": "GraphRAG", "type": "IMPLEMENTS", "description": "Implements graph-based retrieval"},
+    {"source": "Synapse", "target": "Neo4j", "type": "USES", "description": "Stores the extracted graph in the database"},
+    {"source": "Knowledge Graph", "target": "Neo4j", "type": "STORED_IN", "description": "Persisted as nodes and relationships"},
+    {"source": "Neo4j", "target": "Cypher", "type": "QUERIED_WITH", "description": "Queried with a declarative graph language"},
+    {"source": "ENIAC", "target": "University of Pennsylvania", "type": "BUILT_AT", "description": "Unveiled at the university in 1946"},
+    {"source": "ENIAC", "target": "Turing Machine", "type": "REALISED", "description": "A physical machine for an abstract model"},
+    {"source": "Colossus", "target": "Bletchley Park", "type": "USED_AT", "description": "Put into service at the codebreaking site"},
+    {"source": "John von Neumann", "target": "EDVAC", "type": "DESIGNED", "description": "Described the stored-program design in 1945"},
+    {"source": "EDVAC", "target": "ENIAC", "type": "SUCCEEDED", "description": "Followed the first electronic computer"},
+    {"source": "Transistor", "target": "Bell Labs", "type": "INVENTED_AT", "description": "Demonstrated at the laboratory in 1947"},
+    {"source": "IBM", "target": "Transistor", "type": "USES_TOOL", "description": "Shipped transistorised computers from 1959"},
+    {"source": "IBM", "target": "Fortran", "type": "CREATED", "description": "Released the first high-level language"},
+    {"source": "Grace Hopper", "target": "Cobol", "type": "DESIGNED", "description": "Drove the design of the business language"},
+    {"source": "Cobol", "target": "Fortran", "type": "FOLLOWED", "description": "Arrived two years later"},
+    {"source": "ARPANET", "target": "Stanford University", "type": "CONNECTED", "description": "One of the first four network sites"},
+    {"source": "Tim Berners-Lee", "target": "World Wide Web", "type": "CREATED", "description": "Wrote the first browser and server"},
+    {"source": "Tim Berners-Lee", "target": "CERN", "type": "WORKED_AT", "description": "Built the web at the physics laboratory"},
+    {"source": "World Wide Web", "target": "ARPANET", "type": "BUILT_ON", "description": "Layered on the earlier packet network"},
+    {"source": "MYCIN", "target": "Expert Systems", "type": "IS_A", "description": "A rule-based diagnostic program"},
+    {"source": "Expert Systems", "target": "AI Winter", "type": "DEEPENED", "description": "Their brittleness disappointed buyers"},
+    {"source": "Claude Shannon", "target": "Information Theory", "type": "FOUNDED", "description": "Published the mathematical theory of communication"},
+    {"source": "Claude Shannon", "target": "Deep Blue", "type": "ANTICIPATED", "description": "Sketched machine chess decades earlier"},
+    {"source": "DeepMind", "target": "AlphaGo", "type": "BUILT", "description": "Built the Go-playing system"},
+    {"source": "AlphaGo", "target": "Reinforcement Learning", "type": "USES", "description": "Learned from self-played games"},
+    {"source": "Google", "target": "DeepMind", "type": "ACQUIRED", "description": "Acquired the London laboratory in 2014"},
+    {"source": "Word2Vec", "target": "Embeddings", "type": "PRODUCES", "description": "Places words in a vector space"},
+    {"source": "Vector Search", "target": "Embeddings", "type": "USES", "description": "Ranks by distance between vectors"},
+    {"source": "Retrieval-Augmented Generation", "target": "Vector Search", "type": "USES_TOOL", "description": "Ranks candidate passages with it"},
+    {"source": "NVIDIA", "target": "CUDA", "type": "CREATED", "description": "Released the toolkit in 2007"},
+    {"source": "CUDA", "target": "GPU", "type": "RUNS_ON", "description": "Runs general code on graphics hardware"},
+    {"source": "Transformer", "target": "LSTM", "type": "REPLACED", "description": "Made recurrence unnecessary"},
+    {"source": "Fine-Tuning", "target": "Large Language Model", "type": "ADAPTS", "description": "Adapts a pretrained model to a task"},
+    {"source": "FAISS", "target": "Vector Database", "type": "IS_A", "description": "A library for dense similarity search"},
+    {"source": "Vector Database", "target": "Embeddings", "type": "STORES", "description": "Indexes vectors for fast lookup"}
+  ],
+  "questions": [
+    {
+      "id": "q01",
+      "anchor": "Deep Blue",
+      "question": "Who founded the business that eventually became the maker of Deep Blue?",
+      "required_facts": ["Deep Blue", "IBM", "Tabulating Machine Company", "Herman Hollerith"],
+      "reasoning": "Deep Blue <-[BUILT]- IBM <-[RENAMED_AS]- Tabulating Machine Company <-[FOUNDED]- Herman Hollerith"
+    },
+    {
+      "id": "q02",
+      "anchor": "Ada Lovelace",
+      "question": "What fed instructions into the machine Ada Lovelace wrote her notes about, and where did that idea come from?",
+      "required_facts": ["Ada Lovelace", "Analytical Engine", "Punched Cards", "Jacquard Loom"],
+      "reasoning": "Ada Lovelace -[WROTE_ALGORITHM_FOR]-> Analytical Engine -[READ_INPUT_FROM]-> Punched Cards -[DERIVED_FROM]-> Jacquard Loom"
+    },
+    {
+      "id": "q03",
+      "anchor": "Charles Babbage",
+      "question": "Whose statistical work borrowed the input medium of the machine Charles Babbage designed?",
+      "required_facts": ["Charles Babbage", "Analytical Engine", "Punched Cards", "Herman Hollerith"],
+      "reasoning": "Charles Babbage -[DESIGNED]-> Analytical Engine -[READ_INPUT_FROM]-> Punched Cards <-[ADAPTED]- Herman Hollerith"
+    },
+    {
+      "id": "q04",
+      "anchor": "AlexNet",
+      "question": "Who supervised the AlexNet team, and what did he popularise in 1986?",
+      "required_facts": ["AlexNet", "Geoffrey Hinton", "Backpropagation"],
+      "reasoning": "AlexNet <-[BUILT]- Alex Krizhevsky <-[SUPERVISED]- Geoffrey Hinton -[POPULARISED]-> Backpropagation"
+    },
+    {
+      "id": "q05",
+      "anchor": "AlexNet",
+      "question": "Where was the dataset that AlexNet won on assembled, and by whom?",
+      "required_facts": ["AlexNet", "ImageNet", "Fei-Fei Li", "Stanford University"],
+      "reasoning": "AlexNet -[WON]-> ImageNet <-[CREATED]- Fei-Fei Li -[WORKED_AT]-> Stanford University"
+    },
+    {
+      "id": "q06",
+      "anchor": "GPT",
+      "question": "Which vision network was co-built by the first chief scientist of the laboratory that released GPT?",
+      "required_facts": ["GPT", "OpenAI", "Ilya Sutskever", "AlexNet"],
+      "reasoning": "GPT <-[RELEASED]- OpenAI <-[WORKED_AT]- Ilya Sutskever -[BUILT]-> AlexNet"
+    },
+    {
+      "id": "q07",
+      "anchor": "BERT",
+      "question": "What mechanism replaced recurrence inside the architecture BERT is built from?",
+      "required_facts": ["BERT", "Transformer", "Self-Attention"],
+      "reasoning": "BERT -[BUILT_FROM]-> Transformer -[USES]-> Self-Attention"
+    },
+    {
+      "id": "q08",
+      "anchor": "Cornell Aeronautical Laboratory",
+      "question": "Which algorithm overcame the limits of the machine built at the Cornell Aeronautical Laboratory, and who popularised it?",
+      "required_facts": ["Cornell Aeronautical Laboratory", "Perceptron", "Backpropagation", "Geoffrey Hinton"],
+      "reasoning": "Cornell Aeronautical Laboratory <-[BUILT_AT]- Perceptron <-[OVERCAME_LIMITS_OF]- Backpropagation <-[POPULARISED]- Geoffrey Hinton"
+    },
+    {
+      "id": "q09",
+      "anchor": "Enigma",
+      "question": "Which thought experiment was proposed by the man who helped break Enigma?",
+      "required_facts": ["Enigma", "Alan Turing", "Turing Test"],
+      "reasoning": "Enigma <-[HELPED_BREAK]- Alan Turing -[PROPOSED]-> Turing Test"
+    },
+    {
+      "id": "q10",
+      "anchor": "Cypher",
+      "question": "Which retrieval method walks the structure held in the database that Cypher queries?",
+      "required_facts": ["Cypher", "Neo4j", "Knowledge Graph", "GraphRAG"],
+      "reasoning": "Cypher <-[QUERIED_WITH]- Neo4j <-[STORED_IN]- Knowledge Graph <-[TRAVERSES]- GraphRAG"
+    },
+    {
+      "id": "q11",
+      "anchor": "Hallucination",
+      "question": "Which technique extends the method that reduces hallucination, and what does it walk over?",
+      "required_facts": ["Hallucination", "Retrieval-Augmented Generation", "GraphRAG", "Knowledge Graph"],
+      "reasoning": "Hallucination <-[REDUCES]- Retrieval-Augmented Generation <-[EXTENDS]- GraphRAG -[TRAVERSES]-> Knowledge Graph"
+    },
+    {
+      "id": "q12",
+      "anchor": "BERT",
+      "question": "Which paper introduced the architecture behind BERT, and which company employed its authors?",
+      "required_facts": ["BERT", "Transformer", "Attention Is All You Need", "Google"],
+      "reasoning": "BERT -[BUILT_FROM]-> Transformer -[INTRODUCED_IN]-> Attention Is All You Need -[WRITTEN_AT]-> Google"
+    },
+    {
+      "id": "q13",
+      "anchor": "Computer Vision",
+      "question": "Which network won the contest that measured progress in Computer Vision, and on what hardware was it trained?",
+      "required_facts": ["Computer Vision", "ImageNet", "AlexNet", "GPU"],
+      "reasoning": "Computer Vision <-[BENCHMARK_FOR]- ImageNet <-[WON]- AlexNet -[TRAINED_ON]-> GPU"
+    },
+    {
+      "id": "q14",
+      "anchor": "Lisp",
+      "question": "The creator of Lisp organised a meeting; which early neural network was attacked by another of its attendees?",
+      "required_facts": ["Lisp", "John McCarthy", "Dartmouth Workshop", "Marvin Minsky", "Perceptron"],
+      "reasoning": "Lisp <-[CREATED]- John McCarthy -[ORGANISED]-> Dartmouth Workshop <-[ATTENDED]- Marvin Minsky -[CRITICISED]-> Perceptron"
+    }
+  ]
+}
