@@ -1,8 +1,6 @@
-version: "3.9"
-
 services:
   # ──────────────────────────────────────────────
-  # Neo4j Graph Database
+  # Neo4j Graph Database (with APOC + vector index)
   # ──────────────────────────────────────────────
   neo4j:
     image: neo4j:5-community
@@ -19,13 +17,13 @@ services:
       - neo4j_data:/data
       - neo4j_logs:/logs
     healthcheck:
-      test: [ "CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1" ]
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   # ──────────────────────────────────────────────
-  # FastAPI Backend
+  # FastAPI Backend (GraphRAG engine)
   # ──────────────────────────────────────────────
   backend:
     build:
@@ -33,16 +31,26 @@ services:
       dockerfile: Dockerfile
     container_name: synapse-backend
     ports:
-      - "8000:8000"
+      # Override BACKEND_PORT in .env if 8000 is taken by another project.
+      - "${BACKEND_PORT:-8000}:8000"
     env_file:
       - .env
     environment:
       - NEO4J_URI=bolt://neo4j:7687
     volumes:
       - ./backend:/app
+      # Keep the container's virtualenv/site-packages, don't shadow with host.
+      - /app/__pycache__
+    # Hot-reload for local dev (the image's default CMD has no --reload).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       neo4j:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
 
   # ──────────────────────────────────────────────
   # Next.js Frontend
@@ -51,11 +59,13 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     container_name: synapse-frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     depends_on:
       - backend
 

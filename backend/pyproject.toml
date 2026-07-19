@@ -1,0 +1,28 @@
+[project]
+name = "synapse-backend"
+version = "0.2.0"
+description = "Project Synapse — GraphRAG Knowledge Explorer backend"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "integration: end-to-end tests requiring a live Neo4j (set SYNAPSE_IT=1)",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",   # line length handled by formatter, long prompts are fine
+    "B008",   # FastAPI uses function calls in argument defaults by design
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]

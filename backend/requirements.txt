@@ -1,10 +1,28 @@
+# ── Web framework ───────────────────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.32.0
 python-multipart==0.0.18
+
+# ── PDF parsing ─────────────────────────────────────
 pypdf==5.1.0
+
+# ── LangChain core + pluggable providers ────────────
+# Keep the whole stack on the langchain-core 0.3.x line — the <0.4 cap is load-
+# bearing: without it, pip upgrades core to 1.x for the provider packages and
+# breaks langchain/community/ollama (which require core <0.4).
 langchain==0.3.14
-langchain-ollama==0.2.3
+langchain-core>=0.3.33,<0.4
 langchain-community==0.3.14
+langchain-ollama==0.2.3          # local models
+langchain-google-genai>=2.0,<3   # Google Gemini (cloud)
+langchain-anthropic>=0.3,<0.4    # Anthropic Claude (cloud)
+
+# ── Embeddings (local, no API key) ──────────────────
+fastembed>=0.4,<0.8
+
+# ── Database ────────────────────────────────────────
 neo4j==5.27.0
+
+# ── Config ──────────────────────────────────────────
 python-dotenv==1.0.1
 pydantic-settings==2.7.0

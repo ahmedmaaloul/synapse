@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* ── Base Styles (Linear/Vercel Practical SaaS) ── */
+/* ── Base (Linear / Vercel practical SaaS) ──────────── */
 * {
   box-sizing: border-box;
 }
@@ -10,48 +10,43 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background-color: #09090b;
-  /* zinc-950 */
-  color: #fafafa;
-  /* zinc-50 */
-  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #09090b; /* zinc-950 */
+  color: #fafafa; /* zinc-50 */
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   overflow: hidden;
 }
 
-/* ── Typography Fullbacks ───────────────────────── */
 h1,
 h2,
 h3,
 h4,
 h5,
 h6 {
-  font-weight: 500;
+  font-family: var(--font-space-grotesk), var(--font-inter), sans-serif;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
-/* ── Scrollbar ──────────────────────────────────── */
+/* ── Scrollbar ──────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
   background: transparent;
 }
-
 ::-webkit-scrollbar-thumb {
   background: #27272a;
-  /* zinc-800 */
   border-radius: 4px;
 }
-
 ::-webkit-scrollbar-thumb:hover {
   background: #3f3f46;
-  /* zinc-700 */
 }
 
-/* ── Linear Loading Bar (Vercel Style) ──────────── */
+/* ── Indeterminate loading bar ──────────────────────── */
 .loading-bar {
   position: absolute;
   top: 0;
@@ -62,29 +57,98 @@ h6 {
   overflow: hidden;
   z-index: 50;
 }
-
 .loading-indicator {
   position: absolute;
   height: 100%;
   width: 30%;
-  background: #fafafa;
-  /* stark white */
-  animation: indeterminate 1.5s infinite linear;
+  background: linear-gradient(90deg, transparent, #818cf8, transparent);
+  animation: indeterminate 1.4s infinite ease-in-out;
 }
-
 @keyframes indeterminate {
   0% {
     left: -30%;
-    width: 30%;
   }
-
   100% {
     left: 100%;
-    width: 30%;
   }
 }
 
-/* ── Custom Utilities ───────────────────────────── */
-.glass-border {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+/* ── Dotted grid backdrop for the graph canvas ──────── */
+.graph-grid {
+  background-image: radial-gradient(circle, #ffffff0a 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* ── Message entrance ───────────────────────────────── */
+.msg-enter {
+  animation: msg-in 0.22s ease-out;
+}
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Blinking caret for streaming answers ───────────── */
+.caret {
+  display: inline-block;
+  width: 6px;
+  height: 14px;
+  margin-left: 2px;
+  background: #818cf8;
+  vertical-align: text-bottom;
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* ── Prose (markdown answers) ───────────────────────── */
+.prose-chat p {
+  margin: 0 0 0.6em;
+}
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+.prose-chat ul,
+.prose-chat ol {
+  margin: 0.3em 0 0.6em;
+  padding-left: 1.2em;
+}
+.prose-chat li {
+  margin: 0.15em 0;
+}
+.prose-chat code {
+  background: #27272a;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.prose-chat pre {
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 0.75em;
+  overflow-x: auto;
+  margin: 0.5em 0;
+}
+.prose-chat pre code {
+  background: transparent;
+  padding: 0;
+}
+.prose-chat strong {
+  color: #fafafa;
+  font-weight: 600;
+}
+.prose-chat a {
+  color: #818cf8;
+  text-decoration: underline;
 }

@@ -1,0 +1,42 @@
+{
+  "description": "Small fixture knowledge graph + paraphrased retrieval queries. Queries deliberately avoid lexical overlap with entity names so that keyword-only search underperforms and semantic (vector) retrieval is required.",
+  "entities": [
+    {"name": "Ahmed Maaloul", "type": "PERSON", "description": "Machine learning engineer and team lead"},
+    {"name": "PyTorch", "type": "TOOL", "description": "Deep learning framework for neural networks"},
+    {"name": "TensorFlow", "type": "TOOL", "description": "Deep learning framework by Google"},
+    {"name": "scikit-learn", "type": "TOOL", "description": "Classical machine learning library in Python"},
+    {"name": "Neo4j", "type": "DATABASE", "description": "Graph database using the Cypher query language"},
+    {"name": "PostgreSQL", "type": "DATABASE", "description": "Relational SQL database"},
+    {"name": "Docker", "type": "TOOL", "description": "Containerization platform for deployment"},
+    {"name": "Kubernetes", "type": "TOOL", "description": "Container orchestration for scaling services"},
+    {"name": "AWS", "type": "ORGANIZATION", "description": "Cloud computing platform for hosting infrastructure"},
+    {"name": "Retrieval-Augmented Generation", "type": "SKILL", "description": "Grounding language models in external knowledge"},
+    {"name": "Knowledge Graphs", "type": "SKILL", "description": "Representing entities and relationships as a graph"},
+    {"name": "ESILV", "type": "UNIVERSITY", "description": "Engineering school where Ahmed studied"},
+    {"name": "TechCorp", "type": "COMPANY", "description": "Employer where Ahmed leads the ML platform team"},
+    {"name": "FastAPI", "type": "FRAMEWORK", "description": "Python web framework for building APIs"},
+    {"name": "React", "type": "FRAMEWORK", "description": "JavaScript library for building user interfaces"}
+  ],
+  "relationships": [
+    {"source": "Ahmed Maaloul", "target": "PyTorch", "type": "USES_TOOL"},
+    {"source": "Ahmed Maaloul", "target": "TensorFlow", "type": "USES_TOOL"},
+    {"source": "Ahmed Maaloul", "target": "Neo4j", "type": "USES_TOOL"},
+    {"source": "Ahmed Maaloul", "target": "Retrieval-Augmented Generation", "type": "HAS_SKILL"},
+    {"source": "Ahmed Maaloul", "target": "Knowledge Graphs", "type": "HAS_SKILL"},
+    {"source": "Ahmed Maaloul", "target": "ESILV", "type": "STUDIED_AT"},
+    {"source": "Ahmed Maaloul", "target": "TechCorp", "type": "WORKED_AT"},
+    {"source": "TechCorp", "target": "AWS", "type": "USES_TOOL"},
+    {"source": "TechCorp", "target": "Kubernetes", "type": "USES_TOOL"},
+    {"source": "TechCorp", "target": "Docker", "type": "USES_TOOL"}
+  ],
+  "queries": [
+    {"question": "Which neural network libraries does the engineer use?", "expected": ["PyTorch", "TensorFlow"]},
+    {"question": "What technology stores data as connected nodes and edges?", "expected": ["Neo4j"]},
+    {"question": "How does the team scale and orchestrate its containers?", "expected": ["Kubernetes", "Docker"]},
+    {"question": "Where is the cloud infrastructure hosted?", "expected": ["AWS"]},
+    {"question": "What methods ground LLMs in external facts?", "expected": ["Retrieval-Augmented Generation", "Knowledge Graphs"]},
+    {"question": "Where did Ahmed get his engineering degree?", "expected": ["ESILV"]},
+    {"question": "What library builds web user interfaces?", "expected": ["React"]},
+    {"question": "Which relational SQL store is used?", "expected": ["PostgreSQL"]}
+  ]
+}

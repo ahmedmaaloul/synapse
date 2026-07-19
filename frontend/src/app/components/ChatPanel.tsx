@@ -1,194 +1,235 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Send, User, ChevronRight } from "lucide-react";
-
-interface ChatMessage {
-    id: string;
-    role: "user" | "assistant" | "system";
-    content: string;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, Send, Sparkles, User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { streamChat } from "../lib/api";
+import { colorForType } from "../lib/constants";
+import type { ChatMessage, Citation, IngestResult } from "../lib/types";
 
 interface ChatPanelProps {
-    uploadResult?: {
-        filename: string;
-        nodes_created: number;
-        relationships_created: number;
-    } | null;
+  ingestResult: IngestResult | null;
+  onCitations: (names: string[]) => void;
+  onFocusCitation: (name: string) => void;
 }
 
-export default function ChatPanel({ uploadResult }: ChatPanelProps) {
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        {
-            id: "welcome",
-            role: "system",
-            content: "Synapse Engine Ready. Awaiting document ingestion.",
-        },
+let idCounter = 0;
+const nextId = () => `m${++idCounter}`;
+
+const SUGGESTIONS = [
+  "Summarize the key entities",
+  "How is everything connected?",
+  "What are the main skills or topics?",
+];
+
+export default function ChatPanel({
+  ingestResult,
+  onCitations,
+  onFocusCitation,
+}: ChatPanelProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([
+    {
+      id: "welcome",
+      role: "system",
+      content: "Synapse engine ready. Ingest a document, then ask anything.",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  useEffect(() => {
+    if (!ingestResult) return;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: nextId(),
+        role: "system",
+        content: `Ingested "${ingestResult.filename}" → ${ingestResult.nodes_created} entities, ${ingestResult.relationships_created} relationships. Context loaded.`,
+      },
     ]);
-    const [input, setInput] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+  }, [ingestResult]);
 
-    // ── Auto-scroll to bottom ──
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
+  const send = async (text?: string) => {
+    const query = (text ?? input).trim();
+    if (!query || isLoading) return;
 
-    // Listen for external uploads
-    useEffect(() => {
-        if (uploadResult) {
-            const sysMsg: ChatMessage = {
-                id: `sys-${Date.now()}`,
-                role: "system",
-                content: `Ingestion complete. Extracted [${uploadResult.nodes_created}] entities, [${uploadResult.relationships_created}] links. Context loaded.`,
-            };
-            setMessages((prev) => [...prev, sysMsg]);
+    const history = messages
+      .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const userMsg: ChatMessage = { id: nextId(), role: "user", content: query };
+    const assistantId = nextId();
+    setMessages((prev) => [
+      ...prev,
+      userMsg,
+      { id: assistantId, role: "assistant", content: "", citations: [] },
+    ]);
+    setInput("");
+    setIsLoading(true);
+
+    const patch = (fn: (m: ChatMessage) => ChatMessage) =>
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? fn(m) : m)));
+
+    try {
+      await streamChat(query, history, (event) => {
+        if (event.type === "citations") {
+          const cites = event.data as Citation[];
+          patch((m) => ({ ...m, citations: cites }));
+          onCitations(cites.map((c) => c.name));
+        } else if (event.type === "token") {
+          patch((m) => ({ ...m, content: m.content + event.data }));
+        } else if (event.type === "error") {
+          patch((m) => ({ ...m, content: `⚠️ ${event.data}` }));
         }
-    }, [uploadResult]);
+      });
+    } catch (err) {
+      console.error("Chat error:", err);
+      patch((m) => ({
+        ...m,
+        content: m.content || "⚠️ Connection refused. Is the backend running?",
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    // ── Handle send ──
-    const handleSend = async () => {
-        const query = input.trim();
-        if (!query || isLoading) return;
+  const showSuggestions =
+    messages.filter((m) => m.role === "user").length === 0 && !isLoading;
 
-        const userMsg: ChatMessage = {
-            id: `user-${Date.now()}`,
-            role: "user",
-            content: query,
-        };
-        setMessages((prev) => [...prev, userMsg]);
-        setInput("");
-        setIsLoading(true);
-
-        const assistantId = `assistant-${Date.now()}`;
-        setMessages((prev) => [
-            ...prev,
-            { id: assistantId, role: "assistant", content: "" },
-        ]);
-
-        try {
-            const res = await fetch(`${API_URL}/api/chat`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ query }),
-            });
-
-            if (!res.ok) throw new Error("Chat request failed");
-
-            const reader = res.body?.getReader();
-            const decoder = new TextDecoder();
-
-            if (reader) {
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-
-                    const chunk = decoder.decode(value, { stream: true });
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === assistantId
-                                ? { ...msg, content: msg.content + chunk }
-                                : msg
-                        )
-                    );
-                }
-            }
-        } catch (err) {
-            console.error("Chat error:", err);
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.id === assistantId
-                        ? {
-                            ...msg,
-                            content: "Error: Connection refused. Check backend status.",
-                        }
-                        : msg
-                )
-            );
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
-    return (
-        <div className="flex flex-col h-full bg-[#09090b] w-full relative pt-2">
-            {isLoading && (
-                <div className="loading-bar">
-                    <div className="loading-indicator"></div>
-                </div>
-            )}
-
-            {/* ── Chat Header ── */}
-            <div className="px-5 py-2.5 flex items-center justify-between border-b border-[#27272a]">
-                <h3 className="text-[12px] font-semibold text-[#e4e4e7] uppercase tracking-wider">Terminal Workspace</h3>
-                <div className="text-[11px] font-mono text-[#71717a]">v0.2.1</div>
-            </div>
-
-            {/* ── Messages Area ── */}
-            <div className="flex-1 overflow-y-auto w-full px-5 py-4 font-sans text-[13px]">
-                <div className="max-w-full flex flex-col w-full pb-20">
-                    {messages.map((msg) => (
-                        <div key={msg.id} className="w-full flex flex-col py-3 border-b border-[#27272a]/50 last:border-0 group">
-                            {msg.role === "system" ? (
-                                <div className="text-[12px] text-[#71717a] py-1 font-mono tracking-tight flex items-center gap-2">
-                                    <ChevronRight size={12} />
-                                    {msg.content}
-                                </div>
-                            ) : (
-                                <div className="flex gap-3">
-                                    {/* Minimal Avatar Grid */}
-                                    <div className="w-6 h-6 rounded flex items-center justify-center flex-shrink-0 mt-0.5 border border-[#27272a] bg-[#18181b]">
-                                        {msg.role === "user" ? (
-                                            <User size={12} className="text-[#a1a1aa]" />
-                                        ) : (
-                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
-                                        )}
-                                    </div>
-
-                                    {/* Text Content */}
-                                    <div className={`flex-1 text-[13px] leading-relaxed tracking-tight ${msg.role === "user"
-                                            ? "text-[#fafafa]"
-                                            : "text-[#d4d4d8]"
-                                        }`}>
-                                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                                        {msg.role === "assistant" && !msg.content && isLoading && (
-                                            <span className="inline-block w-1.5 h-3 ml-1 bg-indigo-500 animate-pulse mt-1" />
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                </div>
-            </div>
-
-            {/* ── Prompt Input Area (Linear Style) ── */}
-            <div className="absolute bottom-0 w-full bg-[#09090b] pt-2 pb-4 border-t border-[#27272a]">
-                <div className="max-w-full mx-auto px-4">
-                    <div className="relative flex items-center w-full bg-[#18181b] border border-[#27272a] rounded-md shadow-sm transition-colors focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/20">
-                        <input
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                            placeholder="Query the engine..."
-                            disabled={isLoading}
-                            className="bg-transparent text-[#fafafa] placeholder-[#71717a] border-0 focus:ring-0 outline-none w-full py-2.5 pl-3 pr-10 text-[13px] rounded-md font-medium"
-                        />
-                        <button
-                            className="absolute right-1.5 p-1.5 rounded text-[#a1a1aa] hover:text-[#fafafa] hover:bg-[#27272a] disabled:opacity-50 transition-colors"
-                            onClick={handleSend}
-                            disabled={isLoading || !input.trim()}
-                            aria-label="Send message"
-                        >
-                            <Send size={14} />
-                        </button>
-                    </div>
-                </div>
-            </div>
+  return (
+    <div className="relative flex h-full w-full flex-col bg-[#09090b] pt-2">
+      {isLoading && (
+        <div className="loading-bar">
+          <div className="loading-indicator" />
         </div>
-    );
+      )}
+
+      <div className="flex items-center justify-between border-b border-[#27272a] px-5 py-2.5">
+        <h3 className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-[#e4e4e7]">
+          <Sparkles size={13} className="text-indigo-400" />
+          GraphRAG Chat
+        </h3>
+        <div className="font-mono text-[11px] text-[#71717a]">v0.3.0</div>
+      </div>
+
+      {/* Messages */}
+      <div className="w-full flex-1 overflow-y-auto px-5 py-4 text-[13px]">
+        <div className="flex w-full max-w-full flex-col pb-24">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className="msg-enter group flex w-full flex-col border-b border-[#27272a]/50 py-3 last:border-0"
+            >
+              {msg.role === "system" ? (
+                <div className="flex items-center gap-2 py-1 font-mono text-[12px] tracking-tight text-[#71717a]">
+                  <ChevronRight size={12} />
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-[#27272a] bg-[#18181b]">
+                    {msg.role === "user" ? (
+                      <User size={12} className="text-[#a1a1aa]" />
+                    ) : (
+                      <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    {msg.role === "user" ? (
+                      <div className="whitespace-pre-wrap font-medium leading-relaxed text-[#fafafa]">
+                        {msg.content}
+                      </div>
+                    ) : (
+                      <div className="prose-chat leading-relaxed text-[#d4d4d8]">
+                        {msg.content ? (
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {msg.content}
+                          </ReactMarkdown>
+                        ) : (
+                          isLoading && <span className="caret" />
+                        )}
+                      </div>
+                    )}
+
+                    {/* Citations */}
+                    {msg.role === "assistant" &&
+                      msg.citations &&
+                      msg.citations.length > 0 && (
+                        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-[#52525b]">
+                            Grounded in
+                          </span>
+                          {msg.citations.slice(0, 8).map((c) => (
+                            <button
+                              key={c.name}
+                              onClick={() => onFocusCitation(c.name)}
+                              className="flex items-center gap-1 rounded border border-[#27272a] bg-[#18181b] px-1.5 py-0.5 text-[10px] font-medium text-[#d4d4d8] transition-colors hover:border-indigo-500/50 hover:text-[#fafafa]"
+                              title="Center in graph"
+                            >
+                              <span
+                                className="h-1.5 w-1.5 rounded-full"
+                                style={{ backgroundColor: colorForType(c.type || "") }}
+                              />
+                              {c.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {showSuggestions && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="rounded-md border border-[#27272a] bg-[#18181b] px-2.5 py-1.5 text-[12px] text-[#a1a1aa] transition-colors hover:border-indigo-500/40 hover:text-[#fafafa]"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+          <div ref={endRef} />
+        </div>
+      </div>
+
+      {/* Input */}
+      <div className="absolute bottom-0 w-full border-t border-[#27272a] bg-[#09090b] pb-4 pt-2">
+        <div className="mx-auto max-w-full px-4">
+          <div className="relative flex w-full items-center rounded-md border border-[#27272a] bg-[#18181b] shadow-sm transition-colors focus-within:border-indigo-500/50 focus-within:ring-1 focus-within:ring-indigo-500/20">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && send()}
+              placeholder="Query the knowledge graph…"
+              disabled={isLoading}
+              aria-label="Chat message"
+              className="w-full rounded-md border-0 bg-transparent py-2.5 pl-3 pr-10 text-[13px] font-medium text-[#fafafa] outline-none placeholder:text-[#71717a] focus:ring-0"
+            />
+            <button
+              className="absolute right-1.5 rounded p-1.5 text-[#a1a1aa] transition-colors hover:bg-[#27272a] hover:text-[#fafafa] disabled:opacity-50"
+              onClick={() => send()}
+              disabled={isLoading || !input.trim()}
+              aria-label="Send message"
+            >
+              <Send size={14} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }

@@ -1,41 +1,47 @@
 """
 Project Synapse — Graph Router
-Serves the knowledge graph data for frontend visualization.
+
+Serves graph data for the force-graph visualization and supports clearing the DB.
 """
 
-from fastapi import APIRouter
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, HTTPException
+
 from app.neo4j_driver import execute_query
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/graph-data")
 async def get_graph_data():
-    """
-    Fetch all nodes and relationships from Neo4j
-    for the force-graph visualization.
-    """
-    # Fetch nodes
-    nodes_query = """
-    MATCH (n)
-    RETURN elementId(n) AS id, labels(n) AS labels, properties(n) AS properties
-    """
-    nodes_raw = await execute_query(nodes_query)
+    """Fetch all nodes and relationships, formatted for react-force-graph."""
+    nodes_raw = await execute_query(
+        """
+        MATCH (n)
+        RETURN elementId(n) AS id, labels(n) AS labels, properties(n) AS properties
+        """
+    )
+    rels_raw = await execute_query(
+        """
+        MATCH (a)-[r]->(b)
+        RETURN elementId(a) AS source, elementId(b) AS target,
+               type(r) AS type, properties(r) AS properties
+        """
+    )
 
-    # Fetch relationships
-    rels_query = """
-    MATCH (a)-[r]->(b)
-    RETURN elementId(a) AS source, elementId(b) AS target, type(r) AS type, properties(r) AS properties
-    """
-    rels_raw = await execute_query(rels_query)
-
-    # Format for react-force-graph
     nodes = [
         {
             "id": str(n["id"]),
             "label": n["properties"].get("name", n["labels"][0] if n["labels"] else "Unknown"),
-            "type": n["labels"][0] if n["labels"] else "Unknown",
-            "properties": n["properties"],
+            # Color by the domain `type` property (PERSON, TOOL, ...), not the
+            # Neo4j label (which is "Entity" for every node).
+            "type": n["properties"].get("type", n["labels"][0] if n["labels"] else "Unknown"),
+            # Never ship embedding vectors to the browser — large and useless there.
+            "properties": {k: v for k, v in n["properties"].items() if k != "embedding"},
         }
         for n in nodes_raw
     ]
@@ -44,7 +50,8 @@ async def get_graph_data():
         {
             "source": str(r["source"]),
             "target": str(r["target"]),
-            "type": r["type"],
+            # Prefer the semantic type stored on the relationship, else the Neo4j type.
+            "type": r.get("properties", {}).get("type", r["type"]),
             "properties": r.get("properties", {}),
         }
         for r in rels_raw
@@ -53,18 +60,12 @@ async def get_graph_data():
     return {"nodes": nodes, "links": links}
 
 
-from fastapi import APIRouter, HTTPException
-
 @router.delete("/graph")
 async def clear_graph():
-    """
-    Delete all nodes and relationships in the Neo4j database.
-    """
-    query = "MATCH (n) DETACH DELETE n"
+    """Delete all nodes and relationships in the database."""
     try:
-        await execute_query(query)
+        await execute_query("MATCH (n) DETACH DELETE n")
         return {"status": "success", "message": "Knowledge graph cleared"}
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"Error clearing graph: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear graph: {str(e)}")
+        logger.error("Error clearing graph: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to clear graph: {e}") from e

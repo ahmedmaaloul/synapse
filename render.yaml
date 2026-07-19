@@ -1,0 +1,28 @@
+# Render.com Blueprint for the Synapse backend.
+# Push this repo, then "New → Blueprint" in Render and point at it.
+# Set GOOGLE_API_KEY / NEO4J_* as secret env vars in the dashboard.
+services:
+  - type: web
+    name: synapse-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    plan: starter
+    envVars:
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: EMBEDDING_PROVIDER
+        value: fastembed
+      - key: EMBEDDING_DIM
+        value: "384"
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: NEO4J_URI
+        sync: false
+      - key: NEO4J_USER
+        sync: false
+      - key: NEO4J_PASSWORD
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false

@@ -1,124 +1,126 @@
 """
 Project Synapse — Upload Router
-Handles PDF file upload, parsing, and knowledge graph construction.
-Uses BackgroundTasks so the server stays responsive during processing.
+
+Ingestion is a background job: ``POST /api/upload`` validates + parses the PDF,
+starts extraction in the background, and returns a ``job_id`` immediately. The
+client then opens ``GET /api/upload/{job_id}/events`` (SSE) to watch progress in
+real time — parsing → extracting (n/N chunks) → writing → done.
 """
 
+from __future__ import annotations
+
+import json
 import logging
-import asyncio
-import fastapi
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks
-from app.services.pdf_parser import extract_text_from_pdf
+
+from fastapi import APIRouter, BackgroundTasks, File, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+
+from app.config import get_settings
 from app.services.graph_builder import build_knowledge_graph
+from app.services.jobs import job_bus
+from app.services.pdf_parser import extract_text_from_pdf
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# Max chunks to process (prevents extremely long processing)
-MAX_CHUNKS = 15
 
-# Simple in-memory status tracker
-_upload_status: dict[str, dict] = {}
-
-
-async def _process_document(file_id: str, contents: bytes, filename: str):
-    """Background task: parse PDF, extract entities, write to Neo4j."""
+async def _process_document(job_id: str, chunks: list[str], filename: str, theme: str) -> None:
+    """Background task: extract entities from parsed chunks and write to Neo4j."""
     try:
-        _upload_status[file_id] = {"status": "parsing", "filename": filename}
+        async def on_progress(event: dict) -> None:
+            await job_bus.publish(job_id, event)
 
-        text_chunks = extract_text_from_pdf(contents)
-        logger.info(f"✂️  Extracted {len(text_chunks)} chunks from {filename}")
-
-        if not text_chunks:
-            _upload_status[file_id] = {
-                "status": "error",
-                "filename": filename,
-                "detail": "Could not extract text from PDF.",
-            }
-            return
-
-        if len(text_chunks) > MAX_CHUNKS:
-            logger.info(f"⚠️  Limiting to {MAX_CHUNKS} chunks (was {len(text_chunks)})")
-            text_chunks = text_chunks[:MAX_CHUNKS]
-
-        _upload_status[file_id] = {
-            "status": "extracting",
-            "filename": filename,
-            "total_chunks": len(text_chunks),
-        }
-
-        logger.info(f"🧠 Starting entity extraction for {filename}...")
-        result = await build_knowledge_graph(text_chunks, filename)
-
-        _upload_status[file_id] = {
-            "status": "done",
-            "filename": filename,
-            "chunks_processed": len(text_chunks),
-            "nodes_created": result["nodes_created"],
-            "relationships_created": result["relationships_created"],
-        }
-        logger.info(
-            f"✅ Done: {result['nodes_created']} nodes, "
-            f"{result['relationships_created']} rels for {filename}"
+        await job_bus.publish(
+            job_id,
+            {"type": "progress", "stage": "extracting", "processed": 0, "total": len(chunks)},
         )
 
-    except Exception as e:
-        logger.exception(f"❌ Background processing failed for {filename}: {e}")
-        _upload_status[file_id] = {
-            "status": "error",
-            "filename": filename,
-            "detail": str(e),
-        }
+        result = await build_knowledge_graph(
+            chunks, filename, theme=theme, on_progress=on_progress
+        )
+
+        await job_bus.publish(
+            job_id,
+            {
+                "type": "done",
+                "data": {
+                    "filename": filename,
+                    "chunks_processed": len(chunks),
+                    **result,
+                },
+            },
+        )
+        logger.info(
+            "✅ Done: %s nodes, %s rels for %s",
+            result["nodes_created"],
+            result["relationships_created"],
+            filename,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception("❌ Background processing failed for %s", filename)
+        await job_bus.publish(job_id, {"type": "error", "data": str(e)})
 
 
 @router.post("/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    theme: str = fastapi.Form("Generic")
+    theme: str = Form("Generic"),
 ):
+    """Validate + parse a PDF, then kick off background extraction.
+
+    Returns a ``job_id`` the client subscribes to for live progress.
     """
-    Upload a PDF document. Returns immediately with a job ID.
-    Processing happens in the background.
-    """
-    logger.info(f"📥 Upload request received: {file.filename} (theme={theme})")
+    settings = get_settings()
+    logger.info("📥 Upload request: %s (theme=%s)", file.filename, theme)
 
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
+    contents = await file.read()
+    logger.info("📄 Read %s bytes from %s", len(contents), file.filename)
+
     try:
-        contents = await file.read()
-        logger.info(f"📄 Read {len(contents)} bytes from {file.filename}")
-
-        try:
-            text_chunks = extract_text_from_pdf(contents)
-            logger.info(f"✂️  Extracted {len(text_chunks)} chunks")
-        except Exception as parse_err:
-            logger.exception(f"❌ PDF parsing failed: {parse_err}")
-            raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(parse_err)}")
-
-        if not text_chunks:
-            raise HTTPException(status_code=400, detail="Could not extract text from PDF.")
-
-        # Limit chunks to prevent timeout
-        if len(text_chunks) > MAX_CHUNKS:
-            logger.info(f"⚠️  Limiting to {MAX_CHUNKS} chunks (was {len(text_chunks)})")
-            text_chunks = text_chunks[:MAX_CHUNKS]
-
-        # Process synchronously but with per-chunk timeouts so it finishes
-        logger.info(f"🧠 Starting entity extraction with Gemini (Theme: {theme})...")
-        result = await build_knowledge_graph(text_chunks, file.filename, theme=theme)
-        logger.info(f"✅ Done: {result['nodes_created']} nodes, {result['relationships_created']} rels")
-
-        return {
-            "status": "success",
-            "filename": file.filename,
-            "chunks_processed": len(text_chunks),
-            "nodes_created": result["nodes_created"],
-            "relationships_created": result["relationships_created"],
-        }
-
-    except HTTPException:
-        raise
+        chunks = extract_text_from_pdf(contents)
     except Exception as e:
-        logger.exception(f"❌ Upload processing failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        logger.exception("❌ PDF parsing failed")
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}") from e
+
+    if not chunks:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract text from PDF (is it a scanned image?).",
+        )
+
+    if len(chunks) > settings.max_chunks:
+        logger.info("⚠️ Limiting to %s chunks (was %s)", settings.max_chunks, len(chunks))
+        chunks = chunks[: settings.max_chunks]
+
+    job_id = job_bus.create()
+    background_tasks.add_task(_process_document, job_id, chunks, file.filename, theme)
+
+    return {
+        "job_id": job_id,
+        "filename": file.filename,
+        "total_chunks": len(chunks),
+        "status": "processing",
+    }
+
+
+@router.get("/upload/{job_id}/events")
+async def upload_events(job_id: str):
+    """SSE stream of progress events for an ingestion job."""
+
+    async def stream():
+        async for event in job_bus.subscribe(job_id):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

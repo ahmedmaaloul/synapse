@@ -3,8 +3,13 @@ Project Synapse — Neo4j Driver
 Manages the Neo4j async driver lifecycle.
 """
 
-from neo4j import AsyncGraphDatabase, AsyncDriver
+import logging
+
+from neo4j import AsyncDriver, AsyncGraphDatabase
+
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 _driver: AsyncDriver | None = None
 
@@ -36,3 +41,14 @@ async def execute_query(query: str, parameters: dict | None = None) -> list[dict
         result = await session.run(query, parameters or {})
         records = await result.data()
         return records
+
+
+async def verify_connectivity() -> bool:
+    """Return True if Neo4j is reachable (used by the readiness probe)."""
+    try:
+        driver = await get_driver()
+        await driver.verify_connectivity()
+        return True
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Neo4j connectivity check failed: %s", e)
+        return False
