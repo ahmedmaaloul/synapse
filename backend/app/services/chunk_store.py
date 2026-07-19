@@ -8,7 +8,8 @@ Extraction distills prose into ~15-word entity ``description`` fields and then
 throws the source text away. An honest benchmark showed exactly what that costs:
 entity-only GraphRAG *lost* to plain passage vector RAG on raw fact recall
 (87.5% / 64.3% vs 89.3% / 71.4%) even though the controlled ablation proved the
-graph structure itself is worth +37.6pp recall. The graph was never the problem
+graph structure itself is worth +39.4pp recall (48.1% -> 87.5%, permissive rule;
+see benchmarks/results.md). The graph was never the problem
 — the input was. We were retrieving lossy summaries while the baseline retrieved
 the actual prose.
 
@@ -117,12 +118,31 @@ RETURN node.id AS id, node.text AS text, node.document AS document,
        node.index AS index, score
 """
 
+# Ranked, *then* truncated. The previous version ordered by (document, index)
+# before applying LIMIT, so whenever more chunks mentioned the seeds than the
+# limit allowed, Neo4j kept the alphabetically-first document and discarded the
+# rest — relevance never entered, and the one retrieval channel plain vector RAG
+# cannot reproduce was decided by filename.
+#
+# ``$names`` arrives in relevance order (see :func:`chunks_for_entities`), so the
+# position of a name in that list *is* its rank. UNWINDing the positions rather
+# than the names lets both ranking signals be computed in one pass:
+#   seed_mentions   — how many distinct seeds the chunk mentions. A chunk
+#                     covering three of the question's entities is far more
+#                     likely to contain the multi-hop link than one covering one.
+#   best_seed_rank  — the best (lowest) position among the seeds it mentions, so
+#                     a chunk about the top-ranked seed beats an equally broad
+#                     chunk about weaker ones.
+# (document, index, id) is the final tie-break: purely for determinism, never a
+# relevance signal. ``id`` is included because a re-chunked document can leave
+# two chunks sharing (document, index) with different text.
 CHUNKS_FOR_ENTITIES_QUERY = """
-MATCH (e:Entity)-[:MENTIONED_IN]->(c:Chunk)
-WHERE e.name IN $names
-RETURN DISTINCT c.id AS id, c.text AS text, c.document AS document,
-       c.index AS index
-ORDER BY document, index
+UNWIND range(0, size($names) - 1) AS seed_rank
+MATCH (e:Entity {name: $names[seed_rank]})-[:MENTIONED_IN]->(c:Chunk)
+WITH c, count(DISTINCT seed_rank) AS seed_mentions, min(seed_rank) AS best_seed_rank
+RETURN c.id AS id, c.text AS text, c.document AS document, c.index AS index,
+       seed_mentions, best_seed_rank
+ORDER BY seed_mentions DESC, best_seed_rank ASC, document ASC, index ASC, id ASC
 LIMIT $limit
 """
 
@@ -169,6 +189,34 @@ def _row_to_chunk(row: dict, *, score: float | None = None) -> dict:
         "index": int(row.get("index") or 0),
         "score": float(row.get("score", 0.0) or 0.0) if score is None else score,
     }
+
+
+def _as_int(value: object, default: int) -> int:
+    """Coerce a driver value to ``int``, falling back on missing/garbage input.
+
+    Explicitly *not* ``int(value or default)``: a legitimate ``0`` (the top seed
+    rank) must survive, and ``or`` would silently demote it to the default.
+    """
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
+def _rank_key(chunk: dict) -> tuple[int, int, str, int, str]:
+    """Sort key mirroring ``CHUNKS_FOR_ENTITIES_QUERY``'s ORDER BY.
+
+    Relevance first (more seeds covered, then a better best seed), then
+    (document, index, id) purely to keep the output deterministic — the driver
+    is free to hand rows back in any order it likes.
+    """
+    return (
+        -chunk["seed_mentions"],
+        chunk["best_seed_rank"],
+        chunk["document"],
+        chunk["index"],
+        chunk["id"],
+    )
 
 
 # ── Write path ───────────────────────────────────────
@@ -275,9 +323,26 @@ async def chunks_for_entities(names: list[str], limit: int) -> list[dict]:
     through the graph (including via multi-hop expansion), pull the *prose those
     entities were extracted from*.
 
-    Results are de-duplicated by chunk id and ordered by ``(document, index)`` so
-    the excerpts read in document order and the output is stable regardless of
-    how the driver happens to return rows.
+    Args:
+        names: Seed entity names **in relevance order** — the caller's ranking
+            (``chat_engine`` passes its vector/keyword-fused seeds) is used as a
+            tie-break, so passing an unordered list degrades the ranking to
+            "coverage only" rather than breaking it.
+        limit: Maximum excerpts to return, applied *after* ranking.
+
+    Returns:
+        Excerpts ordered by relevance, each carrying the evidence for its own
+        position on top of the shared ``{"id", "text", "document", "index",
+        "score"}`` shape:
+
+        * ``seed_mentions`` — how many of ``names`` the chunk mentions.
+        * ``best_seed_rank`` — position of the best seed it mentions (0 = the
+          top-ranked seed); ``len(names)`` when the database reported none.
+
+    Ranking is ``(-seed_mentions, best_seed_rank, document, index, id)``, applied
+    in Cypher *before* ``LIMIT`` and re-applied here so the result cannot depend
+    on driver row order. Note the consequence: excerpts now come back in
+    relevance order, **not** document order.
     """
     wanted = _clean_names(names)
     if not wanted or limit <= 0:
@@ -291,12 +356,23 @@ async def chunks_for_entities(names: list[str], limit: int) -> list[dict]:
         logger.info("Chunk lookup unavailable (%s); skipping source excerpts", e)
         return []
 
+    # A row that carries no ranking at all sorts behind every genuinely ranked
+    # chunk instead of jumping the queue on a falsy 0.
+    unranked = len(wanted)
+
     by_id: dict[str, dict] = {}
     for row in rows or []:
         chunk = _row_to_chunk(row, score=0.0)
-        # An entity can mention a chunk more than once across the MATCH; the
-        # first row wins so the result is independent of driver row order.
-        by_id.setdefault(chunk["id"], chunk)
+        chunk["seed_mentions"] = max(0, _as_int(row.get("seed_mentions"), 0))
+        chunk["best_seed_rank"] = _as_int(row.get("best_seed_rank"), unranked)
+        first = by_id.get(chunk["id"])
+        if first is None:
+            by_id[chunk["id"]] = chunk
+            continue
+        # The aggregation makes duplicate ids impossible in Cypher, but a driver
+        # that ever repeats a chunk must not change the answer: keep the
+        # strongest evidence seen for it rather than whichever row landed first.
+        first["seed_mentions"] = max(first["seed_mentions"], chunk["seed_mentions"])
+        first["best_seed_rank"] = min(first["best_seed_rank"], chunk["best_seed_rank"])
 
-    ordered = sorted(by_id.values(), key=lambda c: (c["document"], c["index"], c["id"]))
-    return ordered[:limit]
+    return sorted(by_id.values(), key=_rank_key)[:limit]

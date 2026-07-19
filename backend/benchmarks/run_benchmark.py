@@ -70,10 +70,39 @@ embedding model, and are scored on the same rule.
 
 Scoring measures RETRIEVAL, not generation: for each question the dataset lists
 the ``required_facts`` — entity names that must be present for the question to
-be answerable at all. A fact counts as retrieved when its name occurs in the
-retrieved context. *The identical rule is applied to every system*, so nothing
-hinges on how an LLM happens to phrase an answer, and the whole run is free,
-offline and reproducible.
+be answerable at all. The whole run is therefore free, offline and reproducible,
+and nothing hinges on how an LLM happens to phrase an answer.
+
+TWO SCORING RULES, BOTH REPORTED — because one of them is not neutral.
+
+  PERMISSIVE  A fact counts as retrieved when its name occurs anywhere in the
+              retrieved context.
+  STRICT      A fact counts as retrieved only when its name occurs in
+              *retrieved prose* — verbatim corpus text under
+              ``Source excerpts:``.
+
+Applying the *identical* rule to every system is not the same as applying a
+*neutral* rule, and an earlier version of this harness confused the two. The
+systems put radically different strings in front of the rule: a GraphRAG context
+contains entity names as structured scaffolding — ``Entity: X (Type: T)``,
+``Description: …``, ``→ REL → Y (TYPE)`` neighbour lines, rendered reasoning
+paths — so under the permissive rule a required fact can score simply because
+the graph *listed it as a neighbour*, with none of the evidence needed to answer
+retrieved. The passage baseline has no such channel: it can only score when the
+name occurs in prose it actually read. That is a systematic advantage to the
+graph rows, so the harness measures its size instead of asserting it is fair:
+
+  • every scored hit is attributed to the channel it was found in — ``prose``,
+    ``entity`` (a materialised entity block) or ``edge`` (a relationship line or
+    reasoning path *only*) — and the split is printed per system, and
+  • both rules are scored, tabled and given their own computed headline.
+
+The strict rule is not the "true" rule either: it scores the entity-granular
+rows (B, B″, B′) and the graph-only row (C) at exactly 0.0 by construction,
+because those systems return a compressed representation of the corpus rather
+than the corpus. That is itself the finding, and the report states it in those
+words. Read the permissive rule as *upper* bound and the strict rule as *lower*
+bound on what each system makes answerable.
 
   • Fact Recall        — mean fraction of required facts retrieved
   • Full-Coverage Rate — fraction of questions where ALL required facts were
@@ -87,6 +116,11 @@ Because more context is easier to score well on, the report never states a bare
 "we win". Every sweep runs to the point where the graph-free system has read the
 *entire* corpus available to it, so a budget match is always reachable and the
 comparison can never hide behind a truncated sweep.
+
+The generated numeric core (run configuration, results table, both headlines) is
+written into ``results.md`` *and* into the marked region of ``README.md`` from
+one shared function, so the two files cannot drift apart; a test asserts the
+region is present verbatim in both.
 
 Run it (needs Neo4j; no API key, no network):
 
@@ -116,6 +150,17 @@ from pathlib import Path
 
 DATASET_PATH = Path(__file__).with_name("dataset.json")
 RESULTS_PATH = Path(__file__).with_name("results.md")
+README_PATH = Path(__file__).with_name("README.md")
+
+#: The README quotes numbers. Numbers typed by hand rot: an audit found the
+#: corpus character count and several figures in README.md disagreeing with a
+#: fresh run. So the numeric core of the README is *generated* into this marked
+#: region from the same function that writes ``results.md``, and
+#: ``tests/test_benchmark.py`` fails if the region is missing, if it is not
+#: present verbatim in ``results.md``, or if any other number in README.md
+#: cannot be found in ``results.md``.
+README_BEGIN = "<!-- BEGIN GENERATED — written by run_benchmark.py, do not edit by hand -->"
+README_END = "<!-- END GENERATED -->"
 
 #: Passages returned by the naive baseline. The corpus is 34 passages (18 core +
 #: 16 distractor), so k=4 reads ~12% of it — a conventional production setting,
@@ -152,6 +197,25 @@ PATHS_HEADING = "Reasoning paths:"
 SOURCES_HEADING = "Source excerpts:"
 RELATIONSHIPS_LINE = "  Relationships:"
 EDGE_LINE_PREFIX = "  → "
+
+#: The three channels a required fact's name can occupy in a retrieved context.
+#: Attribution is by precedence, best evidence first: prose beats an entity
+#: block, an entity block beats a bare neighbour mention.
+PROSE = "prose"  # verbatim corpus text, under ``Source excerpts:``
+ENTITY = "entity"  # a materialised entity block: name, type, description
+EDGE = "edge"  # a ``→`` relationship line or a rendered reasoning path, only
+CHANNELS = (PROSE, ENTITY, EDGE)
+CHANNEL_LABELS = {
+    PROSE: "retrieved prose",
+    ENTITY: "an entity block",
+    EDGE: "an edge or path only",
+}
+
+#: Provenance headers the engine writes above each excerpt (``[S1] doc (chunk
+#: 3)``) and the truncation note it appends. Neither is corpus text, so neither
+#: counts as prose.
+_EXCERPT_HEADER = re.compile(r"^\[S\d+\] .*$", re.MULTILINE)
+_OMITTED_NOTE = re.compile(r"^\(\d+ further excerpts? omitted for length\.\)$", re.MULTILINE)
 
 
 class DatasetError(RuntimeError):
@@ -329,9 +393,136 @@ def fact_recall(found: list[str], required: list[str]) -> float:
     return len(hits) / len(wanted)
 
 
+# ── Channel attribution: WHERE a scored hit came from ────────────────────────
+# The permissive rule ("the name is somewhere in the context") is not neutral
+# between these systems, because they emit different kinds of string. Splitting
+# a context into its three channels is what lets the report size the advantage
+# rather than assert it away.
+def strip_graph_structure(context: str) -> str:
+    """Delete every edge-derived part of a GraphRAG context, and nothing else.
+
+    Removed:
+      • each entity block's ``Relationships:`` header and its ``→`` lines, and
+      • the whole ``Reasoning paths:`` section (paths are built from edges too —
+        a previous version of this file claimed the relationship lines were "the
+        only thing taken away", which was false).
+
+    Kept: every entity's name, type and description, in the order GraphRAG
+    ranked them. Any ``Source excerpts:`` section is dropped as well, so the
+    function is total; in practice the ablation is only ever run against the
+    graph-only system, which has none.
+
+    This is both the B′ ablation *and* the ``entity`` channel of the attribution
+    below — the same text, used for two purposes, defined once.
+    """
+    head, _sep, _tail = (context or "").partition(SOURCES_HEADING)
+    blocks: list[str] = []
+    for block in head.split("\n\n"):
+        if block.startswith(PATHS_HEADING):
+            continue
+        kept = [
+            line
+            for line in block.split("\n")
+            if line != RELATIONSHIPS_LINE and not line.startswith(EDGE_LINE_PREFIX)
+        ]
+        text = "\n".join(kept).rstrip()
+        if text.strip():
+            blocks.append(text)
+    return "\n\n".join(blocks)
+
+
+def edge_segment(context: str) -> str:
+    """The exact complement of :func:`strip_graph_structure` over the graph half.
+
+    Relationship lines and the rendered reasoning paths — the text in which an
+    entity name can appear *purely because the graph named it as a neighbour*.
+    Together with :func:`strip_graph_structure` and :func:`prose_segment` this
+    partitions the context, which a test verifies by checking that no entity
+    name occurring in a context is missing from all three segments.
+    """
+    head, _sep, _tail = (context or "").partition(SOURCES_HEADING)
+    blocks: list[str] = []
+    for block in head.split("\n\n"):
+        if block.startswith(PATHS_HEADING):
+            blocks.append(block)
+            continue
+        kept = [
+            line
+            for line in block.split("\n")
+            if line == RELATIONSHIPS_LINE or line.startswith(EDGE_LINE_PREFIX)
+        ]
+        if kept:
+            blocks.append("\n".join(kept))
+    return "\n\n".join(blocks)
+
+
+def prose_segment(context: str) -> str:
+    """The verbatim corpus text inside a context, and nothing else.
+
+    Everything under ``Source excerpts:`` minus the ``[Sn] doc (chunk i)``
+    provenance headers and the truncation note, neither of which is corpus text.
+    Empty for every system that returns no source excerpts — which is the point:
+    under the strict rule those systems score zero because they retrieve a
+    representation of the corpus, not the corpus.
+    """
+    _head, sep, tail = (context or "").partition(SOURCES_HEADING)
+    if not sep:
+        return ""
+    return _OMITTED_NOTE.sub("", _EXCERPT_HEADER.sub("", tail))
+
+
+@dataclass(frozen=True)
+class Channels:
+    """A retrieved context split into the channels a required fact can hit."""
+
+    prose: str = ""
+    entities: str = ""
+    edges: str = ""
+
+    @classmethod
+    def of_passages(cls, context: str) -> Channels:
+        """System A/A′: the whole context is corpus prose, so the rules agree."""
+        return cls(prose=context or "")
+
+    @classmethod
+    def of_entities(cls, context: str) -> Channels:
+        """Systems B/B″/B′: entity blocks only — no prose, no edges."""
+        return cls(entities=context or "")
+
+    @classmethod
+    def of_graph(cls, context: str) -> Channels:
+        """Systems C/D: all three channels, as ``chat_engine`` emits them."""
+        return cls(
+            prose=prose_segment(context),
+            entities=strip_graph_structure(context),
+            edges=edge_segment(context),
+        )
+
+
+def classify_hits(channels: Channels, facts: list[str]) -> dict[str, str]:
+    """Map each retrieved fact to the channel it was found in, best evidence first.
+
+    Precedence is ``prose`` → ``entity`` → ``edge``, so attribution is
+    *conservative against the criticism*: a fact that appears both in prose and
+    in a neighbour line is credited to the prose, never to the graph.
+    """
+    attribution: dict[str, str] = {}
+    for fact in facts:
+        needle = fact.lower()
+        for channel, text in (
+            (PROSE, channels.prose),
+            (ENTITY, channels.entities),
+            (EDGE, channels.edges),
+        ):
+            if needle in (text or "").lower():
+                attribution[fact] = channel
+                break
+    return attribution
+
+
 @dataclass
 class QuestionResult:
-    """One question, as answered by one system."""
+    """One question, as answered by one system, under both scoring rules."""
 
     qid: str
     question: str
@@ -340,6 +531,9 @@ class QuestionResult:
     context_chars: int
     detail: str = ""
     extras: dict = field(default_factory=dict)
+    #: fact name → the channel it was found in. Empty means "not attributed",
+    #: which scores 0 under the strict rule; every evaluator fills it in.
+    hit_channels: dict = field(default_factory=dict)
 
     @property
     def missing(self) -> list[str]:
@@ -354,17 +548,64 @@ class QuestionResult:
     def complete(self) -> bool:
         return not self.missing
 
+    @property
+    def found_strict(self) -> list[str]:
+        """Facts whose name occurred in retrieved *prose* — the strict rule."""
+        return [f for f in self.found if self.hit_channels.get(f) == PROSE]
+
+    @property
+    def missing_strict(self) -> list[str]:
+        found = {f.lower() for f in self.found_strict}
+        return [r for r in self.required if r.lower() not in found]
+
+    @property
+    def strict_recall(self) -> float:
+        return fact_recall(self.found_strict, self.required)
+
+    @property
+    def strict_complete(self) -> bool:
+        return not self.missing_strict
+
 
 def aggregate(results: list[QuestionResult]) -> dict:
-    """Roll per-question results into the three headline metrics."""
+    """Roll per-question results into the headline metrics, under BOTH rules."""
     if not results:
-        return {"fact_recall": 0.0, "full_coverage": 0.0, "mean_context_chars": 0.0, "n": 0}
+        return {
+            "fact_recall": 0.0,
+            "full_coverage": 0.0,
+            "strict_fact_recall": 0.0,
+            "strict_full_coverage": 0.0,
+            "mean_context_chars": 0.0,
+            "n": 0,
+        }
     n = len(results)
     return {
         "fact_recall": sum(r.recall for r in results) / n,
         "full_coverage": sum(1.0 for r in results if r.complete) / n,
+        "strict_fact_recall": sum(r.strict_recall for r in results) / n,
+        "strict_full_coverage": sum(1.0 for r in results if r.strict_complete) / n,
         "mean_context_chars": sum(r.context_chars for r in results) / n,
         "n": n,
+    }
+
+
+def hit_provenance(results: list[QuestionResult]) -> dict:
+    """How the scored hits of one system split across the three channels.
+
+    ``shares`` is the number the critique of the permissive rule asks for: the
+    fraction of a system's scored hits that exist only because the graph put a
+    name into structured scaffolding, rather than because the evidence needed to
+    answer was retrieved.
+    """
+    counts = dict.fromkeys(CHANNELS, 0)
+    for result in results:
+        for channel in result.hit_channels.values():
+            counts[channel] += 1
+    total = sum(counts.values())
+    return {
+        "counts": counts,
+        "total": total,
+        "shares": {c: (counts[c] / total if total else 0.0) for c in CHANNELS},
     }
 
 
@@ -393,6 +634,7 @@ def evaluate_baseline(
     for question in dataset["questions"]:
         chosen = rankings[question["id"]][:k]
         context = "\n\n".join(passages[i]["text"] for i in chosen)
+        channels = Channels.of_passages(context)
         results.append(
             QuestionResult(
                 qid=question["id"],
@@ -402,6 +644,10 @@ def evaluate_baseline(
                 context_chars=len(context),
                 detail=", ".join(passages[i]["id"] for i in chosen),
                 extras={"passages": list(chosen)},
+                # Every character this system returns is corpus prose, so the
+                # permissive and strict rules score it identically. That is the
+                # asymmetry the strict rule exists to expose.
+                hit_channels=classify_hits(channels, question["required_facts"]),
             )
         )
     return results
@@ -444,6 +690,12 @@ def evaluate_entity_rag(
                 found=facts_found(context, question["required_facts"]),
                 context_chars=len(context),
                 detail=", ".join(entities[i]["name"] for i in chosen[:4]),
+                # No prose at all: this system returns entity records. Under the
+                # strict rule it therefore scores 0.0, by construction rather
+                # than by failure — stated, not hidden.
+                hit_channels=classify_hits(
+                    Channels.of_entities(context), question["required_facts"]
+                ),
             )
         )
     return results
@@ -534,12 +786,26 @@ async def evaluate_graphrag(dataset: dict, k: int) -> list[QuestionResult]:
         retrieval = await retrieve_subgraph(question["question"], k=k)
         context, citations = retrieval
         sources = list(getattr(retrieval, "sources", []) or [])
+        found = facts_found(context, question["required_facts"])
+        attribution = classify_hits(Channels.of_graph(context), question["required_facts"])
+        # The three channels must partition the context for scoring purposes: a
+        # hit the attribution cannot place would be silently dropped from the
+        # strict rule, which is exactly the kind of quiet distortion this whole
+        # exercise exists to prevent.
+        if set(found) != set(attribution):
+            raise IntegrityError(
+                f"{question['id']}: channel attribution disagrees with the scoring rule "
+                f"(found {sorted(found)}, attributed {sorted(attribution)}) — the "
+                "context contains a required fact in none of prose/entity/edge, so the "
+                "strict rule would under-report it."
+            )
         results.append(
             QuestionResult(
                 qid=question["id"],
                 question=question["question"],
                 required=list(question["required_facts"]),
-                found=facts_found(context, question["required_facts"]),
+                found=found,
+                hit_channels=attribution,
                 context_chars=len(context or ""),
                 detail=", ".join(c["name"] for c in citations[:4]),
                 extras={
@@ -554,36 +820,6 @@ async def evaluate_graphrag(dataset: dict, k: int) -> list[QuestionResult]:
             )
         )
     return results
-
-
-def strip_graph_structure(context: str) -> str:
-    """Delete every edge-derived part of a GraphRAG context, and nothing else.
-
-    Removed:
-      • each entity block's ``Relationships:`` header and its ``→`` lines, and
-      • the whole ``Reasoning paths:`` section (paths are built from edges too —
-        a previous version of this file claimed the relationship lines were "the
-        only thing taken away", which was false).
-
-    Kept: every entity's name, type and description, in the order GraphRAG
-    ranked them. Any ``Source excerpts:`` section is dropped as well, so the
-    function is total; in practice the ablation is only ever run against the
-    graph-only system, which has none.
-    """
-    head, _sep, _tail = (context or "").partition(SOURCES_HEADING)
-    blocks: list[str] = []
-    for block in head.split("\n\n"):
-        if block.startswith(PATHS_HEADING):
-            continue
-        kept = [
-            line
-            for line in block.split("\n")
-            if line != RELATIONSHIPS_LINE and not line.startswith(EDGE_LINE_PREFIX)
-        ]
-        text = "\n".join(kept).rstrip()
-        if text.strip():
-            blocks.append(text)
-    return "\n\n".join(blocks)
 
 
 def contaminated(results: list[QuestionResult]) -> list[str]:
@@ -620,6 +856,7 @@ def strip_edges(graph: list[QuestionResult]) -> list[QuestionResult]:
                 found=facts_found(context, result.required),
                 context_chars=len(context),
                 detail=", ".join(seeds[:4]),
+                hit_channels=classify_hits(Channels.of_entities(context), result.required),
             )
         )
     return stripped
@@ -630,14 +867,31 @@ METRICS: tuple[tuple[str, str], ...] = (
     ("Fact Recall", "fact_recall"),
     ("Full-Coverage Rate", "full_coverage"),
 )
+#: The same two metrics under the strict rule. Every reporting function that
+#: takes ``metrics`` can therefore be run twice, and the second run is not a
+#: rewording of the first — it is the whole argument recomputed.
+STRICT_METRICS: tuple[tuple[str, str], ...] = (
+    ("Fact Recall", "strict_fact_recall"),
+    ("Full-Coverage Rate", "strict_full_coverage"),
+)
+PERMISSIVE_RULE = "permissive rule: the fact's name appears anywhere in the context"
+STRICT_RULE = "strict rule: the fact's name appears in retrieved prose"
 
 _LABEL_W = 52
 
 
 def _row(label: str, agg: dict) -> str:
     return (
-        f"  {label:<{_LABEL_W}}{agg['fact_recall']:>10.1%}"
-        f"{agg['full_coverage']:>16.1%}{agg['mean_context_chars']:>15,.0f}"
+        f"  {label:<{_LABEL_W}}{agg['fact_recall']:>8.1%}{agg['full_coverage']:>8.1%}"
+        f"{agg['strict_fact_recall']:>10.1%}{agg['strict_full_coverage']:>8.1%}"
+        f"{agg['mean_context_chars']:>12,.0f}"
+    )
+
+
+def _header_row() -> str:
+    return (
+        f"  {'System':<{_LABEL_W}}{'recall':>8}{'cover':>8}"
+        f"{'recall':>10}{'cover':>8}{'chars':>12}"
     )
 
 
@@ -669,23 +923,52 @@ def context_matched(sweep: list[tuple[int, dict]], target_chars: float) -> tuple
     return None
 
 
-def verdict(baseline: dict, graph: dict, sweep: list[tuple[int, dict]]) -> list[str]:
+def verdict(
+    baseline: dict,
+    graph: dict,
+    sweep: list[tuple[int, dict]],
+    metrics: tuple[tuple[str, str], ...] = METRICS,
+) -> list[str]:
     """Per-metric result, each one immediately qualified by the parity k.
 
     A bare "GraphRAG wins" is not a claim anybody should accept: the two systems
     were handed different amounts of text. So every metric line is followed by
     the smallest baseline k that matches or beats GraphRAG on that metric, and
     what that k costs in characters relative to GraphRAG's own context.
+
+    ``metrics`` selects the scoring rule, so the identical scrutiny is applied
+    to the permissive and the strict numbers.
     """
+    # Effect-size floor. With N questions, one question is worth 1/N of the
+    # Full-Coverage Rate, and Fact Recall moves in comparably small quanta. A
+    # gap smaller than one question is indistinguishable from re-wording a
+    # single item, so it is reported as a wash rather than a lead — declaring a
+    # sub-question "win" on a 14-question set is exactly what a referee flags.
+    # Only engage when we actually know the question count. Defaulting to 1
+    # would make the floor 100 pp and silently suppress EVERY verdict — a
+    # failure mode far worse than reporting a small gap.
+    n_questions = int(graph.get("n", 0) or baseline.get("n", 0) or 0)
+    one_question = 1.0 / n_questions if n_questions >= 2 else 0.0
+
     lines: list[str] = []
-    for label, key in METRICS:
+    for label, key in metrics:
         delta = graph[key] - baseline[key]
         if abs(delta) < 1e-9:
             lines.append(f"{label}: TIE at the configured k ({graph[key]:.1%} for both).")
+        elif abs(delta) < one_question:
+            leader = "GraphRAG" if delta > 0 else "passage vector RAG"
+            lines.append(
+                f"{label}: TOO CLOSE TO CALL — {graph[key]:.1%} vs {baseline[key]:.1%} "
+                f"({delta * 100:+.1f} pp for GraphRAG, nominally {leader}). The gap is "
+                f"smaller than one question out of {n_questions} "
+                f"({one_question * 100:.1f} pp), so it is not a meaningful lead. "
+                f"No significance is claimed."
+            )
         elif delta > 0:
             lines.append(
                 f"{label}: GraphRAG ahead at the configured k — {graph[key]:.1%} vs "
-                f"{baseline[key]:.1%} ({delta * 100:+.1f} pp)."
+                f"{baseline[key]:.1%} ({delta * 100:+.1f} pp, "
+                f"> one question = {one_question * 100:.1f} pp)."
             )
         else:
             lines.append(
@@ -730,16 +1013,24 @@ def _parity_line(key: str, graph: dict, sweep: list[tuple[int, dict]]) -> str:
     )
 
 
-def headline(graph: dict, sweep: list[tuple[int, dict]]) -> list[str]:
+def headline(
+    graph: dict,
+    sweep: list[tuple[int, dict]],
+    metrics: tuple[tuple[str, str], ...] = METRICS,
+    rule: str = PERMISSIVE_RULE,
+) -> list[str]:
     """The one claim this benchmark is allowed to make, stated precisely.
 
     Computed, never typed: for each metric, GraphRAG "wins at equal-or-smaller
     context" only if no baseline k in the sweep reaches the same score without
     reading at least as many characters. Metrics that fail that test are named.
+
+    Run once per scoring rule. If the two runs disagree, the disagreement is the
+    result — a reader who has to discover it themselves discards the document.
     """
     won: list[str] = []
     lost: list[tuple[str, int, dict, float]] = []
-    for label, key in METRICS:
+    for label, key in metrics:
         match = smallest_k_reaching(sweep, graph[key], key)
         if match is None:
             won.append(label)
@@ -755,10 +1046,10 @@ def headline(graph: dict, sweep: list[tuple[int, dict]]) -> list[str]:
         else:
             won.append(label)
 
-    scores = ", ".join(f"{label} {graph[key]:.1%}" for label, key in METRICS)
+    scores = ", ".join(f"{label} {graph[key]:.1%}" for label, key in metrics)
     lines = [
-        f"HEADLINE (computed, not asserted): the shipped system scores {scores} on "
-        f"{graph['mean_context_chars']:,.0f} chars of retrieved context."
+        f"HEADLINE (computed, not asserted) — {rule}: the shipped system scores "
+        f"{scores} on {graph['mean_context_chars']:,.0f} chars of retrieved context."
     ]
     if won and not lost:
         lines.append(
@@ -818,6 +1109,23 @@ def ablation_note(
     lines.append(
         f"  Cost of the graph: {ratio:.2f}x the context "
         f"({graph['mean_context_chars']:,.0f} vs {stripped['mean_context_chars']:,.0f} chars)."
+    )
+    # Disclosed rather than left for a reviewer to notice: C − B′ holds the seed
+    # set fixed, which is what makes it the controlled comparison — but deleting
+    # the edges also deletes their characters, so the two sides are NOT
+    # budget-matched. B″ below is the budget-matched edgeless row; B′ is not one.
+    lines.append(
+        f"  NOT budget-matched: B′ is C minus text, so it reads "
+        f"{stripped['mean_context_chars']:,.0f} chars against C's "
+        f"{graph['mean_context_chars']:,.0f}. C − B′ controls the *seed set*, not the "
+        "budget; the budget-matched edgeless row is B″, below. Any reading of this "
+        "ablation as 'the graph wins at equal context' is unsupported."
+    )
+    # And the rule under which it exists at all.
+    lines.append(
+        "  Permissive rule only: B′ and C return no prose, so under the strict rule both "
+        "score 0.0 and the difference between them is undefined. The graph's contribution "
+        "is measurable here only because the permissive rule credits names in scaffolding."
     )
     lines.append(
         f"  For reference, a standalone entity vector RAG at top-{k} (its own cosine "
@@ -956,6 +1264,14 @@ def chunk_note(graph_only: dict, with_chunks: dict, overlap: dict) -> list[str]:
         f"{graph_only['mean_context_chars']:,.0f} chars)."
     )
     lines.append(
+        f"  Under the strict rule the whole of D's score is the chunk channel: C scores "
+        f"{graph_only['strict_fact_recall']:.1%} / {graph_only['strict_full_coverage']:.1%} "
+        f"(zero by construction — no prose) and D scores "
+        f"{with_chunks['strict_fact_recall']:.1%} / "
+        f"{with_chunks['strict_full_coverage']:.1%}. Every fact D makes answerable from "
+        "verbatim text, it makes answerable through the excerpts."
+    )
+    lines.append(
         f"  Overlap with the baseline, measured: {overlap['containment']:.0%} of the "
         f"passages system A retrieves at top-{overlap['baseline_k']} also appear among "
         f"D's excerpts, and D returns {overlap['mean_excerpts']:.1f} excerpts per "
@@ -995,7 +1311,7 @@ def excerpt_overlap(baseline: list[QuestionResult], with_chunks: list[QuestionRe
     }
 
 
-def misses_note(label: str, results: list[QuestionResult]) -> list[str]:
+def misses_note(label: str, results: list[QuestionResult], *, strict: bool = False) -> list[str]:
     """Name — from the data, never by hand — the questions a system got wrong.
 
     The README used to assert which questions failed and why. It named three;
@@ -1003,20 +1319,111 @@ def misses_note(label: str, results: list[QuestionResult]) -> list[str]:
     next to is worse than no prose, so the sentence is generated here and the
     README points at it.
     """
-    missed = [r for r in results if r.missing]
+    missed = [r for r in results if (r.missing_strict if strict else r.missing)]
     total = len(results)
     if not missed:
         return [f"{label} retrieved every required fact on all {total} questions."]
     ids = ", ".join(r.qid for r in missed)
-    facts = ", ".join(sorted({f for r in missed for f in r.missing}))
+    facts = ", ".join(
+        sorted({f for r in missed for f in (r.missing_strict if strict else r.missing)})
+    )
     return [
         f"{label} missed at least one required fact on {len(missed)} of {total} "
         f"questions ({ids}). The facts it never retrieved: {facts}."
     ]
 
 
-def context_matched_note(sweep: list[tuple[int, dict]], graph: dict) -> list[str]:
+def provenance_rows(rows: list[tuple[str, list[QuestionResult]]]) -> list[list[str]]:
+    """Per-system channel split of the scored hits, as table cells.
+
+    This is the measurement the permissive rule needs and never had: how many of
+    a system's credited facts were credited because the *evidence* came back,
+    and how many because the graph mentioned the name in scaffolding.
+    """
+    table: list[list[str]] = []
+    for label, results in rows:
+        stats = hit_provenance(results)
+        table.append(
+            [label, f"{stats['total']}"]
+            + [
+                f"{stats['counts'][c]} ({stats['shares'][c]:.0%})"
+                for c in CHANNELS
+            ]
+        )
+    return table
+
+
+def provenance_note(rows: list[tuple[str, list[QuestionResult]]]) -> list[str]:
+    """State, in one sentence per system, how much the permissive rule is worth.
+
+    Computed, because "the identical rule is applied to every system" is a
+    defence of the rule's *uniformity*, not of its *neutrality*, and the second
+    is the one a reviewer will ask about.
+    """
+    lines = [
+        "Where the scored hits come from — the permissive rule credits a fact whose name "
+        "appears anywhere in the context, and the systems put different kinds of string "
+        "in front of it. Attribution is conservative against the graph: a fact present in "
+        "both prose and scaffolding is credited to the prose."
+    ]
+    for label, results in rows:
+        stats = hit_provenance(results)
+        if not stats["total"]:
+            lines.append(f"  {label}: no scored hits.")
+            continue
+        scaffold = stats["shares"][ENTITY] + stats["shares"][EDGE]
+        lines.append(
+            f"  {label}: {stats['shares'][PROSE]:.0%} of its {stats['total']} scored hits "
+            f"came from retrieved prose, {scaffold:.0%} from graph scaffolding "
+            f"({stats['shares'][ENTITY]:.0%} an entity block, {stats['shares'][EDGE]:.0%} "
+            "an edge or reasoning path and nothing else)."
+        )
+    return lines
+
+
+def scoring_rule_note(rows: list[tuple[str, dict]]) -> list[str]:
+    """Say plainly which rule favours which system, and by how much.
+
+    The delta per system *is* the size of the advantage the permissive rule
+    hands out. A system whose delta is zero returns nothing but prose and is
+    scored identically by both rules; a system whose delta is its whole score
+    returns no evidence at all.
+    """
+    lines = [
+        "Scoring-rule sensitivity — how many points each system loses when the rule "
+        "tightens from 'the name is anywhere in the context' to 'the name is in retrieved "
+        "prose'. This is the size of the advantage the permissive rule hands out, per "
+        "system, and it is not the same for all of them:"
+    ]
+    for label, agg in rows:
+        drops = [
+            (name, agg[key] - agg[strict_key])
+            for (name, key), (_, strict_key) in zip(METRICS, STRICT_METRICS, strict=True)
+        ]
+        detail = ", ".join(f"{name} −{drop * 100:.1f} pp" for name, drop in drops)
+        verdict_word = (
+            "unaffected — it returns nothing but prose"
+            if all(abs(d) < 1e-9 for _, d in drops)
+            else "favoured by the permissive rule"
+        )
+        lines.append(f"  {label}: {detail} ({verdict_word}).")
+    lines.append(
+        "  → The passage rows lose nothing because every character they return is corpus "
+        "prose. The entity-granular and graph-only rows lose everything they had, because "
+        "they return a representation of the corpus and never the corpus. Read the "
+        "permissive rule as an upper bound and the strict rule as a lower bound; the true "
+        "answerability of a context is between them and this benchmark does not measure it."
+    )
+    return lines
+
+
+def context_matched_note(
+    sweep: list[tuple[int, dict]],
+    graph: dict,
+    metrics: tuple[tuple[str, str], ...] = METRICS,
+) -> list[str]:
     """Narrate the equal-context comparison, in whichever direction it falls."""
+    recall_key, coverage_key = (key for _label, key in metrics)
     match = context_matched(sweep, graph["mean_context_chars"])
     if match is None:
         return [
@@ -1029,11 +1436,11 @@ def context_matched_note(sweep: list[tuple[int, dict]], graph: dict) -> list[str
         f"Equal-context check: top-{k} is the first baseline setting that reads at "
         f"least as much as GraphRAG ({agg['mean_context_chars']:,.0f} vs "
         f"{graph['mean_context_chars']:,.0f} chars); it scores "
-        f"{agg['fact_recall']:.1%} recall / {agg['full_coverage']:.1%} coverage."
+        f"{agg[recall_key]:.1%} recall / {agg[coverage_key]:.1%} coverage."
     ]
     if (
-        agg["fact_recall"] > graph["fact_recall"]
-        or agg["full_coverage"] > graph["full_coverage"]
+        agg[recall_key] > graph[recall_key]
+        or agg[coverage_key] > graph[coverage_key]
     ):
         lines.append(
             "  → At that budget the baseline matches or beats GraphRAG. Caveat in both "
@@ -1081,6 +1488,24 @@ class Report:
     def overlap(self) -> dict:
         return excerpt_overlap(self.baseline.results, self.chunked.results)
 
+    def measured_rows(self) -> list[tuple[str, list[QuestionResult]]]:
+        """The rows the harness ran per-question, so channel attribution exists.
+
+        A′ and B″ are read off the sweeps as aggregates, so they carry no
+        per-question attribution; they are graph-free and pure prose / pure
+        entity records respectively, which the note says rather than implies.
+        """
+        return [
+            (f"A. Passage vector RAG (top-{self.baseline_k})", self.baseline.results),
+            (f"B. Entity vector RAG, no edges (top-{self.graph_k})", self.entity.results),
+            (f"B′. GraphRAG seeds, graph stripped (k={self.graph_k})", self.stripped.results),
+            (f"C. Synapse GraphRAG, graph only (k={self.graph_k})", self.graph.results),
+            (
+                f"D. Synapse GraphRAG + source chunks (k={self.graph_k})",
+                self.chunked.results,
+            ),
+        ]
+
     def rows(self) -> list[tuple[str, dict]]:
         """(label, aggregate) for every system, in reading order."""
         rows: list[tuple[str, dict]] = [
@@ -1111,14 +1536,31 @@ class Report:
         ]
         return rows
 
+    def headlines(self) -> list[str]:
+        """Both computed headlines, permissive first, strict second."""
+        return (
+            headline(self.chunked.agg, self.passage_sweep, METRICS, PERMISSIVE_RULE)
+            + [""]
+            + headline(self.chunked.agg, self.passage_sweep, STRICT_METRICS, STRICT_RULE)
+        )
+
     def analysis(self) -> list[str]:
         """The whole argument, computed from the run."""
         return (
-            headline(self.chunked.agg, self.passage_sweep)
+            self.headlines()
+            + [""]
+            + scoring_rule_note(self.rows())
+            + [""]
+            + provenance_note(self.measured_rows())
             + [""]
             + verdict(self.baseline.agg, self.chunked.agg, self.passage_sweep)
             + context_matched_note(self.passage_sweep, self.chunked.agg)
             + scale_note(self.dataset, self.chunked.agg, self.matched)
+            + [""]
+            + verdict(
+                self.baseline.agg, self.chunked.agg, self.passage_sweep, STRICT_METRICS
+            )
+            + context_matched_note(self.passage_sweep, self.chunked.agg, STRICT_METRICS)
             + [""]
             + chunk_note(self.graph.agg, self.chunked.agg, self.overlap)
             + [""]
@@ -1133,6 +1575,9 @@ class Report:
             + misses_note("D (GraphRAG + source chunks)", self.chunked.results)
             + misses_note("C (graph only)", self.graph.results)
             + misses_note(f"A (passage baseline, top-{self.baseline_k})", self.baseline.results)
+            + misses_note(
+                "D under the strict rule", self.chunked.results, strict=True
+            )
         )
 
 
@@ -1144,7 +1589,8 @@ def print_report(report: Report) -> None:
     print(f"  {dataset.get('name', 'Benchmark')} — {report.baseline.agg['n']} multi-hop "
           f"questions, {len(dataset['passages'])} passages, {len(dataset['entities'])} entities")
     print("═" * width)
-    print(f"  {'System':<{_LABEL_W}}{'Fact Recall':>10}{'Full Coverage':>16}{'Mean context':>15}")
+    print(f"  {'':<{_LABEL_W}}{'── permissive ──':>16}{'──── strict ────':>18}")
+    print(_header_row())
     print("  " + "─" * (width - 4))
     for label, agg in report.rows():
         print(_row(label, agg))
@@ -1195,6 +1641,81 @@ def _markdown_lines(lines: list[str]) -> list[str]:
     return out
 
 
+def summary_block(report: Report) -> list[str]:
+    """The generated numeric core, emitted verbatim into results.md AND README.md.
+
+    Run configuration, the results table under both scoring rules, and the two
+    computed headlines. Nothing here is ever typed by a human, and because both
+    files receive the identical list of lines they cannot drift apart —
+    ``tests/test_benchmark.py`` fails if the region in README.md is not present,
+    byte for byte, inside results.md.
+
+    That test exists because an audit found the README's corpus character count
+    and several of its figures disagreeing with a fresh run. Hand-copying was
+    the defect; deleting the copy is the fix.
+    """
+    lines: list[str] = []
+    if report.settings_line:
+        lines += [
+            "**Reproduce:** `docker compose up -d neo4j && make benchmark` — no API key, "
+            "no network. Pinned configuration for the numbers below: "
+            f"{report.settings_line}",
+            "",
+        ]
+    lines += [
+        "| System | Fact Recall | Full-Coverage | Fact Recall (strict) | "
+        "Full-Coverage (strict) | Mean context (chars) |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for label, agg in report.rows():
+        mark = "**" if label.startswith("D.") else ""
+        cells = [label] + [
+            f"{agg[key]:.1%}"
+            for _, key in (*METRICS, *STRICT_METRICS)
+        ]
+        rendered = " | ".join(f"{mark}{cell}{mark}" for cell in cells)
+        lines.append(f"| {rendered} | {agg['mean_context_chars']:,.0f} |")
+    lines += [
+        "",
+        "*Permissive* credits a required fact whose name appears anywhere in the "
+        "retrieved context; *strict* credits it only when the name appears in retrieved "
+        "prose (verbatim corpus text). The entity-granular rows (B, B″, B′) and the "
+        "graph-only row (C) score 0.0 under the strict rule **by construction** — they "
+        "return a compressed representation of the corpus, never the corpus. Treat "
+        "permissive as an upper bound and strict as a lower bound.",
+        "",
+    ]
+    lines += _markdown_lines(report.headlines())
+    return lines
+
+
+def render_readme(readme: str, report: Report) -> str:
+    """Replace the marked region of README.md with the freshly generated block.
+
+    Raises :class:`IntegrityError` rather than appending, guessing or silently
+    doing nothing: a README whose generated region has gone missing is exactly
+    the state the rot-detector test exists to catch, and the harness should not
+    paper over it.
+    """
+    start = readme.find(README_BEGIN)
+    end = readme.find(README_END)
+    if start == -1 or end == -1 or end < start:
+        raise IntegrityError(
+            f"{README_PATH.name} has no generated region — expected the markers "
+            f"{README_BEGIN!r} … {README_END!r}. The README's numbers must be generated, "
+            "not typed."
+        )
+    body = "\n".join(summary_block(report))
+    return (
+        readme[:start]
+        + README_BEGIN
+        + "\n\n"
+        + body
+        + "\n\n"
+        + readme[end:]
+    )
+
+
 def _sweep_table(sweep: list[tuple[int, dict]], unit: str) -> list[str]:
     lines = [
         f"| top-k | Fact recall | Full coverage | Mean chars | Share of {unit} |",
@@ -1218,20 +1739,30 @@ def _results_markdown(report: Report) -> str:
         f"{len(dataset['entities'])} entities, {len(dataset['relationships'])} relationships, "
         f"{report.baseline.agg['n']} multi-hop questions.",
         "",
-        "Every system below uses the same embedding model and is scored with the same "
-        "rule (a required fact counts as retrieved when its entity name appears in the "
-        "retrieved context). No LLM is involved — this measures **retrieval**, which is "
-        "the part a knowledge graph actually changes. Regenerate with `make benchmark`; "
-        "this file is written by the harness, never edited by hand.",
+        "Every system below uses the same embedding model, and every system is scored "
+        "with the same **two** rules. No LLM is involved — this measures **retrieval**, "
+        "which is the part a knowledge graph actually changes. Regenerate with "
+        "`make benchmark`; this file is written by the harness, never edited by hand.",
+        "",
+        "**Why two rules.** Applying an identical rule to every system is not the same as "
+        "applying a neutral one. The permissive rule credits a required fact whose name "
+        "appears anywhere in the retrieved context — and a GraphRAG context contains "
+        "entity names as structured scaffolding (`Entity:` headers, `Description:` lines, "
+        "`→ REL → Neighbour` lines, rendered reasoning paths), so a fact can score there "
+        "because the graph *listed it as a neighbour*, with none of the evidence needed "
+        "to answer retrieved. A passage baseline has no such channel. The strict rule "
+        "closes it: a fact counts only when its name appears in retrieved prose. Both are "
+        "reported, and the size of the gap between them is measured per system below.",
         "",
         "**D is the shipped system**: the graph *and* the source chunks the entities "
         "were extracted from. **C is what Synapse was before source chunks** — graph "
         "only. **B′ is the ablation**: C's own context with every edge-derived part "
         "deleted (the per-entity `Relationships:` lines and the rendered "
         "`Reasoning paths:` section), so C − B′ is what the relationships contribute "
-        "with the seed set held fixed. **B″ and A′** are the same graph-free systems "
-        "given the same character budget as C and D respectively, because a comparison "
-        "between unequal budgets is not a comparison.",
+        "with the seed set held fixed — it controls the *seed set*, not the character "
+        "budget, and B′ therefore reads less text than C. **B″ and A′** are the "
+        "graph-free systems given the same character budget as C and D respectively, "
+        "because a comparison between unequal budgets is not a comparison.",
         "",
         "One thing to notice before reading D's row: **D's semantic excerpt channel is "
         "system A**. It runs a top-k cosine search over exactly the passages A ranks, "
@@ -1240,31 +1771,44 @@ def _results_markdown(report: Report) -> str:
         "reported below so the effect can be sized.",
         "",
     ]
-    if report.settings_line:
-        lines += [f"Run configuration: {report.settings_line}", ""]
-    lines += [
-        "| System | Fact Recall | Full-Coverage Rate | Mean context (chars) |",
-        "| --- | ---: | ---: | ---: |",
-    ]
-    for label, agg in report.rows():
-        emphasis = "**" if label.startswith("D.") else ""
-        lines.append(
-            f"| {emphasis}{label}{emphasis} | {emphasis}{agg['fact_recall']:.1%}{emphasis} | "
-            f"{emphasis}{agg['full_coverage']:.1%}{emphasis} | "
-            f"{agg['mean_context_chars']:,.0f} |"
-        )
+    # ── The generated numeric core, shared byte-for-byte with README.md ──────
+    lines += summary_block(report)
 
-    lines += ["", "## What the numbers support", ""]
-    lines += _markdown_lines(headline(report.chunked.agg, report.passage_sweep))
-    lines += ["", "**Per-metric detail (D vs. the passage baseline)**", ""]
+    lines += ["", "## How much the permissive rule is worth", ""]
+    lines += _markdown_lines(scoring_rule_note(report.rows()))
+    lines += [""]
+    lines += _markdown_lines(provenance_note(report.measured_rows()))
+    lines += [
+        "",
+        "A′ and B″ are read off the k sweeps as aggregates, so they carry no "
+        "per-question attribution; A′ is pure corpus prose and B″ pure entity records, "
+        "which is why neither appears in the table above.",
+        "",
+        "## What the numbers support",
+        "",
+        "**Per-metric detail, permissive rule (D vs. the passage baseline)**",
+        "",
+    ]
     lines += _markdown_lines(
         verdict(report.baseline.agg, report.chunked.agg, report.passage_sweep)
         + context_matched_note(report.passage_sweep, report.chunked.agg)
         + scale_note(report.dataset, report.chunked.agg, report.matched)
     )
+    lines += ["", "**Per-metric detail, strict rule (D vs. the passage baseline)**", ""]
+    lines += _markdown_lines(
+        verdict(
+            report.baseline.agg, report.chunked.agg, report.passage_sweep, STRICT_METRICS
+        )
+        + context_matched_note(report.passage_sweep, report.chunked.agg, STRICT_METRICS)
+    )
     lines += ["", "**What the source chunks add (C → D)**", ""]
     lines += _markdown_lines(chunk_note(report.graph.agg, report.chunked.agg, report.overlap))
-    lines += ["", "**Isolating the graph (B′ vs. C, budget-matched by B″)**", ""]
+    lines += [
+        "",
+        "**Isolating the graph (B′ vs. C — seed-matched, not budget-matched; "
+        "budget-matched by B″)**",
+        "",
+    ]
     lines += _markdown_lines(
         ablation_note(
             report.entity.agg,
@@ -1281,6 +1825,7 @@ def _results_markdown(report: Report) -> str:
         + misses_note(
             f"A (passage baseline, top-{report.baseline_k})", report.baseline.results
         )
+        + misses_note("D under the strict rule", report.chunked.results, strict=True)
     )
     lines += [
         "",
@@ -1300,15 +1845,27 @@ def _results_markdown(report: Report) -> str:
         "",
     ]
     lines += _sweep_table(report.passage_sweep, "corpus")
-    lines += ["", "### B. Entity vector RAG (no edges)", ""]
+    lines += [
+        "",
+        "Every character this system returns is corpus prose, so its strict-rule scores "
+        "are identical to the permissive ones printed above and are not repeated.",
+        "",
+        "### B. Entity vector RAG (no edges)",
+        "",
+    ]
     lines += _sweep_table(report.entity_sweep, "entities")
     lines += [
         "",
+        "This system returns no prose at any k, so every row above scores 0.0% under the "
+        "strict rule — including the k that reads every entity in the graph.",
+        "",
         "## Per-question breakdown",
         "",
+        "Permissive-rule recall per system, then D's recall under the strict rule.",
+        "",
         "| # | Question | Required facts | A. passage | B. entity | B′. no graph | "
-        "C. graph | D. graph+chunks | D missed |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+        "C. graph | D. graph+chunks | D strict | D missed (permissive) |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for base, ent, strip, gr, ch in zip(
         report.baseline.results,
@@ -1321,7 +1878,8 @@ def _results_markdown(report: Report) -> str:
         lines.append(
             f"| {ch.qid} | {ch.question} | {', '.join(ch.required)} | "
             f"{base.recall:.0%} | {ent.recall:.0%} | {strip.recall:.0%} | "
-            f"{gr.recall:.0%} | {ch.recall:.0%} | {', '.join(ch.missing) or '—'} |"
+            f"{gr.recall:.0%} | {ch.recall:.0%} | {ch.strict_recall:.0%} | "
+            f"{', '.join(ch.missing) or '—'} |"
         )
     lines += [
         "",
@@ -1490,6 +2048,17 @@ async def main(argv: list[str] | None = None) -> int:
     if not args.no_write:
         RESULTS_PATH.write_text(_results_markdown(report), encoding="utf-8")
         print(f"📄 Wrote {RESULTS_PATH}")
+        # The README's numbers are generated too. Hand-copying them is what let
+        # them rot last time; there is now nothing to copy.
+        try:
+            README_PATH.write_text(
+                render_readme(README_PATH.read_text(encoding="utf-8"), report),
+                encoding="utf-8",
+            )
+        except (OSError, IntegrityError) as e:
+            print(f"❌ Could not regenerate {README_PATH.name}: {e}", file=sys.stderr)
+            return 3
+        print(f"📄 Wrote {README_PATH}")
     return 0
 
 

@@ -10,6 +10,8 @@ service *actually* emits.
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 
 from app.services import chunk_store, graph_builder
@@ -302,14 +304,25 @@ class TestSearchChunks:
 
 
 # ── Entity-anchored lookup ───────────────────────────
+def _row(cid, doc, index, *, mentions=None, best=None, text=None):
+    """A driver row; ranking fields omitted entirely when not given."""
+    row = {"id": cid, "text": text or cid, "document": doc, "index": index}
+    if mentions is not None:
+        row["seed_mentions"] = mentions
+    if best is not None:
+        row["best_seed_rank"] = best
+    return row
+
+
 class TestChunksForEntities:
     async def test_dedupes_by_id_and_orders_by_document_then_index(self, fake_neo4j):
         # Deliberately shuffled, with "c1" returned twice (two entities mention it).
+        # All equally relevant, so the deterministic tie-break decides.
         rows = [
-            {"id": "c2", "text": "second", "document": "cv.pdf", "index": 1},
-            {"id": "c1", "text": "first", "document": "cv.pdf", "index": 0},
-            {"id": "c0", "text": "other doc", "document": "a.pdf", "index": 5},
-            {"id": "c1", "text": "first", "document": "cv.pdf", "index": 0},
+            _row("c2", "cv.pdf", 1, mentions=1, best=0),
+            _row("c1", "cv.pdf", 0, mentions=1, best=0),
+            _row("c0", "a.pdf", 5, mentions=1, best=0),
+            _row("c1", "cv.pdf", 0, mentions=1, best=0),
         ]
         fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
 
@@ -321,8 +334,8 @@ class TestChunksForEntities:
 
     async def test_ordering_is_independent_of_driver_row_order(self, fake_neo4j):
         rows = [
-            {"id": "c1", "text": "first", "document": "cv.pdf", "index": 0},
-            {"id": "c2", "text": "second", "document": "cv.pdf", "index": 1},
+            _row("c1", "cv.pdf", 0, mentions=1, best=0),
+            _row("c2", "cv.pdf", 1, mentions=1, best=0),
         ]
 
         fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
@@ -335,10 +348,10 @@ class TestChunksForEntities:
 
     async def test_respects_the_limit_after_dedupe(self, fake_neo4j):
         rows = [
-            {"id": "c1", "text": "a", "document": "cv.pdf", "index": 0},
-            {"id": "c1", "text": "a", "document": "cv.pdf", "index": 0},
-            {"id": "c2", "text": "b", "document": "cv.pdf", "index": 1},
-            {"id": "c3", "text": "c", "document": "cv.pdf", "index": 2},
+            _row("c1", "cv.pdf", 0, mentions=1, best=0),
+            _row("c1", "cv.pdf", 0, mentions=1, best=0),
+            _row("c2", "cv.pdf", 1, mentions=1, best=0),
+            _row("c3", "cv.pdf", 2, mentions=1, best=0),
         ]
         calls = fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
 
@@ -364,6 +377,189 @@ class TestChunksForEntities:
 
         fake_neo4j(handler)
         assert await chunk_store.chunks_for_entities(["Ahmed"], limit=5) == []
+
+
+# ── Relevance ranking of the structural channel ──────
+class TestChunksForEntitiesRanking:
+    """The structural channel must choose excerpts by relevance, not by filename.
+
+    Before this, the Cypher ended ``ORDER BY document, index LIMIT $limit``: when
+    more chunks mentioned the seeds than the limit allowed, Neo4j kept the
+    alphabetically-first document and threw the rest away. The one retrieval
+    channel plain vector RAG cannot reproduce was being decided by filename.
+    """
+
+    async def test_more_seed_mentions_wins_over_alphabetical_order(self, fake_neo4j):
+        """A chunk covering three seeds is likelier to hold the multi-hop link."""
+        rows = [
+            _row("one", "a_first.pdf", 0, mentions=1, best=0),
+            _row("three", "z_last.pdf", 9, mentions=3, best=0),
+            _row("two", "m_mid.pdf", 2, mentions=2, best=0),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B", "C"], limit=10)
+
+        # Alphabetically this is exactly backwards — which is the point.
+        assert [c["id"] for c in out] == ["three", "two", "one"]
+
+    async def test_ties_on_coverage_break_by_best_seed_rank(self, fake_neo4j):
+        """Equal coverage: prefer the chunk mentioning the better-ranked seed."""
+        rows = [
+            _row("weak_seed", "a.pdf", 0, mentions=1, best=4),
+            _row("top_seed", "z.pdf", 0, mentions=1, best=0),
+            _row("mid_seed", "m.pdf", 0, mentions=1, best=2),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B", "C", "D", "E"], limit=10)
+
+        assert [c["id"] for c in out] == ["top_seed", "mid_seed", "weak_seed"]
+
+    async def test_full_ties_break_by_document_then_index_then_id(self, fake_neo4j):
+        """Last resort is deterministic, never a relevance claim."""
+        rows = [
+            _row("b", "cv.pdf", 1, mentions=2, best=1),
+            _row("a", "cv.pdf", 0, mentions=2, best=1),
+            _row("z", "a.pdf", 7, mentions=2, best=1),
+            # Same (document, index) as "a" — possible when a document is
+            # re-chunked and the old text unit is still stored.
+            _row("a2", "cv.pdf", 0, mentions=2, best=1),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B"], limit=10)
+
+        assert [c["id"] for c in out] == ["z", "a", "a2", "b"]
+
+    async def test_coverage_outranks_a_better_seed_rank(self, fake_neo4j):
+        """Primary signal is coverage; seed rank only settles ties."""
+        rows = [
+            _row("broad", "z.pdf", 0, mentions=3, best=4),
+            _row("narrow_but_top", "a.pdf", 0, mentions=1, best=0),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B", "C", "D", "E"], limit=10)
+
+        assert [c["id"] for c in out] == ["broad", "narrow_but_top"]
+
+    async def test_the_limit_is_applied_after_ranking_not_before(self, fake_neo4j):
+        """The regression itself: truncation must drop the *least relevant*."""
+        rows = [
+            _row("alpha_doc_weak", "a_first.pdf", 0, mentions=1, best=2),
+            _row("alpha_doc_weak2", "a_first.pdf", 1, mentions=1, best=2),
+            _row("strong", "z_last.pdf", 9, mentions=3, best=0),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B", "C"], limit=1)
+
+        # Old behaviour kept "a_first.pdf" chunk 0 purely because of its name.
+        assert [c["id"] for c in out] == ["strong"]
+
+    async def test_ranking_survives_every_driver_row_order(self, fake_neo4j):
+        """Determinism: the driver may hand rows back in any order at all."""
+        rows = [
+            _row("three", "z.pdf", 0, mentions=3, best=1),
+            _row("two", "m.pdf", 0, mentions=2, best=0),
+            _row("one_top", "b.pdf", 0, mentions=1, best=0),
+            _row("one_weak", "a.pdf", 0, mentions=1, best=3),
+        ]
+        expected = ["three", "two", "one_top", "one_weak"]
+
+        for permutation in itertools.permutations(rows):
+            shuffled = list(permutation)
+            fake_neo4j(lambda q, p, r=shuffled: r if "MENTIONED_IN" in q else [])
+            out = await chunk_store.chunks_for_entities(["A", "B", "C", "D"], limit=10)
+            assert [c["id"] for c in out] == expected
+
+    async def test_exposes_why_each_chunk_was_chosen(self, fake_neo4j):
+        """Additive fields — the caller and a reviewer can audit the ranking."""
+        rows = [_row("c1", "cv.pdf", 3, mentions=2, best=1, text="prose")]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B"], limit=5)
+
+        assert out == [
+            {
+                "id": "c1",
+                "text": "prose",
+                "document": "cv.pdf",
+                "index": 3,
+                "score": 0.0,
+                "seed_mentions": 2,
+                "best_seed_rank": 1,
+            }
+        ]
+
+    async def test_duplicate_rows_keep_the_strongest_evidence(self, fake_neo4j):
+        """A repeated id must not let row order decide the score."""
+        rows = [
+            _row("dup", "cv.pdf", 0, mentions=1, best=3),
+            _row("dup", "cv.pdf", 0, mentions=3, best=0),
+        ]
+
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+        forward = await chunk_store.chunks_for_entities(["A", "B", "C", "D"], limit=5)
+
+        rows.reverse()
+        backward = await chunk_store.chunks_for_entities(["A", "B", "C", "D"], limit=5)
+
+        assert forward == backward
+        assert forward[0]["seed_mentions"] == 3
+        assert forward[0]["best_seed_rank"] == 0
+
+    async def test_a_top_ranked_seed_at_position_zero_is_not_treated_as_missing(
+        self, fake_neo4j
+    ):
+        """``best_seed_rank == 0`` is the *best* rank; a falsy check would demote it."""
+        rows = [
+            _row("top", "z.pdf", 0, mentions=1, best=0),
+            _row("second", "a.pdf", 0, mentions=1, best=1),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B"], limit=5)
+
+        assert [c["id"] for c in out] == ["top", "second"]
+
+    async def test_rows_without_ranking_fields_sort_last_and_stay_stable(self, fake_neo4j):
+        """A row carrying no ranking never jumps ahead of a genuinely ranked one."""
+        rows = [
+            _row("unranked_a", "a.pdf", 0),
+            _row("ranked", "z.pdf", 9, mentions=1, best=1),
+            _row("unranked_b", "b.pdf", 0),
+        ]
+        fake_neo4j(lambda q, p: rows if "MENTIONED_IN" in q else [])
+
+        out = await chunk_store.chunks_for_entities(["A", "B", "C"], limit=10)
+
+        assert [c["id"] for c in out] == ["ranked", "unranked_a", "unranked_b"]
+        # Unranked rows sort behind every real seed position, not at rank 0.
+        assert [c["best_seed_rank"] for c in out] == [1, 3, 3]
+        assert [c["seed_mentions"] for c in out] == [1, 0, 0]
+
+    async def test_seed_names_reach_cypher_in_the_callers_relevance_order(self, fake_neo4j):
+        """The seed list *is* the ranking — position order carries the signal."""
+        calls = fake_neo4j(lambda q, p: [])
+
+        await chunk_store.chunks_for_entities(["Best", "Middle", "Worst"], limit=5)
+
+        params = [p for q, p in calls if "MENTIONED_IN" in q][0]
+        assert params["names"] == ["Best", "Middle", "Worst"]
+
+    def test_the_cypher_ranks_before_it_truncates(self):
+        """Guards the exact regression: ORDER BY must rank, and precede LIMIT."""
+        query = chunk_store.CHUNKS_FOR_ENTITIES_QUERY
+        order_by = query.index("ORDER BY")
+        assert order_by < query.index("LIMIT $limit"), "LIMIT must come after ORDER BY"
+
+        clause = query[order_by : query.index("LIMIT $limit")]
+        # Relevance leads; (document, index) is only the deterministic tail.
+        assert clause.index("seed_mentions DESC") < clause.index("best_seed_rank")
+        assert clause.index("best_seed_rank") < clause.index("document")
+        assert not clause.strip().startswith("ORDER BY document")
 
 
 # ── Ingest wiring ────────────────────────────────────

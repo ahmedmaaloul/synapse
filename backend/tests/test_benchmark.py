@@ -4,7 +4,7 @@
 """
 Tests for the GraphRAG vs. vector-RAG benchmark.
 
-Two jobs, both hermetic (no network, no LLM, no Neo4j):
+Four jobs, all hermetic (no network, no LLM, no Neo4j):
 
   1. **Dataset integrity** — a benchmark nobody can audit is worth nothing, so
      every claim ``dataset.json`` makes about itself is verified here: the
@@ -35,6 +35,23 @@ Two jobs, both hermetic (no network, no LLM, no Neo4j):
   2. **Metric correctness** — the scoring and reporting primitives are checked
      against hand-computed values, including the ones that decide whether the
      report is allowed to claim a win.
+
+  3. **Channel attribution** — the permissive scoring rule ("the fact's name is
+     somewhere in the context") is not neutral between these systems, because a
+     GraphRAG context prints entity names as scaffolding while a passage context
+     contains only prose. The harness therefore splits every context into
+     ``prose`` / ``entity`` / ``edge`` channels and scores a strict rule as well
+     as the permissive one. These tests pin the split, pin that the three
+     channels cover every name the context contains — a name that fell through
+     would be silently dropped from the strict column — and pin that the strict
+     rule really is zero-by-construction for the prose-free systems.
+
+  4. **README ↔ results consistency** — an audit found numbers in ``README.md``
+     that a fresh run did not reproduce. The numeric core of the README is now
+     *generated* into a marked region from the same function that writes
+     ``results.md``; :func:`test_the_readme_generated_region_is_verbatim_in_the_results`
+     and :func:`test_every_number_in_the_readme_appears_in_the_generated_results`
+     fail if that ever stops being true, so the defect cannot recur silently.
 """
 
 from __future__ import annotations
@@ -45,22 +62,36 @@ from itertools import combinations
 import pytest
 
 from benchmarks.run_benchmark import (
+    CHANNELS,
     CLEAR_QUERIES,
     DATASET_PATH,
+    EDGE,
+    ENTITY,
+    METRICS,
     PATHS_HEADING,
     PREFIX_FAMILY_LEN,
+    PROSE,
+    README_BEGIN,
+    README_END,
+    README_PATH,
+    RESULTS_PATH,
     SOURCES_HEADING,
+    STRICT_METRICS,
     SWEEP_KS,
+    Channels,
     DatasetError,
+    IntegrityError,
     QuestionResult,
     ablation_note,
     aggregate,
     chunk_note,
+    classify_hits,
     contaminated,
     content_words,
     context_matched,
     context_matched_note,
     cosine_similarity,
+    edge_segment,
     edgeless_budget_lines,
     entity_context_block,
     entity_document,
@@ -70,12 +101,17 @@ from benchmarks.run_benchmark import (
     fact_recall,
     facts_found,
     headline,
+    hit_provenance,
     leaks,
     load_dataset,
     misses_note,
+    prose_segment,
+    provenance_note,
     rank_by_similarity,
+    render_readme,
     same_family,
     scale_note,
+    scoring_rule_note,
     smallest_k_reaching,
     strip_edges,
     strip_graph_structure,
@@ -144,10 +180,17 @@ def test_distractor_passages_are_not_needed_by_any_question():
 def test_the_documented_distractor_leakage_is_the_real_one():
     """The dataset used to claim distractors "carry none of" the required facts.
 
-    Eight of them do mention one in passing, which is realistic and harmless —
-    a leaked mention can only help the *passage* baseline, never GraphRAG — but
-    the claim was false. The true list is now written down in ``dataset.json``
-    and pinned here, so prose and corpus cannot drift apart again.
+    Some of them do mention one in passing, which is realistic; the claim was
+    false. The true list is written down in ``dataset.json`` and pinned here, so
+    prose and corpus cannot drift apart again.
+
+    An earlier version of this docstring added that "a leaked mention can only
+    help the *passage* baseline, never GraphRAG". That is false too, and is
+    deleted rather than softened: the shipped system's excerpt channel retrieves
+    the same passages the baseline ranks, so a leaked mention helps every system
+    that returns prose (A, A′ and D). It cannot help the rows that return no
+    prose at all (B, B″, B′, C), and :func:`test_the_strict_rule_is_zero_for_the_prose_free_systems`
+    is what makes "returns no prose" a checked property rather than a claim.
     """
     required = {f for q in QUESTIONS for f in q["required_facts"]}
     leaking = sorted(
@@ -439,9 +482,48 @@ def test_aggregate_hand_computed():
     assert agg["full_coverage"] == pytest.approx(1 / 3)
     assert agg["mean_context_chars"] == pytest.approx(200.0)
     assert agg["n"] == 3
+    # No channel attribution was supplied, so nothing is credited to prose and
+    # the strict rule scores zero. Silence is not a pass under the strict rule.
+    assert agg["strict_fact_recall"] == 0.0
+    assert agg["strict_full_coverage"] == 0.0
 
     empty = aggregate([])
-    assert empty == {"fact_recall": 0.0, "full_coverage": 0.0, "mean_context_chars": 0.0, "n": 0}
+    assert empty == {
+        "fact_recall": 0.0,
+        "full_coverage": 0.0,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 0.0,
+        "n": 0,
+    }
+
+
+def test_aggregate_scores_both_rules_from_the_channel_attribution():
+    """The strict rule counts only the facts credited to retrieved prose."""
+    results = [
+        QuestionResult(
+            "q1", "?", ["A", "B"], ["A", "B"], 100,
+            hit_channels={"A": PROSE, "B": PROSE},
+        ),
+        QuestionResult(
+            "q2", "?", ["A", "B"], ["A", "B"], 100,
+            # Both credited, but B only because the graph named it as a
+            # neighbour — the exact case the strict rule exists to expose.
+            hit_channels={"A": PROSE, "B": EDGE},
+        ),
+        QuestionResult(
+            "q3", "?", ["A", "B"], ["A", "B"], 100,
+            hit_channels={"A": ENTITY, "B": ENTITY},
+        ),
+    ]
+    agg = aggregate(results)
+    assert agg["fact_recall"] == pytest.approx(1.0)
+    assert agg["full_coverage"] == pytest.approx(1.0)
+    assert agg["strict_fact_recall"] == pytest.approx(0.5)  # (1.0 + 0.5 + 0.0) / 3
+    assert agg["strict_full_coverage"] == pytest.approx(1 / 3)
+    assert results[1].found_strict == ["A"]
+    assert results[1].missing_strict == ["B"]
+    assert results[1].strict_complete is False
 
 
 def _sweep(*rows: tuple[int, float, float, float]) -> list[tuple[int, dict]]:
@@ -482,6 +564,43 @@ def test_verdict_never_claims_an_unqualified_win():
     assert "matches it at top-6" in lines[3]
     # No line is allowed to end the story with a bare win.
     assert not any(line.startswith("Fact Recall: GraphRAG wins") for line in lines)
+
+
+def test_verdict_will_not_call_a_gap_smaller_than_one_question():
+    """A lead worth less than a single question is not a lead.
+
+    With n questions, Full-Coverage moves in steps of 1/n, so on a 14-question
+    set a +1.8 pp "win" is a rounding artefact of one item — the exact kind of
+    claim a referee rejects. The floor engages only when the question count is
+    known; see the sibling test.
+    """
+    baseline = {"fact_recall": 0.893, "full_coverage": 0.714,
+                "mean_context_chars": 831.0, "n": 14}
+    graph = {"fact_recall": 0.911, "full_coverage": 0.857,
+             "mean_context_chars": 3516.0, "n": 14}
+    sweep = _sweep((4, 0.893, 0.714, 831.0), (20, 1.0, 1.0, 4072.0))
+    lines = verdict(baseline, graph, sweep)
+
+    # +1.8 pp < one question (7.1 pp) -> refused.
+    assert "TOO CLOSE TO CALL" in lines[0]
+    assert "No significance is claimed." in lines[0]
+    assert "GraphRAG ahead at the configured k" not in lines[0]
+    # +14.3 pp = two questions -> reported, and qualified with the size of one.
+    assert "GraphRAG ahead at the configured k" in lines[2]
+    assert "one question = 7.1 pp" in lines[2]
+
+
+def test_effect_size_floor_is_inert_when_the_question_count_is_unknown():
+    """A missing ``n`` must NOT silently suppress every verdict.
+
+    Defaulting the floor to "1 question = 100 pp" would swallow even a 40 pp
+    difference, which is strictly worse than having no floor at all.
+    """
+    baseline = {"fact_recall": 0.9, "full_coverage": 0.9, "mean_context_chars": 100.0}
+    graph = {"fact_recall": 0.5, "full_coverage": 0.5, "mean_context_chars": 400.0}
+    lines = verdict(baseline, graph, _sweep((4, 0.9, 0.9, 100.0)))
+    assert "TOO CLOSE TO CALL" not in lines[0]
+    assert "passage vector RAG ahead" in lines[0]
 
 
 def test_verdict_says_when_no_baseline_k_catches_up():
@@ -540,8 +659,17 @@ def test_ablation_note_isolates_the_graph():
     assert "60.0% without the graph → 90.0% with it (+30.0 pp)" in lines[1]
     assert "30.0% without the graph → 80.0% with it (+50.0 pp)" in lines[2]
     assert "2.00x the context" in lines[3]
+    # B′ is C minus text, so the two sides are NOT budget-matched. The README
+    # used to claim the ablation "is now budget-matched"; the harness now states
+    # the residual gap itself, immediately after the cost line it qualifies.
+    assert "NOT budget-matched" in lines[4]
+    assert "500 chars against C's 1,000" in lines[4]
+    assert "controls the *seed set*, not the budget" in lines[4]
+    # …and that the ablation only exists under the permissive rule at all.
+    assert "Permissive rule only" in lines[5]
+    assert "under the strict rule both score 0.0" in lines[5]
     # The standalone entity baseline is reported too, and never confused with B′.
-    assert "50.0% / 10.0% on 400 chars" in lines[4]
+    assert "50.0% / 10.0% on 400 chars" in lines[6]
 
 
 def test_ablation_note_reports_a_negative_contribution_too():
@@ -915,8 +1043,20 @@ def test_contaminated_flags_a_graph_only_run_that_returned_excerpts():
 
 def test_chunk_note_states_the_gain_and_the_tautology_together():
     """D's semantic channel *is* system A; the report has to say so itself."""
-    graph_only = {"fact_recall": 0.875, "full_coverage": 0.643, "mean_context_chars": 2081.0}
-    chunked = {"fact_recall": 0.95, "full_coverage": 0.85, "mean_context_chars": 4162.0}
+    graph_only = {
+        "fact_recall": 0.875,
+        "full_coverage": 0.643,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 2081.0,
+    }
+    chunked = {
+        "fact_recall": 0.95,
+        "full_coverage": 0.85,
+        "strict_fact_recall": 0.9,
+        "strict_full_coverage": 0.8,
+        "mean_context_chars": 4162.0,
+    }
     overlap = {
         "baseline_k": 4,
         "containment": 0.75,
@@ -927,8 +1067,12 @@ def test_chunk_note_states_the_gain_and_the_tautology_together():
     assert "87.5% graph-only → 95.0% with source chunks (+7.5 pp)" in lines[1]
     assert "64.3% graph-only → 85.0% with source chunks (+20.7 pp)" in lines[2]
     assert "2.00x the context" in lines[3]
-    assert "75% of the passages system A retrieves at top-4" in lines[4]
-    assert "D's semantic excerpt channel IS the passage baseline" in lines[4]
+    # Under the strict rule the graph-only side scores nothing, so the whole of
+    # the shipped system's strict score is attributable to the chunk channel.
+    assert "C scores 0.0% / 0.0%" in lines[4]
+    assert "D scores 90.0% / 80.0%" in lines[4]
+    assert "75% of the passages system A retrieves at top-4" in lines[5]
+    assert "D's semantic excerpt channel IS the passage baseline" in lines[5]
 
 
 def test_excerpt_overlap_measures_how_much_of_d_is_just_the_baseline():
@@ -974,3 +1118,398 @@ def test_misses_note_is_generated_from_the_results_not_typed():
 
     (perfect,) = misses_note("D", [QuestionResult("q01", "?", ["A"], ["A"], 10)])
     assert perfect == "D retrieved every required fact on all 1 questions."
+
+
+def test_misses_note_reports_the_strict_rule_separately():
+    """A fact credited only to scaffolding is a miss under the strict rule."""
+    results = [
+        QuestionResult("q01", "?", ["A"], ["A"], 10, hit_channels={"A": PROSE}),
+        QuestionResult("q02", "?", ["A"], ["A"], 10, hit_channels={"A": EDGE}),
+    ]
+    (permissive,) = misses_note("D", results)
+    assert "retrieved every required fact" in permissive
+    (strict,) = misses_note("D", results, strict=True)
+    assert "missed at least one required fact on 1 of 2 questions (q02)" in strict
+    assert "The facts it never retrieved: A." in strict
+
+
+# ── Channel attribution: the permissive rule is uniform, not neutral ─────────
+# A GraphRAG context prints entity names as scaffolding, so a required fact can
+# be credited because the graph listed it as a neighbour rather than because the
+# evidence to answer came back. These tests pin the machinery that measures it.
+GRAPH_CONTEXT_WITH_SOURCES = (
+    "Entity: Ada Lovelace (Type: PERSON)\n"
+    "  Description: British mathematician\n"
+    "  Relationships:\n"
+    "  → WROTE_ALGORITHM_FOR → Analytical Engine (MACHINE)\n\n"
+    "Entity: IBM (Type: ORGANIZATION)\n"
+    "  Description: Computing company\n\n"
+    f"{PATHS_HEADING}\n"
+    "  - IBM -[FOUNDED_BY]-> Herman Hollerith\n\n"
+    f"{SOURCES_HEADING}\n\n"
+    "[S1] benchmark (chunk 7)\n"
+    "Punched Cards fed the machine, and IBM sold them.\n\n"
+    "(1 further excerpt omitted for length.)"
+)
+
+
+def test_prose_segment_is_corpus_text_and_nothing_else():
+    """Provenance headers and the truncation note are the engine's words, not the corpus."""
+    prose = prose_segment(GRAPH_CONTEXT_WITH_SOURCES)
+    assert "Punched Cards fed the machine" in prose
+    assert "[S1]" not in prose
+    assert "chunk 7" not in prose
+    assert "further excerpt omitted" not in prose
+    assert "Ada Lovelace" not in prose  # the graph half is not prose
+    # A context with no excerpt section has no prose at all — which is why the
+    # graph-only and entity-granular rows score zero under the strict rule.
+    assert prose_segment("Entity: IBM (Type: ORG)") == ""
+    assert prose_segment("") == ""
+
+
+def test_edge_segment_is_exactly_what_strip_graph_structure_removes():
+    """The two functions must partition the graph half, or attribution leaks."""
+    edges = edge_segment(GRAPH_CONTEXT_WITH_SOURCES)
+    assert "→ WROTE_ALGORITHM_FOR → Analytical Engine (MACHINE)" in edges
+    assert PATHS_HEADING in edges
+    assert "Herman Hollerith" in edges
+    # What survives the strip must be absent here, and vice versa.
+    assert "Description: British mathematician" not in edges
+    assert "Entity: IBM" not in edges
+    assert "→" not in strip_graph_structure(GRAPH_CONTEXT_WITH_SOURCES)
+    assert edge_segment("Entity: IBM (Type: ORG)") == ""
+
+
+def test_the_three_channels_cover_every_name_the_context_contains():
+    """A name in none of the channels would be dropped from the strict column.
+
+    That is the quiet distortion this whole exercise exists to prevent, so the
+    covering property is asserted rather than assumed — and the harness raises
+    :class:`IntegrityError` at run time if a real context ever violates it.
+    """
+    channels = Channels.of_graph(GRAPH_CONTEXT_WITH_SOURCES)
+    joined = "\n".join([channels.prose, channels.entities, channels.edges]).lower()
+    for name in (
+        "Ada Lovelace",
+        "IBM",
+        "Analytical Engine",
+        "Herman Hollerith",
+        "Punched Cards",
+        "Neo4j",  # not present anywhere: must be absent from both sides
+    ):
+        assert (name.lower() in GRAPH_CONTEXT_WITH_SOURCES.lower()) == (
+            name.lower() in joined
+        ), name
+
+
+def test_classify_hits_attributes_each_fact_to_its_channel():
+    channels = Channels.of_graph(GRAPH_CONTEXT_WITH_SOURCES)
+    attribution = classify_hits(
+        channels,
+        ["Punched Cards", "Ada Lovelace", "Analytical Engine", "Herman Hollerith", "Neo4j"],
+    )
+    assert attribution == {
+        "Punched Cards": PROSE,  # verbatim corpus text
+        "Ada Lovelace": ENTITY,  # a materialised entity block
+        "Analytical Engine": EDGE,  # named ONLY by a relationship line
+        "Herman Hollerith": EDGE,  # named ONLY by a reasoning path
+    }
+    assert "Neo4j" not in attribution
+
+
+def test_classify_hits_credits_the_best_evidence_available():
+    """Attribution is conservative *against* the criticism of the permissive rule.
+
+    IBM occurs in an entity block, in a reasoning path AND in the prose. It is
+    credited to the prose, so the measured "share of hits that are scaffolding
+    only" is a lower bound on the advantage, never an inflated one.
+    """
+    channels = Channels.of_graph(GRAPH_CONTEXT_WITH_SOURCES)
+    assert classify_hits(channels, ["IBM"]) == {"IBM": PROSE}
+    # With the excerpt gone, the same name falls back to the entity block.
+    graph_only = GRAPH_CONTEXT_WITH_SOURCES.partition(SOURCES_HEADING)[0]
+    assert classify_hits(Channels.of_graph(graph_only), ["IBM"]) == {"IBM": ENTITY}
+
+
+def test_the_channel_constructors_describe_the_systems_that_use_them():
+    passage = Channels.of_passages("Punched Cards fed the machine.")
+    assert classify_hits(passage, ["Punched Cards"]) == {"Punched Cards": PROSE}
+    assert passage.entities == "" and passage.edges == ""
+
+    entity = Channels.of_entities("Entity: IBM (Type: ORG)")
+    assert classify_hits(entity, ["IBM"]) == {"IBM": ENTITY}
+    assert entity.prose == ""  # nothing can ever be credited to prose here
+
+
+def test_hit_provenance_counts_and_shares():
+    results = [
+        QuestionResult("q1", "?", [], [], 0, hit_channels={"A": PROSE, "B": EDGE}),
+        QuestionResult("q2", "?", [], [], 0, hit_channels={"C": ENTITY, "D": EDGE}),
+    ]
+    stats = hit_provenance(results)
+    assert stats["total"] == 4
+    assert stats["counts"] == {PROSE: 1, ENTITY: 1, EDGE: 2}
+    assert stats["shares"][EDGE] == pytest.approx(0.5)
+    assert set(stats["shares"]) == set(CHANNELS)
+
+    empty = hit_provenance([])
+    assert empty["total"] == 0
+    assert all(share == 0.0 for share in empty["shares"].values())
+
+
+def test_provenance_note_sizes_the_scaffolding_advantage_per_system():
+    rows = [
+        ("A. passage", [QuestionResult("q1", "?", [], [], 0, hit_channels={"X": PROSE})]),
+        ("C. graph", [QuestionResult("q1", "?", [], [], 0, hit_channels={"X": EDGE})]),
+        ("Z. nothing", [QuestionResult("q1", "?", [], [], 0)]),
+    ]
+    lines = provenance_note(rows)
+    assert "conservative against the graph" in lines[0]
+    assert "100% of its 1 scored hits came from retrieved prose" in lines[1]
+    assert "0% of its 1 scored hits came from retrieved prose, 100% from graph" in lines[2]
+    assert "100% an edge or reasoning path and nothing else" in lines[2]
+    assert "no scored hits" in lines[3]
+
+
+def test_scoring_rule_note_says_which_rule_favours_which_system():
+    rows = [
+        (
+            "A. passage",
+            {
+                "fact_recall": 0.9,
+                "full_coverage": 0.7,
+                "strict_fact_recall": 0.9,
+                "strict_full_coverage": 0.7,
+            },
+        ),
+        (
+            "C. graph",
+            {
+                "fact_recall": 0.9,
+                "full_coverage": 0.7,
+                "strict_fact_recall": 0.0,
+                "strict_full_coverage": 0.0,
+            },
+        ),
+    ]
+    lines = scoring_rule_note(rows)
+    assert "Fact Recall −0.0 pp" in lines[1]
+    assert "unaffected — it returns nothing but prose" in lines[1]
+    assert "Fact Recall −90.0 pp, Full-Coverage Rate −70.0 pp" in lines[2]
+    assert "favoured by the permissive rule" in lines[2]
+    assert "upper bound" in lines[-1] and "lower bound" in lines[-1]
+
+
+def test_headline_runs_the_same_scrutiny_under_the_strict_rule():
+    """The strict headline is recomputed, not reworded — including its parity k."""
+    graph = {
+        "fact_recall": 0.95,
+        "full_coverage": 0.9,
+        "strict_fact_recall": 0.6,
+        "strict_full_coverage": 0.5,
+        "mean_context_chars": 1000.0,
+    }
+    sweep = [
+        (4, {"fact_recall": 0.7, "full_coverage": 0.6,
+             "strict_fact_recall": 0.7, "strict_full_coverage": 0.6,
+             "mean_context_chars": 200.0}),
+        (20, {"fact_recall": 0.95, "full_coverage": 0.9,
+              "strict_fact_recall": 0.95, "strict_full_coverage": 0.9,
+              "mean_context_chars": 5000.0}),
+    ]
+    permissive = headline(graph, sweep, METRICS)
+    assert "survives a budget match" in permissive[1]
+    strict = headline(graph, sweep, STRICT_METRICS, "strict rule")
+    assert "strict rule" in strict[0]
+    assert "Fact Recall 60.0%" in strict[0]
+    # Under the strict rule the cheap baseline already beats it, and the
+    # generated sentence says so rather than reusing the permissive verdict.
+    assert "EVERY metric while reading LESS text" in strict[1]
+    assert "top-4 using 20% of the context" in strict[1]
+
+
+def test_verdict_and_context_matched_note_follow_the_rule_they_are_given():
+    baseline = {
+        "fact_recall": 0.9, "full_coverage": 0.7,
+        "strict_fact_recall": 0.9, "strict_full_coverage": 0.7,
+        "mean_context_chars": 100.0,
+    }
+    graph = {
+        "fact_recall": 0.95, "full_coverage": 0.9,
+        "strict_fact_recall": 0.5, "strict_full_coverage": 0.4,
+        "mean_context_chars": 400.0,
+    }
+    sweep = [
+        (4, dict(baseline)),
+        (20, {"fact_recall": 1.0, "full_coverage": 1.0,
+              "strict_fact_recall": 1.0, "strict_full_coverage": 1.0,
+              "mean_context_chars": 500.0}),
+    ]
+    permissive = verdict(baseline, graph, sweep)
+    assert "GraphRAG ahead at the configured k" in permissive[0]
+    strict = verdict(baseline, graph, sweep, STRICT_METRICS)
+    assert "passage vector RAG ahead at the configured k" in strict[0]
+    assert "90.0% vs 50.0%" in strict[0]
+    # The equal-context row must quote the strict scores when asked for them.
+    assert "100.0% recall / 100.0% coverage" in context_matched_note(
+        sweep, graph, STRICT_METRICS
+    )[0]
+
+
+def test_the_two_rules_agree_exactly_on_the_passage_baseline():
+    """Half of the asymmetry, on the real dataset: prose systems lose nothing."""
+    rankings = {q["id"]: list(range(len(PASSAGES))) for q in QUESTIONS}
+    for k in (1, 4, len(PASSAGES)):
+        agg = aggregate(evaluate_baseline(DATASET, rankings, k))
+        assert agg["strict_fact_recall"] == pytest.approx(agg["fact_recall"]), k
+        assert agg["strict_full_coverage"] == pytest.approx(agg["full_coverage"]), k
+
+
+def test_the_strict_rule_is_zero_for_the_prose_free_systems():
+    """The other half: entity-granular retrieval scores nothing under the strict rule.
+
+    Not a failure — a property. These systems return a compressed representation
+    of the corpus and never the corpus, so every point they score under the
+    permissive rule is a point the permissive rule gave them. Even reading
+    *every entity in the graph*, which is a permissive 100%, buys zero.
+    """
+    rankings = {q["id"]: list(range(len(ENTITIES))) for q in QUESTIONS}
+    everything = aggregate(evaluate_entity_rag(DATASET, rankings, k=len(ENTITIES)))
+    assert everything["fact_recall"] == pytest.approx(1.0)
+    assert everything["full_coverage"] == pytest.approx(1.0)
+    assert everything["strict_fact_recall"] == 0.0
+    assert everything["strict_full_coverage"] == 0.0
+
+    # Same for B′, whose context is C's entity blocks with the edges deleted.
+    (stripped,) = strip_edges(
+        [
+            QuestionResult(
+                "q01", "?", ["Ada Lovelace"], [], 0,
+                extras={"seeds": ["Ada Lovelace"], "context": GRAPH_CONTEXT},
+            )
+        ]
+    )
+    assert stripped.found == ["Ada Lovelace"]
+    assert stripped.found_strict == []
+
+
+# ── R1's asymmetry, disclosed rather than left implicit ─────────────────────
+def test_r1_is_not_enforced_against_passage_text_and_that_asymmetry_is_real():
+    """R1 constrains the graph's text only. The README must not pretend otherwise.
+
+    Questions may not share a content-word family with the *name* or
+    *description* of a non-anchor required fact — those are what GraphRAG embeds
+    and full-text-indexes. Nothing forbids a question from sharing words with the
+    **passages** that carry its facts, which is what the passage baseline embeds.
+
+    The asymmetry therefore cuts *against* GraphRAG, and it is real in this
+    dataset rather than hypothetical: this test finds the actual overlaps. If a
+    future rewrite removed them, the README's disclosure would become false — so
+    this fails, and the disclosure has to be revisited rather than silently rot.
+    """
+    overlaps = [
+        (question["id"], fact, passage["id"])
+        for question in QUESTIONS
+        for fact in question["required_facts"]
+        if fact != question["anchor"]
+        for passage in PASSAGES
+        if fact in passage["entities"] and leaks(question["question"], passage["text"])
+    ]
+    assert overlaps, (
+        "no question shares a content-word family with a passage carrying one of its "
+        "non-anchor required facts — the README documents this asymmetry as real"
+    )
+
+
+# ── The README's numbers are generated, and cannot rot ──────────────────────
+#: Any number, with optional thousands separators, decimals and a percent sign.
+#: The lookbehind keeps identifiers ("R1", "Neo4j", "bge-small-en-v1.5") out.
+_NUMBER = re.compile(r"(?<![\w.])\d[\d,]*(?:\.\d+)?%?")
+
+
+def test_the_readme_generated_region_is_verbatim_in_the_results():
+    """One function writes the numeric core into both files, so it must match.
+
+    An audit found README.md quoting a corpus character count and several
+    figures that a fresh run did not reproduce, under a sentence promising every
+    number was "copied from the generated report and reproduced by re-running
+    the script". Copying was the defect. There is now nothing to copy, and this
+    test is what keeps it that way.
+    """
+    readme = README_PATH.read_text(encoding="utf-8")
+    results = RESULTS_PATH.read_text(encoding="utf-8")
+
+    assert README_BEGIN in readme and README_END in readme, (
+        "README.md has lost its generated region; run `make benchmark`"
+    )
+    block = readme.split(README_BEGIN)[1].split(README_END)[0].strip()
+    assert block, "the generated region is empty; run `make benchmark`"
+    assert "| System |" in block, "the generated region has lost the results table"
+    assert block in results, (
+        "README.md's generated region is not present verbatim in results.md — the two "
+        "were written by different runs. Re-run `make benchmark`."
+    )
+
+
+def test_every_number_in_the_readme_appears_in_the_generated_results():
+    """No figure may exist in README.md that the generated report does not carry.
+
+    Containment is necessary, not sufficient: it catches a stale or invented
+    figure, not a correct figure quoted about the wrong thing. That is the
+    weaker claim, and it is the one this test actually supports.
+    """
+    readme = README_PATH.read_text(encoding="utf-8")
+    results = RESULTS_PATH.read_text(encoding="utf-8")
+
+    missing = sorted(
+        {
+            token
+            for token in _NUMBER.findall(readme)
+            # Matched as a whole token in results.md too, so "4" is not
+            # satisfied by the "4" inside "48".
+            if not re.search(rf"(?<![\w.]){re.escape(token)}(?![\d,.%])", results)
+        }
+    )
+    assert not missing, (
+        f"README.md quotes numbers that results.md does not contain: {missing}. "
+        "Numbers belong in the generated report; re-run `make benchmark` or delete them."
+    )
+
+
+def test_render_readme_replaces_only_the_marked_region():
+    class _Report:
+        settings_line = ""
+
+        def rows(self):
+            return [
+                (
+                    "D. system",
+                    {
+                        "fact_recall": 1.0,
+                        "full_coverage": 1.0,
+                        "strict_fact_recall": 0.5,
+                        "strict_full_coverage": 0.5,
+                        "mean_context_chars": 10.0,
+                    },
+                )
+            ]
+
+        def headlines(self):
+            return ["HEADLINE: computed"]
+
+    original = f"before\n\n{README_BEGIN}\n\nstale numbers\n\n{README_END}\n\nafter\n"
+    rendered = render_readme(original, _Report())
+    assert rendered.startswith("before\n\n")
+    assert rendered.endswith(f"{README_END}\n\nafter\n")
+    assert "stale numbers" not in rendered
+    # The shipped row is emphasised; the context column never is.
+    assert (
+        "| **D. system** | **100.0%** | **100.0%** | **50.0%** | **50.0%** | 10 |"
+    ) in rendered
+    assert "- HEADLINE: computed" in rendered
+
+
+def test_render_readme_refuses_a_readme_with_no_generated_region():
+    """Appending or guessing would hide exactly the state the rot test catches."""
+    with pytest.raises(IntegrityError):
+        render_readme("no markers here", object())
