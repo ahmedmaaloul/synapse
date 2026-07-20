@@ -46,27 +46,27 @@ langchain-core>=0.3.62,<0.4
 # LLM_PROVIDER=vertex, EMBEDDING_PROVIDER=vertex
 # Auth: `gcloud auth application-default login`, or GOOGLE_APPLICATION_CREDENTIALS.
 # 2.0.25+ requires langchain-core>=0.3.65; 3.x requires core 1.x.
-langchain-google-vertexai==2.0.24
+langchain-google-vertexai==2.1.2
 
 # ── AWS Bedrock ──────────────────────────────────────
 # LLM_PROVIDER=bedrock (ChatBedrockConverse), EMBEDDING_PROVIDER=bedrock
 # Auth: the standard AWS chain (env keys, AWS_PROFILE, or an instance role).
 # 0.2.25+ requires langchain-core>=0.3.64; 1.x requires core 1.x.
-langchain-aws==0.2.24
+langchain-aws==0.2.35
 
 # ── Groq (fast open-weights inference) ───────────────
 # LLM_PROVIDER=groq — key: https://console.groq.com/keys
 # 0.3.3+ requires langchain-core>=0.3.66; 1.x requires core 1.x.
-langchain-groq==0.3.2
+langchain-groq==0.3.8
 
 # ── Mistral AI ───────────────────────────────────────
 # LLM_PROVIDER=mistral — key: https://console.mistral.ai/api-keys/
 # 0.2.11+ requires langchain-core>=0.3.68; 1.x requires core 1.x.
-langchain-mistralai==0.2.10
+langchain-mistralai==0.2.12
 
 # ── Cohere (embeddings) ──────────────────────────────
 # EMBEDDING_PROVIDER=cohere — key: https://dashboard.cohere.com/api-keys
 # Depends on langchain-community>=0.3.0, already pinned to 0.3.14 by
 # requirements.txt — install that file first (or both together) so its pin wins.
 # 0.4.6 requires langchain-core>=0.3.76; 0.5+ requires core 1.x.
-langchain-cohere==0.4.5
+langchain-cohere==0.6.0
