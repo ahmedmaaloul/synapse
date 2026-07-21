@@ -29,7 +29,7 @@ langchain-openai>=0.3,<0.4       # OpenAI + Azure OpenAI + OpenAI-compatible
 fastembed>=0.4,<0.8
 
 # ── Database ────────────────────────────────────────
-neo4j==5.27.0
+neo4j==6.2.0
 
 # ── Graph algorithms ────────────────────────────────
 # Louvain community detection runs in Python: the Neo4j image is
