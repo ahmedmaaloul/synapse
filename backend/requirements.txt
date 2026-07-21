@@ -39,4 +39,4 @@ networkx>=3.2,<4
 
 # ── Config ──────────────────────────────────────────
 python-dotenv==1.0.1
-pydantic-settings==2.7.0
+pydantic-settings==2.14.2
