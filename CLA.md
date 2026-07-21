@@ -85,7 +85,7 @@ reports and designs rather than code, and none of those need a CLA.
 
 ## Questions
 
-Ask in a GitHub issue, or email **Ahmed Maaloul** <maaloulahmed25@gmail.com>.
+Ask in a GitHub issue, or email **Ahmed Maaloul** <ahmed.maaloul@proton.me>.
 
 > **Not legal advice.** This document is written to be readable, not to be a
 > substitute for a lawyer. If you are contributing on behalf of a company, have

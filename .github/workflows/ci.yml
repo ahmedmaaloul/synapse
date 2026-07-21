@@ -103,7 +103,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Both images build from the REPO ROOT so they can COPY LICENSE and NOTICE
+      # (the attribution terms require the notices to ship inside distributed
+      # container images). The Dockerfiles therefore reference paths like
+      # `backend/requirements.txt`; building with `./backend` as the context
+      # cannot see them and fails. Keep this in sync with docker-compose.yml
+      # and render.yaml, which use the same root context.
       - name: Build backend image
-        run: docker build -t synapse-backend ./backend
+        run: docker build -f backend/Dockerfile -t synapse-backend .
       - name: Build frontend image
-        run: docker build -t synapse-frontend ./frontend
+        run: docker build -f frontend/Dockerfile -t synapse-frontend .
+      - name: Verify the notices actually ship inside the image
+        run: docker run --rm synapse-backend ls /app/LICENSE /app/NOTICE

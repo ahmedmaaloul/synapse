@@ -9,7 +9,7 @@ genuinely welcome, and researchers who report responsibly will be credited.
 
 Report privately to:
 
-**maaloulahmed25@gmail.com** (Ahmed Maaloul)
+**ahmed.maaloul@proton.me** (Ahmed Maaloul)
 
 Use the subject line `[SECURITY] Synapse — <short summary>`. If you
 prefer, you may instead use GitHub's private

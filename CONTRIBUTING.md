@@ -4,7 +4,7 @@ Thanks for being here. Synapse is built to be **forked and extended** — issues
 are genuinely welcome, and the codebase is organised so that a first contribution is small and
 easy to land.
 
-Maintainer: **Ahmed Maaloul** <maaloulahmed25@gmail.com> ·
+Maintainer: **Ahmed Maaloul** <ahmed.maaloul@proton.me> ·
 [github.com/ahmedmaaloul/synapse](https://github.com/ahmedmaaloul/synapse)
 
 **Contents**
@@ -261,7 +261,7 @@ Then open the PR using the [template](./.github/PULL_REQUEST_TEMPLATE.md) — it
 
   ```python
   # SPDX-License-Identifier: AGPL-3.0-or-later
-  # Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+  # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
   # Synapse — https://github.com/ahmedmaaloul/synapse
   ```
 

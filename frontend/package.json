@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Synapse — Next.js frontend for the GraphRAG Knowledge Explorer: upload documents, explore the Neo4j knowledge graph, and chat with it.",
-  "author": "Ahmed Maaloul <maaloulahmed25@gmail.com> (https://github.com/ahmedmaaloul)",
+  "author": "Ahmed Maaloul <ahmed.maaloul@proton.me> (https://github.com/ahmedmaaloul)",
   "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/ahmedmaaloul/synapse#readme",
   "repository": {

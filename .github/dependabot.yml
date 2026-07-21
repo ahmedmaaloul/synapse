@@ -1,5 +1,5 @@
 # Dependabot configuration for Synapse
-# Maintainer: Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Maintainer: Ahmed Maaloul <ahmed.maaloul@proton.me>
 #
 # IMPORTANT: the LangChain stack is pinned to the langchain-core 0.3.x line
 # ("langchain-core>=0.3.33,<0.4" in backend/requirements.txt). That cap is
@@ -23,15 +23,29 @@ updates:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
     groups:
-      langchain:
-        patterns: ["langchain*"]
-        update-types: ["minor", "patch"]
       dev-tooling:
         patterns: ["pytest*", "ruff", "httpx", "anyio"]
     ignore:
-      # Never let an automated PR cross the langchain-core 0.3.x boundary.
-      - dependency-name: "langchain*"
-        update-types: ["version-update:semver-major"]
+      # The LangChain stack is EXCLUDED FROM AUTOMATION ENTIRELY — not just
+      # major bumps. The effective ceiling is langchain-core 0.3.63, and it is
+      # not expressible as a semver rule:
+      #
+      #   langchain==0.3.14 / langchain-community==0.3.14  ->  langsmith<0.3
+      #   langchain-core>=0.3.64                           ->  langsmith>=0.3.45
+      #
+      # so even a PATCH bump of langchain-core past .63 makes the dependency set
+      # unresolvable and every backend job fails at "Install dependencies".
+      # Dependabot proved this by opening exactly that PR. Bumping this stack
+      # means moving langchain/langchain-community together, by hand, with
+      # `make test` and `make test-int` green before merge.
+      - dependency-name: "langchain"
+      - dependency-name: "langchain-core"
+      - dependency-name: "langchain-community"
+      - dependency-name: "langchain-ollama"
+      - dependency-name: "langchain-openai"
+      - dependency-name: "langchain-google-genai"
+      - dependency-name: "langchain-anthropic"
+      - dependency-name: "langsmith"
 
   # ── Frontend (npm) ───────────────────────────────────────
   - package-ecosystem: npm

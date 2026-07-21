@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Regression tests for packaging, attribution, and the shared DB fixture.
 
@@ -182,7 +182,7 @@ class TestContainerAttribution:
 # ── 3. SPDX headers ──────────────────────────────────────
 SPDX_HEADER = (
     "# SPDX-License-Identifier: AGPL-3.0-or-later",
-    "# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>",
+    "# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>",
     "# Synapse — https://github.com/ahmedmaaloul/synapse",
 )
 _SKIP_DIRS = {"__pycache__", ".venv", "venv", ".pytest_cache", ".ruff_cache", "node_modules"}

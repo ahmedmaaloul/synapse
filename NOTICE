@@ -5,7 +5,7 @@
 
 Synapse — a GraphRAG knowledge-graph explorer (FastAPI + Neo4j + Next.js)
 
-Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 
 Canonical repository: https://github.com/ahmedmaaloul/synapse
 
@@ -36,7 +36,7 @@ source code of your modified version.
 A separate commercial license, which removes the AGPL copyleft obligations, is
 available from the copyright holder for closed-source and proprietary use. It
 can be granted only by Ahmed Maaloul. See COMMERCIAL-LICENSE.md, or contact
-maaloulahmed25@gmail.com.
+ahmed.maaloul@proton.me.
 
 --------------------------------------------------------------------------------
 ATTRIBUTION REQUIREMENT

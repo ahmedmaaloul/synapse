@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """API-level tests with the FastAPI TestClient (no real DB / LLM).
 
@@ -119,7 +119,7 @@ def test_about_reports_authorship_and_license(client):
     assert "AGPL-3.0-or-later" in r.text
     # AGPL §13: network users must be pointed at the corresponding source.
     assert body["source_code"] == "https://github.com/ahmedmaaloul/synapse"
-    assert body["commercial_license"]["contact"] == "maaloulahmed25@gmail.com"
+    assert body["commercial_license"]["contact"] == "ahmed.maaloul@proton.me"
     assert body["llm_provider"] and body["embedding_provider"]
 
 

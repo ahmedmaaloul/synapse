@@ -1,6 +1,6 @@
 <!--
   Thanks for contributing to Synapse!
-  Maintainer: Ahmed Maaloul <maaloulahmed25@gmail.com>
+  Maintainer: Ahmed Maaloul <ahmed.maaloul@proton.me>
   Keep the title in conventional-commit style: feat: / fix: / docs: / chore: / refactor: / test:
 -->
 

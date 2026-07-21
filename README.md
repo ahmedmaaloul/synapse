@@ -291,7 +291,7 @@ SaaS** on a modified version without offering its source, **relicense** it under
 legal team **prohibits AGPL** dependencies. A commercial license waives the copyleft obligations
 (attribution is still required either way).
 
-**Only Ahmed Maaloul can grant one.** Email **<maaloulahmed25@gmail.com>** with the subject
+**Only Ahmed Maaloul can grant one.** Email **<ahmed.maaloul@proton.me>** with the subject
 `[Commercial License] <your company>`. Startups, academic spin-outs and nonprofits: say so, pricing
 is flexible. Full details and FAQ: **[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md)**.
 
@@ -302,7 +302,7 @@ is flexible. Full details and FAQ: **[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENS
 <div align="center">
 
 **Synapse** — created and maintained by **[Ahmed Maaloul](https://github.com/ahmedmaaloul)**
-&lt;maaloulahmed25@gmail.com&gt;
+&lt;ahmed.maaloul@proton.me&gt;
 
 Copyright © 2026 Ahmed Maaloul · SPDX-License-Identifier: `AGPL-3.0-or-later`
 · <https://github.com/ahmedmaaloul/synapse>

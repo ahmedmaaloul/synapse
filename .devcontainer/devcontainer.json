@@ -1,6 +1,6 @@
 {
   // Synapse — one-click dev environment (GitHub Codespaces / VS Code Dev Containers).
-  // Maintainer: Ahmed Maaloul <maaloulahmed25@gmail.com>
+  // Maintainer: Ahmed Maaloul <ahmed.maaloul@proton.me>
   //
   // Open in Codespaces, wait for postCreate, then:
   //   docker compose up -d neo4j     # graph database

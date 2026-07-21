@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """
 Synapse — FastAPI Application
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
 
 APP_VERSION = "0.2.0"
 AUTHOR = "Ahmed Maaloul"
-AUTHOR_EMAIL = "maaloulahmed25@gmail.com"
+AUTHOR_EMAIL = "ahmed.maaloul@proton.me"
 REPO_URL = "https://github.com/ahmedmaaloul/synapse"
 LICENSE_ID = "AGPL-3.0-or-later"
 

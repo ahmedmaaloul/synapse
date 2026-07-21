@@ -8,8 +8,8 @@ requires-python = ">=3.11"
 # setuptools>=77 hard-fails the build if both are present.
 license = "AGPL-3.0-or-later"
 license-files = ["../LICENSE", "../NOTICE"]
-authors = [{ name = "Ahmed Maaloul", email = "maaloulahmed25@gmail.com" }]
-maintainers = [{ name = "Ahmed Maaloul", email = "maaloulahmed25@gmail.com" }]
+authors = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
+maintainers = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
 keywords = ["graphrag", "knowledge-graph", "neo4j", "rag", "fastapi", "llm"]
 classifiers = [
     "Programming Language :: Python :: 3.11",

@@ -108,7 +108,7 @@ or third party has that authority.
 
 ## How to get one
 
-Email **Ahmed Maaloul** — <maaloulahmed25@gmail.com> — with subject line
+Email **Ahmed Maaloul** — <ahmed.maaloul@proton.me> — with subject line
 `[Commercial License] <your company>`.
 
 Helpful things to include, so the first reply can be useful:

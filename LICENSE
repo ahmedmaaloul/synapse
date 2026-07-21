@@ -680,7 +680,7 @@ to use, study, modify, self-host, fork, and redistribute Synapse at no
 cost, forever.
 
   Synapse
-  Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+  Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
   https://github.com/ahmedmaaloul/synapse
 
   SPDX-License-Identifier: AGPL-3.0-or-later
@@ -705,7 +705,7 @@ cost, forever.
    A separate commercial license, which waives the AGPL copyleft obligations,
    is available from the copyright holder. It can be granted only by Ahmed
    Maaloul. See COMMERCIAL-LICENSE.md in this repository, or contact
-   maaloulahmed25@gmail.com.
+   ahmed.maaloul@proton.me.
 
    Unless you hold a signed commercial license, your use of Synapse is
    governed by the AGPL-3.0 text above, together with the supplemental

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
-# Copyright (c) 2026 Ahmed Maaloul <maaloulahmed25@gmail.com>
+# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Head-to-head benchmark: Synapse GraphRAG vs. naive vector RAG.
 
