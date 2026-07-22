@@ -1,0 +1,2653 @@
+{
+  "command": "cd backend && EMBEDDING_PROVIDER=fastembed NEO4J_URI=bolt://localhost:7690 NEO4J_PASSWORD=research_secret python research/rq6_topology/run_rq6.py",
+  "seed": 20260719,
+  "bootstrap_n": 10000,
+  "graph_k": 8,
+  "n_questions": 14,
+  "n_required_facts": 54,
+  "graph_profile": {
+    "nodes": 79,
+    "edges": 81,
+    "density": 0.02629016553067186,
+    "degree_mean": 2.050632911392405,
+    "degree_median": 2.0,
+    "degree_min": 1,
+    "degree_max": 5,
+    "degree_p90": 3.0,
+    "degree_histogram": {
+      "1": 27,
+      "2": 31,
+      "3": 14,
+      "4": 4,
+      "5": 3
+    },
+    "isolated_nodes": 0,
+    "components": [
+      79
+    ],
+    "giant_fraction": 1.0,
+    "giant_diameter": 21,
+    "giant_mean_path_length": 9.293086660175268,
+    "avg_clustering": 0.0,
+    "transitivity": 0.0,
+    "degree_assortativity": -0.2977798123140324,
+    "n_communities": 9,
+    "community_sizes": [
+      13,
+      11,
+      10,
+      9,
+      9,
+      8,
+      8,
+      6,
+      5
+    ],
+    "modularity": 0.7835695778082609,
+    "independent_cycles": 3,
+    "n_triangles": 0
+  },
+  "questions": [
+    {
+      "qid": "q01",
+      "question": "Who founded the business that eventually became the maker of Deep Blue?",
+      "anchor": "Deep Blue",
+      "required": [
+        "Deep Blue",
+        "IBM",
+        "Tabulating Machine Company",
+        "Herman Hollerith"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 3.0,
+      "required_degree_min": 2.0,
+      "anchor_degree": 4.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.25,
+      "seeds": [
+        "Deep Blue",
+        "DeepMind",
+        "AlexNet",
+        "IBM",
+        "Cobol",
+        "Tabulating Machine Company",
+        "Grace Hopper",
+        "Google"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.25,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q01",
+          "fact": "Deep Blue",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q01",
+          "fact": "IBM",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q01",
+          "fact": "Tabulating Machine Company",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q01",
+          "fact": "Herman Hollerith",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q01",
+          "fact": "Deep Blue",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q01",
+          "fact": "IBM",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q01",
+          "fact": "Tabulating Machine Company",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q01",
+          "fact": "Herman Hollerith",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ]
+    },
+    {
+      "qid": "q02",
+      "question": "What fed instructions into the machine Ada Lovelace wrote her notes about, and where did that idea come from?",
+      "anchor": "Ada Lovelace",
+      "required": [
+        "Ada Lovelace",
+        "Analytical Engine",
+        "Punched Cards",
+        "Jacquard Loom"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.0,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Ada Lovelace",
+        "Alan Turing",
+        "Tim Berners-Lee",
+        "John von Neumann",
+        "Turing Machine",
+        "Analytical Engine",
+        "BERT",
+        "Grace Hopper"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 2.0,
+      "seed_mean_dist": 0.75,
+      "n_facts_beyond_1hop": 1.0,
+      "n_paths": 4,
+      "C_complete": 0.0,
+      "C_recall": 0.75,
+      "C_facts": [
+        {
+          "qid": "q02",
+          "fact": "Ada Lovelace",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q02",
+          "fact": "Analytical Engine",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q02",
+          "fact": "Punched Cards",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q02",
+          "fact": "Jacquard Loom",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        }
+      ],
+      "D_complete": 0.0,
+      "D_recall": 0.75,
+      "D_facts": [
+        {
+          "qid": "q02",
+          "fact": "Ada Lovelace",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q02",
+          "fact": "Analytical Engine",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q02",
+          "fact": "Punched Cards",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q02",
+          "fact": "Jacquard Loom",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        }
+      ]
+    },
+    {
+      "qid": "q03",
+      "question": "Whose statistical work borrowed the input medium of the machine Charles Babbage designed?",
+      "anchor": "Charles Babbage",
+      "required": [
+        "Charles Babbage",
+        "Analytical Engine",
+        "Punched Cards",
+        "Herman Hollerith"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.25,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Charles Babbage",
+        "Analytical Engine",
+        "OpenAI",
+        "Tabulating Machine Company",
+        "Google",
+        "Claude Shannon",
+        "Marvin Minsky",
+        "ENIAC"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.5,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 5,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q03",
+          "fact": "Charles Babbage",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q03",
+          "fact": "Analytical Engine",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q03",
+          "fact": "Punched Cards",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q03",
+          "fact": "Herman Hollerith",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q03",
+          "fact": "Charles Babbage",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q03",
+          "fact": "Analytical Engine",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q03",
+          "fact": "Punched Cards",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q03",
+          "fact": "Herman Hollerith",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q04",
+      "question": "Who supervised the AlexNet team, and what did he popularise in 1986?",
+      "anchor": "AlexNet",
+      "required": [
+        "AlexNet",
+        "Geoffrey Hinton",
+        "Backpropagation"
+      ],
+      "n_required": 3,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.6666666666666667,
+      "required_spread": 3.0,
+      "required_degree_mean": 3.0,
+      "required_degree_min": 2.0,
+      "anchor_degree": 4.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Alex Krizhevsky",
+        "AlexNet",
+        "Geoffrey Hinton",
+        "ARPANET",
+        "Frank Rosenblatt",
+        "AI Winter",
+        "Grace Hopper",
+        "Fei-Fei Li"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.3333333333333333,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q04",
+          "fact": "AlexNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q04",
+          "fact": "Geoffrey Hinton",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q04",
+          "fact": "Backpropagation",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q04",
+          "fact": "AlexNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q04",
+          "fact": "Geoffrey Hinton",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q04",
+          "fact": "Backpropagation",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q05",
+      "question": "Where was the dataset that AlexNet won on assembled, and by whom?",
+      "anchor": "AlexNet",
+      "required": [
+        "AlexNet",
+        "ImageNet",
+        "Fei-Fei Li",
+        "Stanford University"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.75,
+      "required_degree_min": 2.0,
+      "anchor_degree": 4.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.25,
+      "seeds": [
+        "AlexNet",
+        "OpenAI",
+        "Alex Krizhevsky",
+        "ARPANET",
+        "ImageNet",
+        "AI Winter",
+        "GraphRAG",
+        "DeepMind"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.5,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q05",
+          "fact": "AlexNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q05",
+          "fact": "ImageNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q05",
+          "fact": "Fei-Fei Li",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q05",
+          "fact": "Stanford University",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q05",
+          "fact": "AlexNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q05",
+          "fact": "ImageNet",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q05",
+          "fact": "Fei-Fei Li",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q05",
+          "fact": "Stanford University",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q06",
+      "question": "Which vision network was co-built by the first chief scientist of the laboratory that released GPT?",
+      "anchor": "GPT",
+      "required": [
+        "GPT",
+        "OpenAI",
+        "Ilya Sutskever",
+        "AlexNet"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 3.0,
+      "required_degree_min": 2.0,
+      "anchor_degree": 3.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.5,
+      "seeds": [
+        "Geoffrey Hinton",
+        "Cornell Aeronautical Laboratory",
+        "Frank Rosenblatt",
+        "ARPANET",
+        "GPT",
+        "Bell Labs",
+        "Computer Vision",
+        "DeepMind"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 2.0,
+      "seed_mean_dist": 1.0,
+      "n_facts_beyond_1hop": 1.0,
+      "n_paths": 4,
+      "C_complete": 0.0,
+      "C_recall": 0.75,
+      "C_facts": [
+        {
+          "qid": "q06",
+          "fact": "GPT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q06",
+          "fact": "OpenAI",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q06",
+          "fact": "Ilya Sutskever",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q06",
+          "fact": "AlexNet",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q06",
+          "fact": "GPT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q06",
+          "fact": "OpenAI",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q06",
+          "fact": "Ilya Sutskever",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q06",
+          "fact": "AlexNet",
+          "seed_dist": 2,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q07",
+      "question": "What mechanism replaced recurrence inside the architecture BERT is built from?",
+      "anchor": "BERT",
+      "required": [
+        "BERT",
+        "Transformer",
+        "Self-Attention"
+      ],
+      "n_required": 3,
+      "anchor_max_dist": 2.0,
+      "anchor_mean_dist": 1.0,
+      "required_spread": 2.0,
+      "required_degree_mean": 2.6666666666666665,
+      "required_degree_min": 1.0,
+      "anchor_degree": 2.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Turing Machine",
+        "BERT",
+        "John von Neumann",
+        "Self-Attention",
+        "Cornell Aeronautical Laboratory",
+        "Lisp",
+        "University of Pennsylvania",
+        "Grace Hopper"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.3333333333333333,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 2,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q07",
+          "fact": "BERT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q07",
+          "fact": "Transformer",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q07",
+          "fact": "Self-Attention",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q07",
+          "fact": "BERT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q07",
+          "fact": "Transformer",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q07",
+          "fact": "Self-Attention",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q08",
+      "question": "Which algorithm overcame the limits of the machine built at the Cornell Aeronautical Laboratory, and who popularised it?",
+      "anchor": "Cornell Aeronautical Laboratory",
+      "required": [
+        "Cornell Aeronautical Laboratory",
+        "Perceptron",
+        "Backpropagation",
+        "Geoffrey Hinton"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.75,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.5,
+      "seeds": [
+        "Cornell Aeronautical Laboratory",
+        "Ada Lovelace",
+        "Analytical Engine",
+        "Marvin Minsky",
+        "Charles Babbage",
+        "CERN",
+        "Alan Turing",
+        "Turing Machine"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 3.0,
+      "seed_mean_dist": 1.5,
+      "n_facts_beyond_1hop": 2.0,
+      "n_paths": 4,
+      "C_complete": 0.0,
+      "C_recall": 0.5,
+      "C_facts": [
+        {
+          "qid": "q08",
+          "fact": "Cornell Aeronautical Laboratory",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q08",
+          "fact": "Perceptron",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q08",
+          "fact": "Backpropagation",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        },
+        {
+          "qid": "q08",
+          "fact": "Geoffrey Hinton",
+          "seed_dist": 3,
+          "found": false,
+          "channel": null
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q08",
+          "fact": "Cornell Aeronautical Laboratory",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q08",
+          "fact": "Perceptron",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q08",
+          "fact": "Backpropagation",
+          "seed_dist": 2,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q08",
+          "fact": "Geoffrey Hinton",
+          "seed_dist": 3,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q09",
+      "question": "Which thought experiment was proposed by the man who helped break Enigma?",
+      "anchor": "Enigma",
+      "required": [
+        "Enigma",
+        "Alan Turing",
+        "Turing Test"
+      ],
+      "n_required": 3,
+      "anchor_max_dist": 2.0,
+      "anchor_mean_dist": 1.0,
+      "required_spread": 2.0,
+      "required_degree_mean": 2.3333333333333335,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Alan Turing",
+        "Enigma",
+        "Turing Test",
+        "John McCarthy",
+        "John von Neumann",
+        "Ada Lovelace",
+        "Claude Shannon",
+        "Frank Rosenblatt"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 0.0,
+      "seed_mean_dist": 0.0,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q09",
+          "fact": "Enigma",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q09",
+          "fact": "Alan Turing",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q09",
+          "fact": "Turing Test",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q09",
+          "fact": "Enigma",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q09",
+          "fact": "Alan Turing",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q09",
+          "fact": "Turing Test",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q10",
+      "question": "Which retrieval method walks the structure held in the database that Cypher queries?",
+      "anchor": "Cypher",
+      "required": [
+        "Cypher",
+        "Neo4j",
+        "Knowledge Graph",
+        "GraphRAG"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.25,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Cypher",
+        "Neo4j",
+        "Synapse",
+        "Retrieval-Augmented Generation",
+        "Backpropagation",
+        "Vector Database",
+        "Vector Search",
+        "Word2Vec"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.5,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q10",
+          "fact": "Cypher",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q10",
+          "fact": "Neo4j",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q10",
+          "fact": "Knowledge Graph",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q10",
+          "fact": "GraphRAG",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q10",
+          "fact": "Cypher",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q10",
+          "fact": "Neo4j",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q10",
+          "fact": "Knowledge Graph",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q10",
+          "fact": "GraphRAG",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q11",
+      "question": "Which technique extends the method that reduces hallucination, and what does it walk over?",
+      "anchor": "Hallucination",
+      "required": [
+        "Hallucination",
+        "Retrieval-Augmented Generation",
+        "GraphRAG",
+        "Knowledge Graph"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.5,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.5,
+      "seeds": [
+        "Transistor",
+        "Hallucination",
+        "Frank Rosenblatt",
+        "FAISS",
+        "Marvin Minsky",
+        "Backpropagation",
+        "Geoffrey Hinton",
+        "Word2Vec"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 3.0,
+      "seed_mean_dist": 1.5,
+      "n_facts_beyond_1hop": 2.0,
+      "n_paths": 3,
+      "C_complete": 0.0,
+      "C_recall": 0.5,
+      "C_facts": [
+        {
+          "qid": "q11",
+          "fact": "Hallucination",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q11",
+          "fact": "Retrieval-Augmented Generation",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q11",
+          "fact": "GraphRAG",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        },
+        {
+          "qid": "q11",
+          "fact": "Knowledge Graph",
+          "seed_dist": 3,
+          "found": false,
+          "channel": null
+        }
+      ],
+      "D_complete": 0.0,
+      "D_recall": 0.5,
+      "D_facts": [
+        {
+          "qid": "q11",
+          "fact": "Hallucination",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q11",
+          "fact": "Retrieval-Augmented Generation",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q11",
+          "fact": "GraphRAG",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        },
+        {
+          "qid": "q11",
+          "fact": "Knowledge Graph",
+          "seed_dist": 3,
+          "found": false,
+          "channel": null
+        }
+      ]
+    },
+    {
+      "qid": "q12",
+      "question": "Which paper introduced the architecture behind BERT, and which company employed its authors?",
+      "anchor": "BERT",
+      "required": [
+        "BERT",
+        "Transformer",
+        "Attention Is All You Need",
+        "Google"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 2.0,
+      "anchor_mean_dist": 1.0,
+      "required_spread": 2.0,
+      "required_degree_mean": 3.0,
+      "required_degree_min": 2.0,
+      "anchor_degree": 2.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 1.0,
+      "seeds": [
+        "Claude Shannon",
+        "BERT",
+        "Grace Hopper",
+        "DeepMind",
+        "Tim Berners-Lee",
+        "John von Neumann",
+        "Analytical Engine",
+        "Frank Rosenblatt"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 2.0,
+      "seed_mean_dist": 1.0,
+      "n_facts_beyond_1hop": 1.0,
+      "n_paths": 1,
+      "C_complete": 0.0,
+      "C_recall": 0.75,
+      "C_facts": [
+        {
+          "qid": "q12",
+          "fact": "BERT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q12",
+          "fact": "Transformer",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q12",
+          "fact": "Attention Is All You Need",
+          "seed_dist": 2,
+          "found": false,
+          "channel": null
+        },
+        {
+          "qid": "q12",
+          "fact": "Google",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q12",
+          "fact": "BERT",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q12",
+          "fact": "Transformer",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q12",
+          "fact": "Attention Is All You Need",
+          "seed_dist": 2,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q12",
+          "fact": "Google",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q13",
+      "question": "Which network won the contest that measured progress in Computer Vision, and on what hardware was it trained?",
+      "anchor": "Computer Vision",
+      "required": [
+        "Computer Vision",
+        "ImageNet",
+        "AlexNet",
+        "GPU"
+      ],
+      "n_required": 4,
+      "anchor_max_dist": 3.0,
+      "anchor_mean_dist": 1.5,
+      "required_spread": 3.0,
+      "required_degree_mean": 2.5,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.5,
+      "seeds": [
+        "Geoffrey Hinton",
+        "Computer Vision",
+        "Alex Krizhevsky",
+        "Cornell Aeronautical Laboratory",
+        "Large Language Model",
+        "Frank Rosenblatt",
+        "Perceptron",
+        "CUDA"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.75,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 6,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q13",
+          "fact": "Computer Vision",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q13",
+          "fact": "ImageNet",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q13",
+          "fact": "AlexNet",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q13",
+          "fact": "GPU",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q13",
+          "fact": "Computer Vision",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q13",
+          "fact": "ImageNet",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q13",
+          "fact": "AlexNet",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q13",
+          "fact": "GPU",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    },
+    {
+      "qid": "q14",
+      "question": "The creator of Lisp organised a meeting; which early neural network was attacked by another of its attendees?",
+      "anchor": "Lisp",
+      "required": [
+        "Lisp",
+        "John McCarthy",
+        "Dartmouth Workshop",
+        "Marvin Minsky",
+        "Perceptron"
+      ],
+      "n_required": 5,
+      "anchor_max_dist": 4.0,
+      "anchor_mean_dist": 2.0,
+      "required_spread": 4.0,
+      "required_degree_mean": 2.6,
+      "required_degree_min": 1.0,
+      "anchor_degree": 1.0,
+      "required_clustering_mean": 0.0,
+      "anchor_clustering": 0.0,
+      "same_community_fraction": 0.8,
+      "seeds": [
+        "Lisp",
+        "Geoffrey Hinton",
+        "Frank Rosenblatt",
+        "Alan Turing",
+        "Large Language Model",
+        "ImageNet",
+        "Ilya Sutskever",
+        "Dartmouth Workshop"
+      ],
+      "anchor_is_seed": true,
+      "seed_max_dist": 1.0,
+      "seed_mean_dist": 0.6,
+      "n_facts_beyond_1hop": 0.0,
+      "n_paths": 4,
+      "C_complete": 1.0,
+      "C_recall": 1.0,
+      "C_facts": [
+        {
+          "qid": "q14",
+          "fact": "Lisp",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q14",
+          "fact": "John McCarthy",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q14",
+          "fact": "Dartmouth Workshop",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "entity"
+        },
+        {
+          "qid": "q14",
+          "fact": "Marvin Minsky",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        },
+        {
+          "qid": "q14",
+          "fact": "Perceptron",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "edge"
+        }
+      ],
+      "D_complete": 1.0,
+      "D_recall": 1.0,
+      "D_facts": [
+        {
+          "qid": "q14",
+          "fact": "Lisp",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q14",
+          "fact": "John McCarthy",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q14",
+          "fact": "Dartmouth Workshop",
+          "seed_dist": 0,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q14",
+          "fact": "Marvin Minsky",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        },
+        {
+          "qid": "q14",
+          "fact": "Perceptron",
+          "seed_dist": 1,
+          "found": true,
+          "channel": "prose"
+        }
+      ]
+    }
+  ],
+  "systems": {
+    "C": {
+      "label": "Synapse GraphRAG, graph only",
+      "n": 14,
+      "n_success": 9,
+      "full_coverage": 0.6428571428571429,
+      "full_coverage_ci": [
+        0.35714285714285715,
+        0.8571428571428571
+      ],
+      "fact_recall": 0.875,
+      "fact_recall_ci": [
+        0.7678571428571429,
+        0.9642857142857143
+      ],
+      "features": [
+        {
+          "key": "seed_max_dist",
+          "label": "Max seed\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 0.8888888888888888,
+          "mean_success_ci": [
+            0.625,
+            1.0
+          ],
+          "mean_failure": 2.4,
+          "mean_failure_ci": [
+            2.0,
+            3.0
+          ],
+          "diff_failure_minus_success": 1.511111111111111,
+          "diff_ci": [
+            1.0,
+            2.0769230769230766
+          ],
+          "spearman_rho_vs_success": -0.927715332257109,
+          "spearman_ci": [
+            -1.0,
+            -0.7637626158259733
+          ],
+          "cliffs_delta_failure_vs_success": 1.0,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "seed_mean_dist",
+          "label": "Mean seed\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 0.4185185185185185,
+          "mean_success_ci": [
+            0.2738095238095238,
+            0.5516712962962962
+          ],
+          "mean_failure": 1.15,
+          "mean_failure_ci": [
+            0.875,
+            1.5
+          ],
+          "diff_failure_minus_success": 0.7314814814814814,
+          "diff_ci": [
+            0.41500000000000004,
+            1.0565448717948718
+          ],
+          "spearman_rho_vs_success": -0.8208081840895333,
+          "spearman_ci": [
+            -0.8941665390372195,
+            -0.6003813155770986
+          ],
+          "cliffs_delta_failure_vs_success": 0.9777777777777777,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "n_facts_beyond_1hop",
+          "label": "Required facts at seed-distance \u2265 2",
+          "predicted_sign": "-",
+          "mean_success": 0.0,
+          "mean_success_ci": [
+            0.0,
+            0.0
+          ],
+          "mean_failure": 1.4,
+          "mean_failure_ci": [
+            1.0,
+            2.0
+          ],
+          "diff_failure_minus_success": 1.4,
+          "diff_ci": [
+            1.0,
+            2.0
+          ],
+          "spearman_rho_vs_success": -0.9770084209183945,
+          "spearman_ci": [
+            -1.0,
+            -0.9146019288378264
+          ],
+          "cliffs_delta_failure_vs_success": 1.0,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "anchor_max_dist",
+          "label": "Max anchor\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 2.888888888888889,
+          "mean_success_ci": [
+            2.5,
+            3.25
+          ],
+          "mean_failure": 2.8,
+          "mean_failure_ci": [
+            2.3333333333333335,
+            3.0
+          ],
+          "diff_failure_minus_success": -0.08888888888888902,
+          "diff_ci": [
+            -0.6666666666666665,
+            0.3999999999999999
+          ],
+          "spearman_rho_vs_success": 0.06996502622814413,
+          "spearman_ci": [
+            -0.4166666666666667,
+            0.5414447277076333
+          ],
+          "cliffs_delta_failure_vs_success": -0.06666666666666667,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "anchor_mean_dist",
+          "label": "Mean anchor\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 1.462962962962963,
+          "mean_success_ci": [
+            1.25,
+            1.6481481481481481
+          ],
+          "mean_failure": 1.4,
+          "mean_failure_ci": [
+            1.1666666666666667,
+            1.5
+          ],
+          "diff_failure_minus_success": -0.06296296296296311,
+          "diff_ci": [
+            -0.34832491582491565,
+            0.18518518518518512
+          ],
+          "spearman_rho_vs_success": 0.15174933837930418,
+          "spearman_ci": [
+            -0.34115443712120247,
+            0.5886124756277652
+          ],
+          "cliffs_delta_failure_vs_success": -0.15555555555555556,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_spread",
+          "label": "Spread of the required set (max pairwise distance)",
+          "predicted_sign": "-",
+          "mean_success": 2.888888888888889,
+          "mean_success_ci": [
+            2.5,
+            3.25
+          ],
+          "mean_failure": 2.8,
+          "mean_failure_ci": [
+            2.3333333333333335,
+            3.0
+          ],
+          "diff_failure_minus_success": -0.08888888888888902,
+          "diff_ci": [
+            -0.6666666666666665,
+            0.3999999999999999
+          ],
+          "spearman_rho_vs_success": 0.06996502622814413,
+          "spearman_ci": [
+            -0.4166666666666667,
+            0.5414447277076333
+          ],
+          "cliffs_delta_failure_vs_success": -0.06666666666666667,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "n_required",
+          "label": "Number of required facts",
+          "predicted_sign": "-",
+          "mean_success": 3.7777777777777777,
+          "mean_success_ci": [
+            3.3636363636363638,
+            4.200555555555548
+          ],
+          "mean_failure": 4.0,
+          "mean_failure_ci": [
+            4.0,
+            4.0
+          ],
+          "diff_failure_minus_success": 0.22222222222222232,
+          "diff_ci": [
+            -0.2116666666666663,
+            0.6363636363636362
+          ],
+          "spearman_rho_vs_success": -0.23321675409381376,
+          "spearman_ci": [
+            -0.6454972243679027,
+            0.2709733813985673
+          ],
+          "cliffs_delta_failure_vs_success": 0.2222222222222222,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_degree_mean",
+          "label": "Mean degree of required facts",
+          "predicted_sign": "+",
+          "mean_success": 2.5944444444444446,
+          "mean_success_ci": [
+            2.416666666666667,
+            2.78125
+          ],
+          "mean_failure": 2.65,
+          "mean_failure_ci": [
+            2.25,
+            3.0
+          ],
+          "diff_failure_minus_success": 0.05555555555555536,
+          "diff_ci": [
+            -0.3643125000000001,
+            0.4222222222222225
+          ],
+          "spearman_rho_vs_success": -0.13131963545719796,
+          "spearman_ci": [
+            -0.6678495874978437,
+            0.4665869150354483
+          ],
+          "cliffs_delta_failure_vs_success": 0.15555555555555556,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_degree_min",
+          "label": "Min degree of required facts",
+          "predicted_sign": "+",
+          "mean_success": 1.3333333333333333,
+          "mean_success_ci": [
+            1.0,
+            1.6666666666666667
+          ],
+          "mean_failure": 1.4,
+          "mean_failure_ci": [
+            1.0,
+            2.0
+          ],
+          "diff_failure_minus_success": 0.06666666666666665,
+          "diff_ci": [
+            -0.4666666666666668,
+            0.6499999999999999
+          ],
+          "spearman_rho_vs_success": -0.06666666666666667,
+          "spearman_ci": [
+            -0.6030226891555273,
+            0.4583333333333333
+          ],
+          "cliffs_delta_failure_vs_success": 0.06666666666666667,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "anchor_degree",
+          "label": "Degree of the anchor entity",
+          "predicted_sign": "+",
+          "mean_success": 2.111111111111111,
+          "mean_success_ci": [
+            1.2,
+            3.0911363636363602
+          ],
+          "mean_failure": 1.6,
+          "mean_failure_ci": [
+            1.0,
+            2.5
+          ],
+          "diff_failure_minus_success": -0.5111111111111111,
+          "diff_ci": [
+            -1.6666666666666667,
+            0.7
+          ],
+          "spearman_rho_vs_success": 0.1443112739066614,
+          "spearman_ci": [
+            -0.42048082442763096,
+            0.599144689515278
+          ],
+          "cliffs_delta_failure_vs_success": -0.15555555555555556,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_clustering_mean",
+          "label": "Mean local clustering of required facts",
+          "predicted_sign": "+",
+          "mean_success": 0.0,
+          "mean_success_ci": [
+            0.0,
+            0.0
+          ],
+          "mean_failure": 0.0,
+          "mean_failure_ci": [
+            0.0,
+            0.0
+          ],
+          "diff_failure_minus_success": 0.0,
+          "diff_ci": [
+            0.0,
+            0.0
+          ],
+          "spearman_rho_vs_success": NaN,
+          "spearman_ci": [
+            NaN,
+            NaN
+          ],
+          "cliffs_delta_failure_vs_success": 0.0,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "anchor_clustering",
+          "label": "Local clustering of the anchor",
+          "predicted_sign": "+",
+          "mean_success": 0.0,
+          "mean_success_ci": [
+            0.0,
+            0.0
+          ],
+          "mean_failure": 0.0,
+          "mean_failure_ci": [
+            0.0,
+            0.0
+          ],
+          "diff_failure_minus_success": 0.0,
+          "diff_ci": [
+            0.0,
+            0.0
+          ],
+          "spearman_rho_vs_success": NaN,
+          "spearman_ci": [
+            NaN,
+            NaN
+          ],
+          "cliffs_delta_failure_vs_success": 0.0,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "same_community_fraction",
+          "label": "Fraction of required facts in the anchor's community",
+          "predicted_sign": "+",
+          "mean_success": 0.7555555555555555,
+          "mean_success_ci": [
+            0.5333333333333333,
+            0.9555555555555555
+          ],
+          "mean_failure": 0.7,
+          "mean_failure_ci": [
+            0.5,
+            1.0
+          ],
+          "diff_failure_minus_success": -0.05555555555555558,
+          "diff_ci": [
+            -0.35,
+            0.27
+          ],
+          "spearman_rho_vs_success": 0.08009158560526305,
+          "spearman_ci": [
+            -0.43603148600774627,
+            0.6429867203592359
+          ],
+          "cliffs_delta_failure_vs_success": -0.08888888888888889,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        }
+      ],
+      "n_features_ci_excludes_zero": 3,
+      "fact_analysis": {
+        "0": {
+          "n_facts": 25,
+          "n_found": 25,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.8628148284692875,
+            1.0
+          ]
+        },
+        "1": {
+          "n_facts": 22,
+          "n_found": 22,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.8456274871844254,
+            1.0
+          ]
+        },
+        ">=2": {
+          "n_facts": 7,
+          "n_found": 0,
+          "rate": 0.0,
+          "ci": [
+            0.0,
+            0.0
+          ],
+          "exact_ci": [
+            0.0,
+            0.40961639722500337
+          ]
+        },
+        "near": {
+          "n_facts": 47,
+          "n_found": 47,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.9245142663089414,
+            1.0
+          ]
+        },
+        "near_minus_far": {
+          "gap": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ]
+        }
+      },
+      "miss_concentration": {
+        "n_missed": 7,
+        "n_facts": 54,
+        "share_missed_beyond_1hop": 1.0,
+        "share_ci": [
+          1.0,
+          1.0
+        ],
+        "distance_histogram_all": {
+          "0": 25,
+          "1": 22,
+          "2": 5,
+          "3": 2
+        },
+        "distance_histogram_missed": {
+          "2": 5,
+          "3": 2
+        },
+        "missed_facts": [
+          {
+            "qid": "q02",
+            "fact": "Jacquard Loom",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q06",
+            "fact": "AlexNet",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q08",
+            "fact": "Backpropagation",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q08",
+            "fact": "Geoffrey Hinton",
+            "seed_dist": 3
+          },
+          {
+            "qid": "q11",
+            "fact": "GraphRAG",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q11",
+            "fact": "Knowledge Graph",
+            "seed_dist": 3
+          },
+          {
+            "qid": "q12",
+            "fact": "Attention Is All You Need",
+            "seed_dist": 2
+          }
+        ]
+      },
+      "hop_frontier": [
+        {
+          "hops": 1,
+          "mean_frontier_nodes": 19.714285714285715,
+          "frontier_share_of_graph": 0.2495479204339964,
+          "implied_full_coverage": 0.6428571428571429,
+          "implied_ci": [
+            0.35714285714285715,
+            0.8571428571428571
+          ],
+          "n_questions_covered": 9
+        },
+        {
+          "hops": 2,
+          "mean_frontier_nodes": 31.785714285714285,
+          "frontier_share_of_graph": 0.4023508137432188,
+          "implied_full_coverage": 0.8571428571428571,
+          "implied_ci": [
+            0.6428571428571429,
+            1.0
+          ],
+          "n_questions_covered": 12
+        },
+        {
+          "hops": 3,
+          "mean_frontier_nodes": 41.92857142857143,
+          "frontier_share_of_graph": 0.530741410488246,
+          "implied_full_coverage": 1.0,
+          "implied_ci": [
+            1.0,
+            1.0
+          ],
+          "n_questions_covered": 14
+        },
+        {
+          "hops": 4,
+          "mean_frontier_nodes": 50.714285714285715,
+          "frontier_share_of_graph": 0.6419529837251357,
+          "implied_full_coverage": 1.0,
+          "implied_ci": [
+            1.0,
+            1.0
+          ],
+          "n_questions_covered": 14
+        }
+      ],
+      "path_rescue": {
+        "n_far_facts": 7,
+        "n_on_seed_pair_path": 0,
+        "n_retrieved": 0,
+        "mean_rendered_paths": 4.5,
+        "details": [
+          {
+            "qid": "q02",
+            "fact": "Jacquard Loom",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q06",
+            "fact": "AlexNet",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q08",
+            "fact": "Backpropagation",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q08",
+            "fact": "Geoffrey Hinton",
+            "seed_dist": 3,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q11",
+            "fact": "GraphRAG",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q11",
+            "fact": "Knowledge Graph",
+            "seed_dist": 3,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q12",
+            "fact": "Attention Is All You Need",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          }
+        ]
+      }
+    },
+    "D": {
+      "label": "Synapse GraphRAG + source chunks",
+      "n": 14,
+      "n_success": 12,
+      "full_coverage": 0.8571428571428571,
+      "full_coverage_ci": [
+        0.6428571428571429,
+        1.0
+      ],
+      "fact_recall": 0.9464285714285714,
+      "fact_recall_ci": [
+        0.875,
+        1.0
+      ],
+      "features": [
+        {
+          "key": "seed_max_dist",
+          "label": "Max seed\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 1.25,
+          "mean_success_ci": [
+            0.8571428571428571,
+            1.6923076923076923
+          ],
+          "mean_failure": 2.5,
+          "mean_failure_ci": [
+            2.0,
+            3.0
+          ],
+          "diff_failure_minus_success": 1.25,
+          "diff_ci": [
+            0.46153846153846145,
+            2.0
+          ],
+          "spearman_rho_vs_success": -0.5363600929995419,
+          "spearman_ci": [
+            -0.8750757542964928,
+            -0.22351811767599758
+          ],
+          "cliffs_delta_failure_vs_success": 0.7916666666666666,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "seed_mean_dist",
+          "label": "Mean seed\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 0.6055555555555555,
+          "mean_success_ci": [
+            0.39722222222222214,
+            0.8409120046620047
+          ],
+          "mean_failure": 1.125,
+          "mean_failure_ci": [
+            0.75,
+            1.5
+          ],
+          "diff_failure_minus_success": 0.5194444444444445,
+          "diff_ci": [
+            -0.01388888888888884,
+            1.0333333333333334
+          ],
+          "spearman_rho_vs_success": -0.4087046889188094,
+          "spearman_ci": [
+            -0.7280427069812501,
+            -0.03526414801204051
+          ],
+          "cliffs_delta_failure_vs_success": 0.6666666666666666,
+          "cliffs_label": "large",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "n_facts_beyond_1hop",
+          "label": "Required facts at seed-distance \u2265 2",
+          "predicted_sign": "-",
+          "mean_success": 0.3333333333333333,
+          "mean_success_ci": [
+            0.0,
+            0.7272727272727273
+          ],
+          "mean_failure": 1.5,
+          "mean_failure_ci": [
+            1.0,
+            2.0
+          ],
+          "diff_failure_minus_success": 1.1666666666666667,
+          "diff_ci": [
+            0.41666666666666663,
+            1.9090909090909092
+          ],
+          "spearman_rho_vs_success": -0.564858970510035,
+          "spearman_ci": [
+            -0.9935690651280802,
+            -0.23169615028498214
+          ],
+          "cliffs_delta_failure_vs_success": 0.7916666666666666,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "anchor_max_dist",
+          "label": "Max anchor\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 2.8333333333333335,
+          "mean_success_ci": [
+            2.5,
+            3.1538461538461537
+          ],
+          "mean_failure": 3.0,
+          "mean_failure_ci": [
+            3.0,
+            3.0
+          ],
+          "diff_failure_minus_success": 0.16666666666666652,
+          "diff_ci": [
+            -0.16666666666666652,
+            0.5
+          ],
+          "spearman_rho_vs_success": -0.12773807700531709,
+          "spearman_ci": [
+            -0.4000000000000001,
+            0.14484136487558028
+          ],
+          "cliffs_delta_failure_vs_success": 0.16666666666666666,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "anchor_mean_dist",
+          "label": "Mean anchor\u2192fact distance",
+          "predicted_sign": "-",
+          "mean_success": 1.4305555555555556,
+          "mean_success_ci": [
+            1.2666666666666668,
+            1.5909090909090908
+          ],
+          "mean_failure": 1.5,
+          "mean_failure_ci": [
+            1.5,
+            1.5
+          ],
+          "diff_failure_minus_success": 0.06944444444444442,
+          "diff_ci": [
+            -0.09090909090909083,
+            0.2333333333333334
+          ],
+          "spearman_rho_vs_success": -0.059368954083449534,
+          "spearman_ci": [
+            -0.36210341218895065,
+            0.22783506371774612
+          ],
+          "cliffs_delta_failure_vs_success": 0.08333333333333333,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_spread",
+          "label": "Spread of the required set (max pairwise distance)",
+          "predicted_sign": "-",
+          "mean_success": 2.8333333333333335,
+          "mean_success_ci": [
+            2.5,
+            3.1538461538461537
+          ],
+          "mean_failure": 3.0,
+          "mean_failure_ci": [
+            3.0,
+            3.0
+          ],
+          "diff_failure_minus_success": 0.16666666666666652,
+          "diff_ci": [
+            -0.16666666666666652,
+            0.5
+          ],
+          "spearman_rho_vs_success": -0.12773807700531709,
+          "spearman_ci": [
+            -0.4000000000000001,
+            0.14484136487558028
+          ],
+          "cliffs_delta_failure_vs_success": 0.16666666666666666,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "n_required",
+          "label": "Number of required facts",
+          "predicted_sign": "-",
+          "mean_success": 3.8333333333333335,
+          "mean_success_ci": [
+            3.5,
+            4.153846153846154
+          ],
+          "mean_failure": 4.0,
+          "mean_failure_ci": [
+            4.0,
+            4.0
+          ],
+          "diff_failure_minus_success": 0.16666666666666652,
+          "diff_ci": [
+            -0.16666666666666696,
+            0.5
+          ],
+          "spearman_rho_vs_success": -0.12773807700531709,
+          "spearman_ci": [
+            -0.4000000000000001,
+            0.14484136487558028
+          ],
+          "cliffs_delta_failure_vs_success": 0.16666666666666666,
+          "cliffs_label": "small",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "required_degree_mean",
+          "label": "Mean degree of required facts",
+          "predicted_sign": "+",
+          "mean_success": 2.6750000000000003,
+          "mean_success_ci": [
+            2.5151298701298703,
+            2.8333333333333335
+          ],
+          "mean_failure": 2.25,
+          "mean_failure_ci": [
+            2.0,
+            2.5
+          ],
+          "diff_failure_minus_success": -0.42500000000000027,
+          "diff_ci": [
+            -0.7792548076923077,
+            -0.07179487179487198
+          ],
+          "spearman_rho_vs_success": 0.43669798282695127,
+          "spearman_ci": [
+            0.036284044411821946,
+            0.7460740620234001
+          ],
+          "cliffs_delta_failure_vs_success": -0.7083333333333334,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "required_degree_min",
+          "label": "Min degree of required facts",
+          "predicted_sign": "+",
+          "mean_success": 1.4166666666666667,
+          "mean_success_ci": [
+            1.1538461538461537,
+            1.7
+          ],
+          "mean_failure": 1.0,
+          "mean_failure_ci": [
+            1.0,
+            1.0
+          ],
+          "diff_failure_minus_success": -0.41666666666666674,
+          "diff_ci": [
+            -0.7,
+            -0.15384615384615374
+          ],
+          "spearman_rho_vs_success": 0.3042903097250923,
+          "spearman_ci": [
+            0.14484136487558028,
+            0.5555555555555556
+          ],
+          "cliffs_delta_failure_vs_success": -0.4166666666666667,
+          "cliffs_label": "medium",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "anchor_degree",
+          "label": "Degree of the anchor entity",
+          "predicted_sign": "+",
+          "mean_success": 2.0833333333333335,
+          "mean_success_ci": [
+            1.4166666666666667,
+            2.8333333333333335
+          ],
+          "mean_failure": 1.0,
+          "mean_failure_ci": [
+            1.0,
+            1.0
+          ],
+          "diff_failure_minus_success": -1.0833333333333335,
+          "diff_ci": [
+            -1.8333333333333335,
+            -0.3999999999999999
+          ],
+          "spearman_rho_vs_success": 0.33875374294707905,
+          "spearman_ci": [
+            0.17265867898949244,
+            0.6037033932572184
+          ],
+          "cliffs_delta_failure_vs_success": -0.5,
+          "cliffs_label": "large",
+          "ci_excludes_zero": true
+        },
+        {
+          "key": "required_clustering_mean",
+          "label": "Mean local clustering of required facts",
+          "predicted_sign": "+",
+          "mean_success": 0.0,
+          "mean_success_ci": [
+            0.0,
+            0.0
+          ],
+          "mean_failure": 0.0,
+          "mean_failure_ci": [
+            0.0,
+            0.0
+          ],
+          "diff_failure_minus_success": 0.0,
+          "diff_ci": [
+            0.0,
+            0.0
+          ],
+          "spearman_rho_vs_success": NaN,
+          "spearman_ci": [
+            NaN,
+            NaN
+          ],
+          "cliffs_delta_failure_vs_success": 0.0,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "anchor_clustering",
+          "label": "Local clustering of the anchor",
+          "predicted_sign": "+",
+          "mean_success": 0.0,
+          "mean_success_ci": [
+            0.0,
+            0.0
+          ],
+          "mean_failure": 0.0,
+          "mean_failure_ci": [
+            0.0,
+            0.0
+          ],
+          "diff_failure_minus_success": 0.0,
+          "diff_ci": [
+            0.0,
+            0.0
+          ],
+          "spearman_rho_vs_success": NaN,
+          "spearman_ci": [
+            NaN,
+            NaN
+          ],
+          "cliffs_delta_failure_vs_success": 0.0,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        },
+        {
+          "key": "same_community_fraction",
+          "label": "Fraction of required facts in the anchor's community",
+          "predicted_sign": "+",
+          "mean_success": 0.7333333333333334,
+          "mean_success_ci": [
+            0.5576923076923077,
+            0.8958333333333334
+          ],
+          "mean_failure": 0.75,
+          "mean_failure_ci": [
+            0.5,
+            1.0
+          ],
+          "diff_failure_minus_success": 0.016666666666666607,
+          "diff_ci": [
+            -0.34111742424242425,
+            0.38076923076923075
+          ],
+          "spearman_rho_vs_success": -0.02741748006397414,
+          "spearman_ci": [
+            -0.4403855060505443,
+            0.4547888209409025
+          ],
+          "cliffs_delta_failure_vs_success": 0.041666666666666664,
+          "cliffs_label": "negligible",
+          "ci_excludes_zero": false
+        }
+      ],
+      "n_features_ci_excludes_zero": 5,
+      "fact_analysis": {
+        "0": {
+          "n_facts": 25,
+          "n_found": 25,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.8628148284692875,
+            1.0
+          ]
+        },
+        "1": {
+          "n_facts": 22,
+          "n_found": 22,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.8456274871844254,
+            1.0
+          ]
+        },
+        ">=2": {
+          "n_facts": 7,
+          "n_found": 4,
+          "rate": 0.5714285714285714,
+          "ci": [
+            0.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.184051567640083,
+            0.9010117215574921
+          ]
+        },
+        "near": {
+          "n_facts": 47,
+          "n_found": 47,
+          "rate": 1.0,
+          "ci": [
+            1.0,
+            1.0
+          ],
+          "exact_ci": [
+            0.9245142663089414,
+            1.0
+          ]
+        },
+        "near_minus_far": {
+          "gap": 0.4285714285714286,
+          "ci": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "miss_concentration": {
+        "n_missed": 3,
+        "n_facts": 54,
+        "share_missed_beyond_1hop": 1.0,
+        "share_ci": [
+          1.0,
+          1.0
+        ],
+        "distance_histogram_all": {
+          "0": 25,
+          "1": 22,
+          "2": 5,
+          "3": 2
+        },
+        "distance_histogram_missed": {
+          "2": 2,
+          "3": 1
+        },
+        "missed_facts": [
+          {
+            "qid": "q02",
+            "fact": "Jacquard Loom",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q11",
+            "fact": "GraphRAG",
+            "seed_dist": 2
+          },
+          {
+            "qid": "q11",
+            "fact": "Knowledge Graph",
+            "seed_dist": 3
+          }
+        ]
+      },
+      "hop_frontier": [
+        {
+          "hops": 1,
+          "mean_frontier_nodes": 19.714285714285715,
+          "frontier_share_of_graph": 0.2495479204339964,
+          "implied_full_coverage": 0.6428571428571429,
+          "implied_ci": [
+            0.35714285714285715,
+            0.8571428571428571
+          ],
+          "n_questions_covered": 9
+        },
+        {
+          "hops": 2,
+          "mean_frontier_nodes": 31.785714285714285,
+          "frontier_share_of_graph": 0.4023508137432188,
+          "implied_full_coverage": 0.8571428571428571,
+          "implied_ci": [
+            0.6428571428571429,
+            1.0
+          ],
+          "n_questions_covered": 12
+        },
+        {
+          "hops": 3,
+          "mean_frontier_nodes": 41.92857142857143,
+          "frontier_share_of_graph": 0.530741410488246,
+          "implied_full_coverage": 1.0,
+          "implied_ci": [
+            1.0,
+            1.0
+          ],
+          "n_questions_covered": 14
+        },
+        {
+          "hops": 4,
+          "mean_frontier_nodes": 50.714285714285715,
+          "frontier_share_of_graph": 0.6419529837251357,
+          "implied_full_coverage": 1.0,
+          "implied_ci": [
+            1.0,
+            1.0
+          ],
+          "n_questions_covered": 14
+        }
+      ],
+      "path_rescue": {
+        "n_far_facts": 7,
+        "n_on_seed_pair_path": 0,
+        "n_retrieved": 4,
+        "mean_rendered_paths": 4.5,
+        "details": [
+          {
+            "qid": "q02",
+            "fact": "Jacquard Loom",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q06",
+            "fact": "AlexNet",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": true
+          },
+          {
+            "qid": "q08",
+            "fact": "Backpropagation",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": true
+          },
+          {
+            "qid": "q08",
+            "fact": "Geoffrey Hinton",
+            "seed_dist": 3,
+            "on_a_seed_pair_shortest_path": false,
+            "found": true
+          },
+          {
+            "qid": "q11",
+            "fact": "GraphRAG",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q11",
+            "fact": "Knowledge Graph",
+            "seed_dist": 3,
+            "on_a_seed_pair_shortest_path": false,
+            "found": false
+          },
+          {
+            "qid": "q12",
+            "fact": "Attention Is All You Need",
+            "seed_dist": 2,
+            "on_a_seed_pair_shortest_path": false,
+            "found": true
+          }
+        ]
+      }
+    }
+  },
+  "neo4j_uri": "bolt://localhost:7690",
+  "integrity": {
+    "verified_quiet_window": true,
+    "attempts_used": 1,
+    "discarded_attempts": [],
+    "fingerprints": {
+      "graph": {
+        "n_entities": 79,
+        "n_relationships": 81,
+        "n_chunks": 0,
+        "digest": "eb2c872d1ca5c804"
+      },
+      "with_chunks": {
+        "n_entities": 79,
+        "n_relationships": 81,
+        "n_chunks": 34,
+        "digest": "eb2c872d1ca5c804"
+      }
+    }
+  },
+  "profile_note": "**The fixture is a near-tree, and that matters for everything below.** It is a single connected component with 81 edges over 79 nodes \u2014 only 3 independent cycles \u2014 and it contains 0 triangles, so average clustering and transitivity are exactly 0.000. Mean degree is 2.05, the maximum degree is 5, and the diameter is 21 with a mean shortest path of 9.29 \u2014 a long, stringy graph, not a small world. Modularity is 0.784 over 9 communities, which on a near-tree mostly reflects where the branches are rather than genuinely dense clusters. Two consequences follow and are visible in the tables: the clustering-coefficient features are identically zero for every node and therefore carry no information *on this graph*, and Louvain community membership is close to a coarse restatement of graph distance. A knowledge graph extracted from real documents is usually denser locally (hub entities, triangles) and more fragmented globally; this fixture is neither.",
+  "seeds_identical_c_d": true,
+  "seed_identity_note": "systems C and D select identical seed entities on all 14 questions (verified this run), so their seed-distance frontiers coincide; they differ only in the source-chunk channel.",
+  "degenerate_ci_note": "**The zero-width bootstrap intervals are an artefact, not certainty.** System C's outcome is perfectly separated \u2014 47/47 near facts retrieved, 0/7 far facts retrieved \u2014 and a percentile bootstrap of a constant is a constant. The exact (Clopper\u2013Pearson) column is the honest reading: the far-fact retrieval rate is 0.0% with a 95% interval reaching up to 41.0%, because it rests on only 7 facts. Even that interval treats facts as independent when they are nested in questions, so it is optimistic. The separation is clean; the *precision* of the rates is not.",
+  "interpretation": [
+    "**The headline is split.** The *topology* half of the hypothesis is a **null result**: none of the classical graph-structure features \u2014 degree, local clustering, Louvain community co-membership, the spread of the required set, or distance from the question's nominal anchor \u2014 separates the questions system C answers fully from the ones it does not. The *distance-from-the-seeds* half is not merely supported but deterministic on this fixture. Those are different claims and we keep them apart.",
+    "**What we measured, on the question level.** Of 13 candidate features, 3 had a group-difference bootstrap CI that excluded zero for system C \u2014 and all 3 are restatements of the same quantity, the distance from the retrieved seeds to the required facts. Every anchor-based, degree-based, clustering-based and community-based feature has a \u0394 interval straddling zero and a negligible-to-small Cliff's \u03b4. With 14 questions split 9/5, group means rest on as few as 5 observations. Nothing in that table is a model of retrieval success, and we do not fit one.",
+    "**Where the signal actually is.** Moving from the question to the *fact* as the unit of analysis \u2014 54 facts instead of 14 questions, still bootstrapped by question so the clustering is respected \u2014 produces the one large, well-separated effect in this experiment. For system C, 47 of 47 required facts within one hop of a retrieved seed were retrieved (exact 95% CI [92.5%, 100.0%]); 0 of 7 facts two or more hops away were retrieved (exact 95% CI [0.0%, 41.0%]). That is not a subtle statistical association, it is the retriever's construction showing through: `_expand_and_format` writes out every seed's immediate neighbours, so anything at distance \u2264 1 is in the context by definition, and anything further away is in the context only if a rendered reasoning path happens to pass through it.",
+    "**P2 confirmed, and it is the mechanism behind the hop limit.** System C missed 7 of the 54 required facts, and all 7 of those misses (100.0%) lie at seed-distance \u2265 2. The failure mode of the graph-only system is not 'the graph was too sparse' or 'the community structure was wrong'; it is 'the evidence was one hop further out than the retriever materialises'. The reasoning-path channel does not compensate: 0 of the 7 far facts lie on a shortest path between two of the question's seeds \u2014 the only route by which a distant entity can reach the context \u2014 and 0 of them were retrieved, even though 4.5 reasoning paths were rendered per question on average. Reasoning paths connect seeds to each other; they are not a mechanism for reaching evidence that does not happen to sit between two seeds.",
+    "**The actionable corollary, and the link to RQ2.** The graph arithmetic says that materialising two hops instead of one would put 12/14 questions' full evidence inside the neighbourhood instead of 9/14, and three hops would reach 14/14 \u2014 at the cost of growing the materialised neighbourhood from 19.7 entities (25.0% of the graph) to 31.8 (40.2%) and then 41.9 (53.1%). That is the shape of a hop-limit trade-off: on a near-tree the frontier grows roughly geometrically while coverage improves in discrete jumps, so the extra depth is bought with context that a budget-matched baseline will also be given. We did not run the deepened retriever, so this is arithmetic and an upper bound on the benefit, not a measured intervention \u2014 but it identifies exactly which knob the observed failures are asking for, which is what connects this result to RQ2.",
+    "**P3 confirmed, weakly.** The seeds the retriever actually chose carry more signal than the dataset's nominal anchor: max seed\u2192fact distance has Cliff's \u03b4 = 1.00 (large) against success, while max anchor\u2192fact distance has \u03b4 = -0.07 (negligible). Both CIs are wide; the ordering is suggestive, not established.",
+    "**What we infer, and what we do not.** We infer that seed-distance is *causally* implicated in retrieval success for the graph-only system, because we can read the mechanism directly out of `_expand_and_format` \u2014 it writes every seed's immediate neighbours and nothing beyond them \u2014 rather than only out of the correlation. We do **not** infer that topology predicts success in general; on this fixture it demonstrably does not, beyond distance. And we infer nothing from system D's feature table: D reaches 12/14 full coverage, so its failure group is 2 questions and the degree features whose intervals exclude zero there are describing two data points. What D does show is that its source-chunk channel rescues 4 of the 7 far facts by retrieving prose that happens to name them \u2014 adding chunks papers over the topological failure mode rather than fixing it, and the graph's own reach is unchanged."
+  ],
+  "threats": [
+    "**Small n.** 14 questions, 54 required facts, one corpus, one graph. The question-level group comparisons rest on a handful of observations per group; every CI in the question-level table is wide enough to contain 'no effect'. This is exploratory.",
+    "**Multiplicity.** Thirteen features were examined against the same 14 outcomes. Any feature whose CI excludes zero here would need pre-registration and a fresh dataset before it could be called a finding; no correction is applied because with this n a corrected interval would be uninformative either way.",
+    "**The substrate is a near-tree, and this is the biggest threat.** 81 edges over 79 nodes, 3 independent cycles, 0 triangles, clustering exactly 0.000, diameter 21. On a tree there is essentially only one topological variable \u2014 distance \u2014 so the finding that 'only distance matters' is partly baked into the fixture. Two of the thirteen features are constant by construction. A real extracted knowledge graph has hubs, triangles and redundant paths, on which degree and clustering could matter and on which multiple short paths could rescue a distant fact. This experiment cannot speak to that case at all.",
+    "**The neighbourhood-depth result is close to analytic.** Once you know that `_expand_and_format` materialises exactly the seeds' immediate neighbours and that scoring is permissive, 'facts at distance \u2264 1 are always scored' follows without any measurement. The empirical content of Result 2 is therefore the *other* half \u2014 that nothing else (reasoning paths, chunk co-occurrence) fills the gap \u2014 plus the distribution of required facts over distances, which is where the 7 far facts come from.",
+    "**Hand-built benchmark.** `dataset.json` was authored with bridge-style multi-hop structure in mind. The distance distribution of required facts is therefore a property of the benchmark's design as much as of any real retrieval workload.",
+    "**Permissive scoring.** Full coverage is scored on the benchmark's permissive rule, under which a fact counts when its name appears anywhere in the context \u2014 including in a bare neighbour line. That rule is exactly what makes distance-1 facts score ~100%, so Result 2 partly measures the scoring rule. Under the strict (prose-only) rule system C scores 0 by construction and the analysis would be vacuous; this is stated rather than worked around.",
+    "**Seeds are not random.** Seed selection is a hybrid vector + full-text search, so seed-distance is itself an outcome of the retriever. It is a *diagnostic* of the pipeline, not an exogenous property of the graph.",
+    "**Louvain instability.** Community assignment on a graph this small is sensitive to the seed; a fixed seed makes the run reproducible, not the partition canonical.",
+    "**Environmental reproducibility had to be engineered, and that is itself a finding.** On a database shared with other writers this experiment produced four different headline numbers from four identical runs. The results above are only trustworthy because the graph is fingerprinted around every measurement and disturbed runs are discarded. Anyone reproducing this must use an instance nothing else writes to; the guard will abort rather than report a corrupted run, but it can only detect interference it can see between two fingerprints."
+  ],
+  "claim": "Graph topology per se does **not** predict GraphRAG retrieval success on this benchmark \u2014 degree, local clustering, Louvain co-membership and anchor distance are all null at n=14 \u2014 but the depth of the neighbourhood the retriever materialises does, completely: graph-only GraphRAG retrieved 47/47 required facts lying within one hop of a retrieved seed and 0/7 lying further away (exact 95% CI on the far rate [0.0%, 41.0%]), so all 7 of its misses sit outside the one-hop frontier and its multi-hop failures are a property of the retrieval depth rather than of the graph's structure."
+}

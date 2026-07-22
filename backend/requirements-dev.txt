@@ -6,3 +6,7 @@ pytest==8.4.2
 pytest-asyncio==0.25.2
 httpx==0.28.1
 ruff==0.12.1
+
+# Research experiments (backend/research/) — bootstrap CIs, graph topology.
+# Not needed for the app or its test suite; only to reproduce the studies.
+numpy>=1.26,<3

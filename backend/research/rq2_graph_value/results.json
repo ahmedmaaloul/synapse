@@ -1,0 +1,4997 @@
+{
+  "config": {
+    "command": "cd backend && EMBEDDING_PROVIDER=fastembed NEO4J_URI=bolt://localhost:7688 NEO4J_PASSWORD=research_secret python -m research.rq2_graph_value.run_rq2",
+    "seed": 20260721,
+    "bootstrap_iters": 10000,
+    "graph_k": 8,
+    "prod_hops": 2,
+    "baseline_k_default": 4,
+    "embedding_provider": "fastembed",
+    "neo4j_uri": "bolt://localhost:7688",
+    "chunk_top_k": 4,
+    "chunk_context_max_chars": 4000,
+    "max_reasoning_paths": 6,
+    "max_hops_cap": 4,
+    "census": {
+      "graph_only": {
+        "entities": 79,
+        "edges": 81,
+        "chunks": 0
+      },
+      "with_chunks": {
+        "entities": 79,
+        "edges": 81,
+        "chunks": 34
+      }
+    },
+    "dataset": {
+      "name": "Synapse Multi-Hop Benchmark v1",
+      "passages": 34,
+      "entities": 79,
+      "relationships": 81,
+      "questions": 14,
+      "corpus_chars": 6750
+    },
+    "attempts": 1
+  },
+  "hop_invariance": {
+    "h1 vs h2": true,
+    "h1 vs h3": true,
+    "h1 vs h4": true
+  },
+  "ladder": {
+    "graph_only": [
+      {
+        "key": "d0",
+        "label": "d0  seeds only (no edges, no paths)",
+        "kind": "surgical",
+        "fact_recall": 0.48095238095238096,
+        "full_coverage": 0.07142857142857142,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 898.8571428571429,
+        "n": 14
+      },
+      {
+        "key": "d1",
+        "label": "d1  seeds + neighbour lines (paths stripped)",
+        "kind": "surgical",
+        "fact_recall": 0.875,
+        "full_coverage": 0.6428571428571429,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 1665.5714285714287,
+        "n": 14
+      },
+      {
+        "key": "h1",
+        "label": "h1  production, retrieval_max_hops=1",
+        "kind": "run",
+        "fact_recall": 0.875,
+        "full_coverage": 0.6428571428571429,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 1825.0,
+        "n": 14
+      },
+      {
+        "key": "h2",
+        "label": "h2  production, retrieval_max_hops=2",
+        "kind": "run",
+        "fact_recall": 0.875,
+        "full_coverage": 0.6428571428571429,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 2055.785714285714,
+        "n": 14
+      },
+      {
+        "key": "h3",
+        "label": "h3  production, retrieval_max_hops=3",
+        "kind": "run",
+        "fact_recall": 0.8928571428571429,
+        "full_coverage": 0.7142857142857143,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 2190.4285714285716,
+        "n": 14
+      },
+      {
+        "key": "h4",
+        "label": "h4  production, retrieval_max_hops=4",
+        "kind": "run",
+        "fact_recall": 0.8928571428571429,
+        "full_coverage": 0.7142857142857143,
+        "strict_fact_recall": 0.0,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 2295.214285714286,
+        "n": 14
+      }
+    ],
+    "with_chunks": [
+      {
+        "key": "d0",
+        "label": "d0  seeds only (no edges, no paths)",
+        "kind": "surgical",
+        "fact_recall": 0.9107142857142857,
+        "full_coverage": 0.7857142857142857,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 2358.5,
+        "n": 14
+      },
+      {
+        "key": "d1",
+        "label": "d1  seeds + neighbour lines (paths stripped)",
+        "kind": "surgical",
+        "fact_recall": 0.9464285714285714,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 3125.214285714286,
+        "n": 14
+      },
+      {
+        "key": "h1",
+        "label": "h1  production, retrieval_max_hops=1",
+        "kind": "run",
+        "fact_recall": 0.9464285714285714,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 3284.6428571428573,
+        "n": 14
+      },
+      {
+        "key": "h2",
+        "label": "h2  production, retrieval_max_hops=2",
+        "kind": "run",
+        "fact_recall": 0.9464285714285714,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 3515.4285714285716,
+        "n": 14
+      },
+      {
+        "key": "h3",
+        "label": "h3  production, retrieval_max_hops=3",
+        "kind": "run",
+        "fact_recall": 0.9464285714285714,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 3650.0714285714284,
+        "n": 14
+      },
+      {
+        "key": "h4",
+        "label": "h4  production, retrieval_max_hops=4",
+        "kind": "run",
+        "fact_recall": 0.9464285714285714,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 3754.8571428571427,
+        "n": 14
+      }
+    ]
+  },
+  "marginal": {
+    "graph_only": [
+      {
+        "step": "d0 \u2192 d1",
+        "facts_gained": 22,
+        "facts_lost": 0,
+        "net_facts": 22,
+        "delta_chars": 766.7142857142858,
+        "net_facts_per_1k_chars": 2.0495621389975773,
+        "recall_before": 0.48095238095238096,
+        "recall_after": 0.875
+      },
+      {
+        "step": "d1 \u2192 h1",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 159.42857142857133,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.875,
+        "recall_after": 0.875
+      },
+      {
+        "step": "h1 \u2192 h2",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 230.78571428571422,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.875,
+        "recall_after": 0.875
+      },
+      {
+        "step": "h2 \u2192 h3",
+        "facts_gained": 1,
+        "facts_lost": 0,
+        "net_facts": 1,
+        "delta_chars": 134.64285714285734,
+        "net_facts_per_1k_chars": 0.53050397877984,
+        "recall_before": 0.875,
+        "recall_after": 0.8928571428571429
+      },
+      {
+        "step": "h3 \u2192 h4",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 104.78571428571422,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.8928571428571429,
+        "recall_after": 0.8928571428571429
+      }
+    ],
+    "with_chunks": [
+      {
+        "step": "d0 \u2192 d1",
+        "facts_gained": 2,
+        "facts_lost": 0,
+        "net_facts": 2,
+        "delta_chars": 766.7142857142858,
+        "net_facts_per_1k_chars": 0.18632383081796158,
+        "recall_before": 0.9107142857142857,
+        "recall_after": 0.9464285714285714
+      },
+      {
+        "step": "d1 \u2192 h1",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 159.42857142857156,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.9464285714285714,
+        "recall_after": 0.9464285714285714
+      },
+      {
+        "step": "h1 \u2192 h2",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 230.78571428571422,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.9464285714285714,
+        "recall_after": 0.9464285714285714
+      },
+      {
+        "step": "h2 \u2192 h3",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 134.64285714285688,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.9464285714285714,
+        "recall_after": 0.9464285714285714
+      },
+      {
+        "step": "h3 \u2192 h4",
+        "facts_gained": 0,
+        "facts_lost": 0,
+        "net_facts": 0,
+        "delta_chars": 104.78571428571422,
+        "net_facts_per_1k_chars": 0.0,
+        "recall_before": 0.9464285714285714,
+        "recall_after": 0.9464285714285714
+      }
+    ]
+  },
+  "paths": {
+    "h1": {
+      "mean_paths": 2.4285714285714284
+    },
+    "h2": {
+      "mean_paths": 4.5
+    },
+    "h3": {
+      "mean_paths": 5.285714285714286
+    },
+    "h4": {
+      "mean_paths": 5.714285714285714
+    }
+  },
+  "spans": [
+    {
+      "qid": "q01",
+      "question": "Who founded the business that eventually became the maker of Deep Blue?",
+      "anchor": "Deep Blue",
+      "required": [
+        "Deep Blue",
+        "IBM",
+        "Tabulating Machine Company",
+        "Herman Hollerith"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q02",
+      "question": "What fed instructions into the machine Ada Lovelace wrote her notes about, and where did that idea come from?",
+      "anchor": "Ada Lovelace",
+      "required": [
+        "Ada Lovelace",
+        "Analytical Engine",
+        "Punched Cards",
+        "Jacquard Loom"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q03",
+      "question": "Whose statistical work borrowed the input medium of the machine Charles Babbage designed?",
+      "anchor": "Charles Babbage",
+      "required": [
+        "Charles Babbage",
+        "Analytical Engine",
+        "Punched Cards",
+        "Herman Hollerith"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q04",
+      "question": "Who supervised the AlexNet team, and what did he popularise in 1986?",
+      "anchor": "AlexNet",
+      "required": [
+        "AlexNet",
+        "Geoffrey Hinton",
+        "Backpropagation"
+      ],
+      "n_facts": 3,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q05",
+      "question": "Where was the dataset that AlexNet won on assembled, and by whom?",
+      "anchor": "AlexNet",
+      "required": [
+        "AlexNet",
+        "ImageNet",
+        "Fei-Fei Li",
+        "Stanford University"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q06",
+      "question": "Which vision network was co-built by the first chief scientist of the laboratory that released GPT?",
+      "anchor": "GPT",
+      "required": [
+        "GPT",
+        "OpenAI",
+        "Ilya Sutskever",
+        "AlexNet"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q07",
+      "question": "What mechanism replaced recurrence inside the architecture BERT is built from?",
+      "anchor": "BERT",
+      "required": [
+        "BERT",
+        "Transformer",
+        "Self-Attention"
+      ],
+      "n_facts": 3,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q08",
+      "question": "Which algorithm overcame the limits of the machine built at the Cornell Aeronautical Laboratory, and who popularised it?",
+      "anchor": "Cornell Aeronautical Laboratory",
+      "required": [
+        "Cornell Aeronautical Laboratory",
+        "Perceptron",
+        "Backpropagation",
+        "Geoffrey Hinton"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q09",
+      "question": "Which thought experiment was proposed by the man who helped break Enigma?",
+      "anchor": "Enigma",
+      "required": [
+        "Enigma",
+        "Alan Turing",
+        "Turing Test"
+      ],
+      "n_facts": 3,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q10",
+      "question": "Which retrieval method walks the structure held in the database that Cypher queries?",
+      "anchor": "Cypher",
+      "required": [
+        "Cypher",
+        "Neo4j",
+        "Knowledge Graph",
+        "GraphRAG"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q11",
+      "question": "Which technique extends the method that reduces hallucination, and what does it walk over?",
+      "anchor": "Hallucination",
+      "required": [
+        "Hallucination",
+        "Retrieval-Augmented Generation",
+        "GraphRAG",
+        "Knowledge Graph"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q12",
+      "question": "Which paper introduced the architecture behind BERT, and which company employed its authors?",
+      "anchor": "BERT",
+      "required": [
+        "BERT",
+        "Transformer",
+        "Attention Is All You Need",
+        "Google"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q13",
+      "question": "Which network won the contest that measured progress in Computer Vision, and on what hardware was it trained?",
+      "anchor": "Computer Vision",
+      "required": [
+        "Computer Vision",
+        "ImageNet",
+        "AlexNet",
+        "GPU"
+      ],
+      "n_facts": 4,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    },
+    {
+      "qid": "q14",
+      "question": "The creator of Lisp organised a meeting; which early neural network was attacked by another of its attendees?",
+      "anchor": "Lisp",
+      "required": [
+        "Lisp",
+        "John McCarthy",
+        "Dartmouth Workshop",
+        "Marvin Minsky",
+        "Perceptron"
+      ],
+      "n_facts": 5,
+      "span_text": 2,
+      "span_declared": 2,
+      "orphan_facts": []
+    }
+  ],
+  "fact_classes": [
+    {
+      "qid": "q01",
+      "anchor": {
+        "in-passage": [
+          "Deep Blue",
+          "IBM"
+        ],
+        "off-passage": [
+          "Tabulating Machine Company",
+          "Herman Hollerith"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Deep Blue",
+          "IBM"
+        ],
+        "off-passage": [
+          "Tabulating Machine Company",
+          "Herman Hollerith"
+        ]
+      }
+    },
+    {
+      "qid": "q02",
+      "anchor": {
+        "in-passage": [
+          "Ada Lovelace",
+          "Analytical Engine"
+        ],
+        "off-passage": [
+          "Punched Cards",
+          "Jacquard Loom"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Ada Lovelace",
+          "Analytical Engine"
+        ],
+        "off-passage": [
+          "Punched Cards",
+          "Jacquard Loom"
+        ]
+      }
+    },
+    {
+      "qid": "q03",
+      "anchor": {
+        "in-passage": [
+          "Charles Babbage",
+          "Analytical Engine",
+          "Punched Cards"
+        ],
+        "off-passage": [
+          "Herman Hollerith"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Charles Babbage",
+          "Analytical Engine",
+          "Punched Cards"
+        ],
+        "off-passage": [
+          "Herman Hollerith"
+        ]
+      }
+    },
+    {
+      "qid": "q04",
+      "anchor": {
+        "in-passage": [
+          "AlexNet",
+          "Geoffrey Hinton"
+        ],
+        "off-passage": [
+          "Backpropagation"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "AlexNet",
+          "Geoffrey Hinton"
+        ],
+        "off-passage": [
+          "Backpropagation"
+        ]
+      }
+    },
+    {
+      "qid": "q05",
+      "anchor": {
+        "in-passage": [
+          "AlexNet",
+          "ImageNet"
+        ],
+        "off-passage": [
+          "Fei-Fei Li",
+          "Stanford University"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "ImageNet",
+          "Fei-Fei Li",
+          "Stanford University"
+        ],
+        "off-passage": [
+          "AlexNet"
+        ]
+      }
+    },
+    {
+      "qid": "q06",
+      "anchor": {
+        "in-passage": [
+          "GPT",
+          "OpenAI",
+          "Ilya Sutskever"
+        ],
+        "off-passage": [
+          "AlexNet"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "GPT",
+          "OpenAI",
+          "Ilya Sutskever"
+        ],
+        "off-passage": [
+          "AlexNet"
+        ]
+      }
+    },
+    {
+      "qid": "q07",
+      "anchor": {
+        "in-passage": [
+          "BERT",
+          "Transformer"
+        ],
+        "off-passage": [
+          "Self-Attention"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Transformer"
+        ],
+        "off-passage": [
+          "BERT",
+          "Self-Attention"
+        ]
+      }
+    },
+    {
+      "qid": "q08",
+      "anchor": {
+        "in-passage": [
+          "Cornell Aeronautical Laboratory",
+          "Perceptron"
+        ],
+        "off-passage": [
+          "Backpropagation",
+          "Geoffrey Hinton"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Cornell Aeronautical Laboratory",
+          "Perceptron"
+        ],
+        "off-passage": [
+          "Backpropagation",
+          "Geoffrey Hinton"
+        ]
+      }
+    },
+    {
+      "qid": "q09",
+      "anchor": {
+        "in-passage": [
+          "Enigma",
+          "Alan Turing"
+        ],
+        "off-passage": [
+          "Turing Test"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Alan Turing",
+          "Turing Test"
+        ],
+        "off-passage": [
+          "Enigma"
+        ]
+      }
+    },
+    {
+      "qid": "q10",
+      "anchor": {
+        "in-passage": [
+          "Cypher",
+          "Neo4j",
+          "Knowledge Graph"
+        ],
+        "off-passage": [
+          "GraphRAG"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Knowledge Graph",
+          "GraphRAG"
+        ],
+        "off-passage": [
+          "Cypher",
+          "Neo4j"
+        ]
+      }
+    },
+    {
+      "qid": "q11",
+      "anchor": {
+        "in-passage": [
+          "Hallucination",
+          "Retrieval-Augmented Generation"
+        ],
+        "off-passage": [
+          "GraphRAG",
+          "Knowledge Graph"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Hallucination",
+          "Retrieval-Augmented Generation"
+        ],
+        "off-passage": [
+          "GraphRAG",
+          "Knowledge Graph"
+        ]
+      }
+    },
+    {
+      "qid": "q12",
+      "anchor": {
+        "in-passage": [
+          "BERT",
+          "Transformer",
+          "Google"
+        ],
+        "off-passage": [
+          "Attention Is All You Need"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "BERT",
+          "Transformer",
+          "Google"
+        ],
+        "off-passage": [
+          "Attention Is All You Need"
+        ]
+      }
+    },
+    {
+      "qid": "q13",
+      "anchor": {
+        "in-passage": [
+          "Computer Vision",
+          "ImageNet"
+        ],
+        "off-passage": [
+          "AlexNet",
+          "GPU"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Computer Vision",
+          "ImageNet"
+        ],
+        "off-passage": [
+          "AlexNet",
+          "GPU"
+        ]
+      }
+    },
+    {
+      "qid": "q14",
+      "anchor": {
+        "in-passage": [
+          "Lisp",
+          "John McCarthy",
+          "Dartmouth Workshop"
+        ],
+        "off-passage": [
+          "Marvin Minsky",
+          "Perceptron"
+        ]
+      },
+      "top1": {
+        "in-passage": [
+          "Lisp",
+          "John McCarthy",
+          "Dartmouth Workshop"
+        ],
+        "off-passage": [
+          "Marvin Minsky",
+          "Perceptron"
+        ]
+      }
+    }
+  ],
+  "baselines": {
+    "default_k": 4,
+    "default": {
+      "fact_recall": 0.8928571428571429,
+      "full_coverage": 0.7142857142857143,
+      "strict_fact_recall": 0.8928571428571429,
+      "strict_full_coverage": 0.7142857142857143,
+      "mean_context_chars": 831.1428571428571,
+      "n": 14
+    },
+    "matched_k_graph_only": 10,
+    "matched_graph_only": {
+      "fact_recall": 0.9642857142857143,
+      "full_coverage": 0.9285714285714286,
+      "strict_fact_recall": 0.9642857142857143,
+      "strict_full_coverage": 0.9285714285714286,
+      "mean_context_chars": 2068.4285714285716,
+      "n": 14
+    },
+    "matched_k_with_chunks": 20,
+    "matched_with_chunks": {
+      "fact_recall": 1.0,
+      "full_coverage": 1.0,
+      "strict_fact_recall": 1.0,
+      "strict_full_coverage": 1.0,
+      "mean_context_chars": 4072.285714285714,
+      "n": 14
+    },
+    "sweep": [
+      {
+        "k": 1,
+        "fact_recall": 0.5904761904761904,
+        "full_coverage": 0.0,
+        "strict_fact_recall": 0.5904761904761904,
+        "strict_full_coverage": 0.0,
+        "mean_context_chars": 198.71428571428572,
+        "n": 14
+      },
+      {
+        "k": 2,
+        "fact_recall": 0.7797619047619048,
+        "full_coverage": 0.42857142857142855,
+        "strict_fact_recall": 0.7797619047619048,
+        "strict_full_coverage": 0.42857142857142855,
+        "mean_context_chars": 412.7857142857143,
+        "n": 14
+      },
+      {
+        "k": 3,
+        "fact_recall": 0.8392857142857143,
+        "full_coverage": 0.5714285714285714,
+        "strict_fact_recall": 0.8392857142857143,
+        "strict_full_coverage": 0.5714285714285714,
+        "mean_context_chars": 627.4285714285714,
+        "n": 14
+      },
+      {
+        "k": 4,
+        "fact_recall": 0.8928571428571429,
+        "full_coverage": 0.7142857142857143,
+        "strict_fact_recall": 0.8928571428571429,
+        "strict_full_coverage": 0.7142857142857143,
+        "mean_context_chars": 831.1428571428571,
+        "n": 14
+      },
+      {
+        "k": 5,
+        "fact_recall": 0.9107142857142857,
+        "full_coverage": 0.7857142857142857,
+        "strict_fact_recall": 0.9107142857142857,
+        "strict_full_coverage": 0.7857142857142857,
+        "mean_context_chars": 1045.2857142857142,
+        "n": 14
+      },
+      {
+        "k": 6,
+        "fact_recall": 0.9285714285714286,
+        "full_coverage": 0.8571428571428571,
+        "strict_fact_recall": 0.9285714285714286,
+        "strict_full_coverage": 0.8571428571428571,
+        "mean_context_chars": 1259.857142857143,
+        "n": 14
+      },
+      {
+        "k": 8,
+        "fact_recall": 0.9642857142857143,
+        "full_coverage": 0.9285714285714286,
+        "strict_fact_recall": 0.9642857142857143,
+        "strict_full_coverage": 0.9285714285714286,
+        "mean_context_chars": 1672.0,
+        "n": 14
+      },
+      {
+        "k": 10,
+        "fact_recall": 0.9642857142857143,
+        "full_coverage": 0.9285714285714286,
+        "strict_fact_recall": 0.9642857142857143,
+        "strict_full_coverage": 0.9285714285714286,
+        "mean_context_chars": 2068.4285714285716,
+        "n": 14
+      },
+      {
+        "k": 12,
+        "fact_recall": 0.9642857142857143,
+        "full_coverage": 0.9285714285714286,
+        "strict_fact_recall": 0.9642857142857143,
+        "strict_full_coverage": 0.9285714285714286,
+        "mean_context_chars": 2470.214285714286,
+        "n": 14
+      },
+      {
+        "k": 16,
+        "fact_recall": 1.0,
+        "full_coverage": 1.0,
+        "strict_fact_recall": 1.0,
+        "strict_full_coverage": 1.0,
+        "mean_context_chars": 3252.8571428571427,
+        "n": 14
+      },
+      {
+        "k": 20,
+        "fact_recall": 1.0,
+        "full_coverage": 1.0,
+        "strict_fact_recall": 1.0,
+        "strict_full_coverage": 1.0,
+        "mean_context_chars": 4072.285714285714,
+        "n": 14
+      },
+      {
+        "k": 24,
+        "fact_recall": 1.0,
+        "full_coverage": 1.0,
+        "strict_fact_recall": 1.0,
+        "strict_full_coverage": 1.0,
+        "mean_context_chars": 4839.928571428572,
+        "n": 14
+      },
+      {
+        "k": 32,
+        "fact_recall": 1.0,
+        "full_coverage": 1.0,
+        "strict_fact_recall": 1.0,
+        "strict_full_coverage": 1.0,
+        "mean_context_chars": 6433.357142857143,
+        "n": 14
+      },
+      {
+        "k": 34,
+        "fact_recall": 1.0,
+        "full_coverage": 1.0,
+        "strict_fact_recall": 1.0,
+        "strict_full_coverage": 1.0,
+        "mean_context_chars": 6816.0,
+        "n": 14
+      }
+    ]
+  },
+  "span_partition": {
+    "D_vs_matched": {
+      "label": "passage baseline top-20 (budget-matched)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q02",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q03",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q12",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "span = 1": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 0,
+            "empty": true
+          },
+          "span >= 2": {
+            "mean": -0.05357142857142857,
+            "lo": -0.14285714285714285,
+            "hi": 0.0,
+            "n": 14,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.05357142857142857,
+          "lo": -0.14285714285714285,
+          "hi": 0.0,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_a": 14,
+          "n_b": 0,
+          "empty": true
+        },
+        "interaction_label": "span >= 2 \u2212 span = 1"
+      }
+    },
+    "D_vs_default": {
+      "label": "passage baseline top-4 (production default)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q04",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "span = 1": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 0,
+            "empty": true
+          },
+          "span >= 2": {
+            "mean": 0.05357142857142857,
+            "lo": 0.0,
+            "hi": 0.10714285714285714,
+            "n": 14,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": 0.05357142857142857,
+          "lo": 0.0,
+          "hi": 0.10714285714285714,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_a": 14,
+          "n_b": 0,
+          "empty": true
+        },
+        "interaction_label": "span >= 2 \u2212 span = 1"
+      }
+    },
+    "C_vs_matched": {
+      "label": "passage baseline top-10 (budget-matched)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q02",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q03",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q07",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q09",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q13",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "span = 1": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 0,
+            "empty": true
+          },
+          "span >= 2": {
+            "mean": -0.08928571428571429,
+            "lo": -0.17857142857142858,
+            "hi": -0.017857142857142856,
+            "n": 14,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.08928571428571429,
+          "lo": -0.17857142857142858,
+          "hi": -0.017857142857142856,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_a": 14,
+          "n_b": 0,
+          "empty": true
+        },
+        "interaction_label": "span >= 2 \u2212 span = 1"
+      }
+    },
+    "C_vs_default": {
+      "label": "passage baseline top-4 (production default)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q04",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q07",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q09",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q13",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "span = 1": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 0,
+            "empty": true
+          },
+          "span >= 2": {
+            "mean": -0.017857142857142856,
+            "lo": -0.125,
+            "hi": 0.08928571428571429,
+            "n": 14,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.017857142857142856,
+          "lo": -0.125,
+          "hi": 0.07142857142857142,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_a": 14,
+          "n_b": 0,
+          "empty": true
+        },
+        "interaction_label": "span >= 2 \u2212 span = 1"
+      }
+    },
+    "D_vs_d0": {
+      "label": "its own seeds with the edges deleted (d0)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": "span >= 2",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": "span >= 2",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": "span >= 2",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "span = 1": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 0,
+            "empty": true
+          },
+          "span >= 2": {
+            "mean": 0.03571428571428571,
+            "lo": 0.0,
+            "hi": 0.08928571428571429,
+            "n": 14,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": 0.03571428571428571,
+          "lo": 0.0,
+          "hi": 0.08928571428571429,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.0,
+          "lo": 0.0,
+          "hi": 0.0,
+          "n_a": 14,
+          "n_b": 0,
+          "empty": true
+        },
+        "interaction_label": "span >= 2 \u2212 span = 1"
+      }
+    }
+  },
+  "length_partition": {
+    "D_vs_matched": {
+      "label": "passage baseline top-20 (budget-matched)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q02",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q03",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q12",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "3 required facts": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 3,
+            "empty": false
+          },
+          ">= 4 required facts": {
+            "mean": -0.06818181818181818,
+            "lo": -0.1590909090909091,
+            "hi": 0.0,
+            "n": 11,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.05357142857142857,
+          "lo": -0.14285714285714285,
+          "hi": 0.0,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": -0.06818181818181818,
+          "lo": -0.18181818181818182,
+          "hi": 0.0,
+          "n_a": 11,
+          "n_b": 3,
+          "empty": false
+        },
+        "interaction_label": ">= 4 required facts \u2212 3 required facts"
+      }
+    },
+    "D_vs_default": {
+      "label": "passage baseline top-4 (production default)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q04",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "3 required facts": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 3,
+            "empty": false
+          },
+          ">= 4 required facts": {
+            "mean": 0.06818181818181818,
+            "lo": 0.0,
+            "hi": 0.13636363636363635,
+            "n": 11,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": 0.05357142857142857,
+          "lo": 0.0,
+          "hi": 0.10714285714285714,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.06818181818181818,
+          "lo": 0.0,
+          "hi": 0.13636363636363635,
+          "n_a": 11,
+          "n_b": 3,
+          "empty": false
+        },
+        "interaction_label": ">= 4 required facts \u2212 3 required facts"
+      }
+    },
+    "C_vs_matched": {
+      "label": "passage baseline top-10 (budget-matched)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q02",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q03",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q07",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q09",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q13",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "3 required facts": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 3,
+            "empty": false
+          },
+          ">= 4 required facts": {
+            "mean": -0.11363636363636363,
+            "lo": -0.22727272727272727,
+            "hi": -0.022727272727272728,
+            "n": 11,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.08928571428571429,
+          "lo": -0.17857142857142858,
+          "hi": -0.017857142857142856,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": -0.11363636363636363,
+          "lo": -0.22727272727272727,
+          "hi": -0.022727272727272728,
+          "n_a": 11,
+          "n_b": 3,
+          "empty": false
+        },
+        "interaction_label": ">= 4 required facts \u2212 3 required facts"
+      }
+    },
+    "C_vs_default": {
+      "label": "passage baseline top-4 (production default)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q04",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q07",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 1.0,
+            "delta": -0.5
+          },
+          {
+            "qid": "q09",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 1.0,
+            "delta": -0.25
+          },
+          {
+            "qid": "q13",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "3 required facts": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 3,
+            "empty": false
+          },
+          ">= 4 required facts": {
+            "mean": -0.022727272727272728,
+            "lo": -0.1590909090909091,
+            "hi": 0.11363636363636363,
+            "n": 11,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": -0.017857142857142856,
+          "lo": -0.125,
+          "hi": 0.07142857142857142,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": -0.022727272727272728,
+          "lo": -0.1590909090909091,
+          "hi": 0.11363636363636363,
+          "n_a": 11,
+          "n_b": 3,
+          "empty": false
+        },
+        "interaction_label": ">= 4 required facts \u2212 3 required facts"
+      }
+    },
+    "D_vs_d0": {
+      "label": "its own seeds with the edges deleted (d0)",
+      "permissive": {
+        "per_question": [
+          {
+            "qid": "q01",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 0.75,
+            "delta": 0.25
+          },
+          {
+            "qid": "q02",
+            "group": ">= 4 required facts",
+            "graph": 0.75,
+            "baseline": 0.5,
+            "delta": 0.25
+          },
+          {
+            "qid": "q03",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q04",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q05",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q06",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q07",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q08",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q09",
+            "group": "3 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q10",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q11",
+            "group": ">= 4 required facts",
+            "graph": 0.5,
+            "baseline": 0.5,
+            "delta": 0.0
+          },
+          {
+            "qid": "q12",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q13",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          },
+          {
+            "qid": "q14",
+            "group": ">= 4 required facts",
+            "graph": 1.0,
+            "baseline": 1.0,
+            "delta": 0.0
+          }
+        ],
+        "groups": {
+          "3 required facts": {
+            "mean": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "n": 3,
+            "empty": false
+          },
+          ">= 4 required facts": {
+            "mean": 0.045454545454545456,
+            "lo": 0.0,
+            "hi": 0.11363636363636363,
+            "n": 11,
+            "empty": false
+          }
+        },
+        "all": {
+          "mean": 0.03571428571428571,
+          "lo": 0.0,
+          "hi": 0.08928571428571429,
+          "n": 14,
+          "empty": false
+        },
+        "interaction": {
+          "diff": 0.045454545454545456,
+          "lo": 0.0,
+          "hi": 0.11363636363636363,
+          "n_a": 11,
+          "n_b": 3,
+          "empty": false
+        },
+        "interaction_label": ">= 4 required facts \u2212 3 required facts"
+      }
+    }
+  },
+  "fact_partition": {
+    "anchor": {
+      "D_vs_matched": {
+        "label": "passage baseline top-20 (budget-matched)",
+        "rule": "anchor",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "AlexNet",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "BERT",
+              "Transformer"
+            ],
+            "off-passage": [
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Enigma",
+              "Alan Turing"
+            ],
+            "off-passage": [
+              "Turing Test"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Cypher",
+              "Neo4j",
+              "Knowledge Graph"
+            ],
+            "off-passage": [
+              "GraphRAG"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 33,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 21,
+          "graph": {
+            "point": 0.8571428571428571,
+            "lo": 0.6521739130434783,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.1428571428571429,
+            "lo": -0.34782608695652173,
+            "hi": 0.0,
+            "share_below": 0.8823,
+            "share_zero": 0.1177,
+            "share_above": 0.0
+          }
+        },
+        "interaction": {
+          "point": -0.1428571428571429,
+          "lo": -0.34782608695652173,
+          "hi": 0.0,
+          "share_below": 0.8823,
+          "share_zero": 0.1177,
+          "share_above": 0.0
+        }
+      },
+      "D_vs_default": {
+        "label": "passage baseline top-4 (production default)",
+        "rule": "anchor",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "AlexNet",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "BERT",
+              "Transformer"
+            ],
+            "off-passage": [
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Enigma",
+              "Alan Turing"
+            ],
+            "off-passage": [
+              "Turing Test"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Cypher",
+              "Neo4j",
+              "Knowledge Graph"
+            ],
+            "off-passage": [
+              "GraphRAG"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 33,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 21,
+          "graph": {
+            "point": 0.8571428571428571,
+            "lo": 0.6521739130434783,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7142857142857143,
+            "lo": 0.47368421052631576,
+            "hi": 0.9473684210526315,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.1428571428571428,
+            "lo": 0.0,
+            "hi": 0.29999999999999993,
+            "share_below": 0.0,
+            "share_zero": 0.035,
+            "share_above": 0.965
+          }
+        },
+        "interaction": {
+          "point": 0.1428571428571428,
+          "lo": 0.0,
+          "hi": 0.29999999999999993,
+          "share_below": 0.0,
+          "share_zero": 0.035,
+          "share_above": 0.965
+        }
+      },
+      "C_vs_matched": {
+        "label": "passage baseline top-10 (budget-matched)",
+        "rule": "anchor",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "AlexNet",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [
+              "AlexNet"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "BERT",
+              "Transformer"
+            ],
+            "off-passage": [
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Enigma",
+              "Alan Turing"
+            ],
+            "off-passage": [
+              "Turing Test"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Cypher",
+              "Neo4j",
+              "Knowledge Graph"
+            ],
+            "off-passage": [
+              "GraphRAG"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [
+              "Attention Is All You Need"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 33,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 21,
+          "graph": {
+            "point": 0.6666666666666666,
+            "lo": 0.4090909090909091,
+            "hi": 0.9,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.9047619047619048,
+            "lo": 0.7,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.23809523809523814,
+            "lo": -0.47058823529411764,
+            "hi": -0.04761904761904767,
+            "share_below": 0.9898,
+            "share_zero": 0.0102,
+            "share_above": 0.0
+          }
+        },
+        "interaction": {
+          "point": -0.23809523809523814,
+          "lo": -0.47058823529411764,
+          "hi": -0.04761904761904767,
+          "share_below": 0.9898,
+          "share_zero": 0.0102,
+          "share_above": 0.0
+        }
+      },
+      "C_vs_default": {
+        "label": "passage baseline top-4 (production default)",
+        "rule": "anchor",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "AlexNet",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [
+              "AlexNet"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "BERT",
+              "Transformer"
+            ],
+            "off-passage": [
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Enigma",
+              "Alan Turing"
+            ],
+            "off-passage": [
+              "Turing Test"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Cypher",
+              "Neo4j",
+              "Knowledge Graph"
+            ],
+            "off-passage": [
+              "GraphRAG"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [
+              "Attention Is All You Need"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 33,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 21,
+          "graph": {
+            "point": 0.6666666666666666,
+            "lo": 0.4090909090909091,
+            "hi": 0.9047619047619048,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7142857142857143,
+            "lo": 0.47619047619047616,
+            "hi": 0.9473684210526315,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.04761904761904767,
+            "lo": -0.35,
+            "hi": 0.21739130434782605,
+            "share_below": 0.5498,
+            "share_zero": 0.1324,
+            "share_above": 0.3178
+          }
+        },
+        "interaction": {
+          "point": -0.04761904761904767,
+          "lo": -0.35,
+          "hi": 0.21739130434782605,
+          "share_below": 0.5498,
+          "share_zero": 0.1324,
+          "share_above": 0.3178
+        }
+      },
+      "D_vs_d0": {
+        "label": "its own seeds with the edges deleted (d0)",
+        "rule": "anchor",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "AlexNet",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "BERT",
+              "Transformer"
+            ],
+            "off-passage": [
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Enigma",
+              "Alan Turing"
+            ],
+            "off-passage": [
+              "Turing Test"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Cypher",
+              "Neo4j",
+              "Knowledge Graph"
+            ],
+            "off-passage": [
+              "GraphRAG"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 33,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 21,
+          "graph": {
+            "point": 0.8571428571428571,
+            "lo": 0.6521739130434783,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7619047619047619,
+            "lo": 0.5238095238095238,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.09523809523809523,
+            "lo": 0.0,
+            "hi": 0.21739130434782605,
+            "share_below": 0.0,
+            "share_zero": 0.1148,
+            "share_above": 0.8852
+          }
+        },
+        "interaction": {
+          "point": 0.09523809523809523,
+          "lo": 0.0,
+          "hi": 0.21739130434782605,
+          "share_below": 0.0,
+          "share_zero": 0.1148,
+          "share_above": 0.8852
+        }
+      }
+    },
+    "top1": {
+      "D_vs_matched": {
+        "label": "passage baseline top-20 (budget-matched)",
+        "rule": "top1",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "ImageNet",
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "Transformer"
+            ],
+            "off-passage": [
+              "BERT",
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Alan Turing",
+              "Turing Test"
+            ],
+            "off-passage": [
+              "Enigma"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Knowledge Graph",
+              "GraphRAG"
+            ],
+            "off-passage": [
+              "Cypher",
+              "Neo4j"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 32,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 22,
+          "graph": {
+            "point": 0.8636363636363636,
+            "lo": 0.6666666666666666,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.13636363636363635,
+            "lo": -0.33333333333333337,
+            "hi": 0.0,
+            "share_below": 0.883,
+            "share_zero": 0.117,
+            "share_above": 0.0
+          }
+        },
+        "interaction": {
+          "point": -0.13636363636363635,
+          "lo": -0.33333333333333337,
+          "hi": 0.0,
+          "share_below": 0.883,
+          "share_zero": 0.117,
+          "share_above": 0.0
+        }
+      },
+      "D_vs_default": {
+        "label": "passage baseline top-4 (production default)",
+        "rule": "top1",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "ImageNet",
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "Transformer"
+            ],
+            "off-passage": [
+              "BERT",
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Alan Turing",
+              "Turing Test"
+            ],
+            "off-passage": [
+              "Enigma"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Knowledge Graph",
+              "GraphRAG"
+            ],
+            "off-passage": [
+              "Cypher",
+              "Neo4j"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 32,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 22,
+          "graph": {
+            "point": 0.8636363636363636,
+            "lo": 0.6666666666666666,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7272727272727273,
+            "lo": 0.4782608695652174,
+            "hi": 0.95,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.13636363636363635,
+            "lo": 0.0,
+            "hi": 0.2857142857142857,
+            "share_below": 0.0,
+            "share_zero": 0.0355,
+            "share_above": 0.9645
+          }
+        },
+        "interaction": {
+          "point": 0.13636363636363635,
+          "lo": 0.0,
+          "hi": 0.2857142857142857,
+          "share_below": 0.0,
+          "share_zero": 0.0355,
+          "share_above": 0.9645
+        }
+      },
+      "C_vs_matched": {
+        "label": "passage baseline top-10 (budget-matched)",
+        "rule": "top1",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "ImageNet",
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [
+              "AlexNet"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "Transformer"
+            ],
+            "off-passage": [
+              "BERT",
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Alan Turing",
+              "Turing Test"
+            ],
+            "off-passage": [
+              "Enigma"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Knowledge Graph",
+              "GraphRAG"
+            ],
+            "off-passage": [
+              "Cypher",
+              "Neo4j"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [
+              "Attention Is All You Need"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 32,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 22,
+          "graph": {
+            "point": 0.6818181818181818,
+            "lo": 0.42857142857142855,
+            "hi": 0.9047619047619048,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.9090909090909091,
+            "lo": 0.7142857142857143,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.2272727272727273,
+            "lo": -0.4545454545454546,
+            "hi": -0.045454545454545414,
+            "share_below": 0.9926,
+            "share_zero": 0.0074,
+            "share_above": 0.0
+          }
+        },
+        "interaction": {
+          "point": -0.2272727272727273,
+          "lo": -0.4545454545454546,
+          "hi": -0.045454545454545414,
+          "share_below": 0.9926,
+          "share_zero": 0.0074,
+          "share_above": 0.0
+        }
+      },
+      "C_vs_default": {
+        "label": "passage baseline top-4 (production default)",
+        "rule": "top1",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "ImageNet",
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [
+              "AlexNet"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "Transformer"
+            ],
+            "off-passage": [
+              "BERT",
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Alan Turing",
+              "Turing Test"
+            ],
+            "off-passage": [
+              "Enigma"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Knowledge Graph",
+              "GraphRAG"
+            ],
+            "off-passage": [
+              "Cypher",
+              "Neo4j"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [
+              "Attention Is All You Need"
+            ],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 32,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 22,
+          "graph": {
+            "point": 0.6818181818181818,
+            "lo": 0.43478260869565216,
+            "hi": 0.9090909090909091,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7272727272727273,
+            "lo": 0.4782608695652174,
+            "hi": 0.95,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": -0.045454545454545525,
+            "lo": -0.32000000000000006,
+            "hi": 0.20833333333333326,
+            "share_below": 0.5556,
+            "share_zero": 0.1312,
+            "share_above": 0.3132
+          }
+        },
+        "interaction": {
+          "point": -0.045454545454545525,
+          "lo": -0.32000000000000006,
+          "hi": 0.20833333333333326,
+          "share_below": 0.5556,
+          "share_zero": 0.1312,
+          "share_above": 0.3132
+        }
+      },
+      "D_vs_d0": {
+        "label": "its own seeds with the edges deleted (d0)",
+        "rule": "top1",
+        "detail": [
+          {
+            "qid": "q01",
+            "in-passage": [
+              "Deep Blue",
+              "IBM"
+            ],
+            "off-passage": [
+              "Tabulating Machine Company",
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": [
+              "Herman Hollerith"
+            ]
+          },
+          {
+            "qid": "q02",
+            "in-passage": [
+              "Ada Lovelace",
+              "Analytical Engine"
+            ],
+            "off-passage": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ],
+            "graph_missed": [
+              "Jacquard Loom"
+            ],
+            "baseline_missed": [
+              "Punched Cards",
+              "Jacquard Loom"
+            ]
+          },
+          {
+            "qid": "q03",
+            "in-passage": [
+              "Charles Babbage",
+              "Analytical Engine",
+              "Punched Cards"
+            ],
+            "off-passage": [
+              "Herman Hollerith"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q04",
+            "in-passage": [
+              "AlexNet",
+              "Geoffrey Hinton"
+            ],
+            "off-passage": [
+              "Backpropagation"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q05",
+            "in-passage": [
+              "ImageNet",
+              "Fei-Fei Li",
+              "Stanford University"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q06",
+            "in-passage": [
+              "GPT",
+              "OpenAI",
+              "Ilya Sutskever"
+            ],
+            "off-passage": [
+              "AlexNet"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q07",
+            "in-passage": [
+              "Transformer"
+            ],
+            "off-passage": [
+              "BERT",
+              "Self-Attention"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q08",
+            "in-passage": [
+              "Cornell Aeronautical Laboratory",
+              "Perceptron"
+            ],
+            "off-passage": [
+              "Backpropagation",
+              "Geoffrey Hinton"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q09",
+            "in-passage": [
+              "Alan Turing",
+              "Turing Test"
+            ],
+            "off-passage": [
+              "Enigma"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q10",
+            "in-passage": [
+              "Knowledge Graph",
+              "GraphRAG"
+            ],
+            "off-passage": [
+              "Cypher",
+              "Neo4j"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q11",
+            "in-passage": [
+              "Hallucination",
+              "Retrieval-Augmented Generation"
+            ],
+            "off-passage": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "graph_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ],
+            "baseline_missed": [
+              "GraphRAG",
+              "Knowledge Graph"
+            ]
+          },
+          {
+            "qid": "q12",
+            "in-passage": [
+              "BERT",
+              "Transformer",
+              "Google"
+            ],
+            "off-passage": [
+              "Attention Is All You Need"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q13",
+            "in-passage": [
+              "Computer Vision",
+              "ImageNet"
+            ],
+            "off-passage": [
+              "AlexNet",
+              "GPU"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          },
+          {
+            "qid": "q14",
+            "in-passage": [
+              "Lisp",
+              "John McCarthy",
+              "Dartmouth Workshop"
+            ],
+            "off-passage": [
+              "Marvin Minsky",
+              "Perceptron"
+            ],
+            "graph_missed": [],
+            "baseline_missed": []
+          }
+        ],
+        "n_questions": 14,
+        "in-passage": {
+          "n_facts": 32,
+          "graph": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 1.0,
+            "lo": 1.0,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "share_below": 0.0,
+            "share_zero": 1.0,
+            "share_above": 0.0
+          }
+        },
+        "off-passage": {
+          "n_facts": 22,
+          "graph": {
+            "point": 0.8636363636363636,
+            "lo": 0.6666666666666666,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "base": {
+            "point": 0.7727272727272727,
+            "lo": 0.5416666666666666,
+            "hi": 1.0,
+            "share_below": 0.0,
+            "share_zero": 0.0,
+            "share_above": 1.0
+          },
+          "delta": {
+            "point": 0.09090909090909094,
+            "lo": 0.0,
+            "hi": 0.20833333333333337,
+            "share_below": 0.0,
+            "share_zero": 0.1135,
+            "share_above": 0.8865
+          }
+        },
+        "interaction": {
+          "point": 0.09090909090909094,
+          "lo": 0.0,
+          "hi": 0.20833333333333337,
+          "share_below": 0.0,
+          "share_zero": 0.1135,
+          "share_above": 0.8865
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,4 @@
+# The HotpotQA dev-distractor split is ~45 MB. It is a *cache*, not source:
+# `python -m benchmarks.public.hotpotqa --stats` re-creates it from the network.
+# A blob that size must never enter the repository.
+data/
