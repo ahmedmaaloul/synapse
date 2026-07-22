@@ -38,5 +38,5 @@ neo4j==5.27.0
 networkx>=3.2,<4
 
 # ── Config ──────────────────────────────────────────
-python-dotenv==1.0.1
+python-dotenv==1.2.2
 pydantic-settings==2.7.0
