@@ -69,4 +69,4 @@ langchain-mistralai==0.2.10
 # Depends on langchain-community>=0.3.0, already pinned to 0.3.14 by
 # requirements.txt — install that file first (or both together) so its pin wins.
 # 0.4.6 requires langchain-core>=0.3.76; 0.5+ requires core 1.x.
-langchain-cohere==0.4.5
+langchain-cohere==0.6.0
