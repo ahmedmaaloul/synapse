@@ -38,3 +38,9 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+# Research paper + findings — kept LOCAL, deliberately not published
+# (removed from git history; see ~/synapse-paper-backup-* for the safety copy).
+paper/
+backend/research/
+backend/benchmarks/public/results_hotpotqa.md
