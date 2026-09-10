@@ -9,7 +9,10 @@ mocked via the ``fake_neo4j`` fixture instead.
 """
 
 import json
+import math
 import re
+import tomllib
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -123,6 +126,13 @@ def test_about_reports_authorship_and_license(client):
     assert body["llm_provider"] and body["embedding_provider"]
 
 
+def test_about_reports_the_packaged_version(client):
+    """``/api/about`` and pyproject.toml drifted apart once (0.2.0 vs 0.3.0)."""
+    pyproject = Path(__file__).resolve().parent.parent / "pyproject.toml"
+    packaged = tomllib.loads(pyproject.read_text(encoding="utf-8"))["project"]["version"]
+    assert client.get("/api/about").json()["version"] == packaged
+
+
 def test_process_time_header_present(client):
     r = client.get("/health")
     assert "X-Process-Time" in r.headers
@@ -219,10 +229,12 @@ class TestUpload:
 
 class TestChat:
     def test_streams_sse_events(self, client, monkeypatch):
+        usage = {"context_chars": 7, "context_tokens_est": 2, "answer_chars": 5}
+
         async def fake_gen(question, history):
             yield {"type": "citations", "data": [{"name": "Ada", "type": "PERSON"}]}
             yield {"type": "token", "data": "Hello"}
-            yield {"type": "done"}
+            yield {"type": "done", "usage": usage}
 
         monkeypatch.setattr(chat_router, "generate_rag_response", fake_gen)
 
@@ -236,10 +248,160 @@ class TestChat:
             if line.startswith("data: ")
         ]
         assert [e["type"] for e in events] == ["citations", "token", "done"]
+        # ``usage`` rides on the closing frame untouched — a client that
+        # ignores it still sees a plain ``done``.
+        assert events[-1] == {"type": "done", "usage": usage}
 
     def test_rejects_empty_query(self, client):
         r = client.post("/api/chat", json={"query": ""})
         assert r.status_code == 422  # pydantic min_length
+
+
+class _StubRetrieval(tuple):
+    """What ``retrieve_subgraph`` hands back: a ``(context, citations)`` 2-tuple
+    that also exposes ``.context``, ``.citations``, ``.paths``, ``.mode`` and
+    ``.sources``. Mirrored here so the router is tested against that contract
+    rather than against the engine's own class."""
+
+    def __new__(cls, context, citations, paths=(), mode="local", sources=()):
+        self = super().__new__(cls, (context, citations))
+        self.context, self.citations = context, citations
+        self.paths, self.mode, self.sources = list(paths), mode, list(sources)
+        return self
+
+
+def _stub_retrieve(monkeypatch, retrieval=None, *, raises=None) -> list[tuple[str, int]]:
+    """Replace the router's ``retrieve_subgraph``; returns the ``(query, k)`` calls."""
+    calls: list[tuple[str, int]] = []
+
+    async def fake_retrieve(question, k=8):
+        calls.append((question, k))
+        if raises is not None:
+            raise raises
+        return retrieval
+
+    monkeypatch.setattr(chat_router, "retrieve_subgraph", fake_retrieve)
+    return calls
+
+
+SAMPLE_RETRIEVAL = _StubRetrieval(
+    "Entity: Ada (Type: PERSON)\n  Description: mathematician\n  Relationships:\n"
+    "  → WORKED_ON → Analytical Engine (TOOL)",
+    [{"name": "Ada", "type": "PERSON", "kind": "entity"}],
+    paths=[
+        {
+            "nodes": ["Ada", "Analytical Engine"],
+            "rels": ["WORKED_ON"],
+            "dirs": [True],
+            "text": "Ada -[WORKED_ON]-> Analytical Engine",
+        }
+    ],
+    sources=[
+        {
+            "id": "c1",
+            "document": "history.pdf",
+            "index": 0,
+            "text": "Ada Lovelace wrote the first published algorithm.",
+            "score": 0.9,
+        }
+    ],
+)
+
+
+class TestRetrieve:
+    def test_returns_context_and_usage_without_generating(self, client, monkeypatch):
+        calls = _stub_retrieve(monkeypatch, SAMPLE_RETRIEVAL)
+        generated: list[str] = []
+
+        def fake_gen(question, history):
+            generated.append(question)
+            raise AssertionError("/api/retrieve must never generate an answer")
+
+        monkeypatch.setattr(chat_router, "generate_rag_response", fake_gen)
+
+        r = client.post("/api/retrieve", json={"query": "who is ada?"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["mode"] == "local"
+        assert body["context"] == SAMPLE_RETRIEVAL.context
+        assert body["citations"] == SAMPLE_RETRIEVAL.citations
+        assert body["paths"] == SAMPLE_RETRIEVAL.paths
+        # Sources go through the same transport shrink as the chat event:
+        # provenance fields only, no retrieval score.
+        assert body["sources"] == [
+            {
+                "id": "c1",
+                "document": "history.pdf",
+                "index": 0,
+                "text": "Ada Lovelace wrote the first published algorithm.",
+            }
+        ]
+        assert body["usage"] == {
+            "context_chars": len(SAMPLE_RETRIEVAL.context),
+            "context_tokens_est": math.ceil(len(SAMPLE_RETRIEVAL.context) / 4),
+            "truncated": False,
+            "citations": 1,
+            "paths": 1,
+            "sources": 1,
+        }
+        assert calls == [("who is ada?", 8)]
+        assert generated == []  # the whole point: no second LLM call on this side
+
+    def test_k_is_passed_through(self, client, monkeypatch):
+        calls = _stub_retrieve(monkeypatch, SAMPLE_RETRIEVAL)
+        r = client.post("/api/retrieve", json={"query": "who is ada?", "k": 3})
+        assert r.status_code == 200
+        assert calls == [("who is ada?", 3)]
+
+    def test_budget_truncates_the_context_and_says_so(self, client, monkeypatch):
+        lines = [f"Entity: E{i:02d} (Type: T)" for i in range(40)]
+        _stub_retrieve(monkeypatch, _StubRetrieval("\n".join(lines), []))
+
+        r = client.post(
+            "/api/retrieve", json={"query": "list entities", "max_context_chars": 300}
+        )
+        assert r.status_code == 200
+        body = r.json()
+        context = body["context"]
+        assert context.endswith("…[context truncated to 300 chars]")
+        kept, _marker = context.rsplit("\n", 1)
+        assert len(kept) <= 300
+        assert kept.splitlines() == lines[: len(kept.splitlines())]  # whole lines only
+        assert body["usage"]["truncated"] is True
+        assert body["usage"]["context_chars"] == len(context)
+        assert body["usage"]["context_tokens_est"] == math.ceil(len(context) / 4)
+
+    def test_context_within_budget_is_untouched(self, client, monkeypatch):
+        _stub_retrieve(monkeypatch, SAMPLE_RETRIEVAL)
+        r = client.post(
+            "/api/retrieve", json={"query": "who is ada?", "max_context_chars": 10_000}
+        )
+        assert r.status_code == 200
+        assert r.json()["context"] == SAMPLE_RETRIEVAL.context
+        assert r.json()["usage"]["truncated"] is False
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"query": ""},
+            {"query": "who is ada?", "k": 0},
+            {"query": "who is ada?", "k": 21},
+            {"query": "who is ada?", "max_context_chars": 10},
+        ],
+        ids=["empty-query", "k=0", "k=21", "budget-too-small"],
+    )
+    def test_rejects_out_of_range_input(self, client, monkeypatch, payload):
+        calls = _stub_retrieve(monkeypatch, SAMPLE_RETRIEVAL)
+        r = client.post("/api/retrieve", json=payload)
+        assert r.status_code == 422
+        assert calls == []  # validation happens before any graph work
+
+    def test_retrieval_failure_is_a_500_without_leaking_internals(self, client, monkeypatch):
+        _stub_retrieve(monkeypatch, raises=RuntimeError("bolt://neo4j:7687 refused"))
+        r = client.post("/api/retrieve", json={"query": "who is ada?"})
+        assert r.status_code == 500
+        assert r.json() == {"detail": "Failed to query the knowledge graph."}
+        assert "neo4j" not in r.text
 
 
 # ── A database holding everything the visualization must NOT show ───────────

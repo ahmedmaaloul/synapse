@@ -72,6 +72,27 @@ services:
     depends_on:
       - backend
 
+  # ──────────────────────────────────────────────
+  # MCP server (streamable-HTTP) — opt-in profile:
+  #   docker compose --profile mcp up -d   →  http://localhost:8765/mcp
+  # Off by default so `make up` stays the three-service stack.
+  # ──────────────────────────────────────────────
+  mcp:
+    profiles: ["mcp"]
+    build:
+      # Repo root, NOT ./packages/synapse-graphrag — same LICENSE/NOTICE reason.
+      context: .
+      dockerfile: packages/synapse-graphrag/Dockerfile
+    container_name: synapse-mcp
+    environment:
+      # Talks to the backend over the compose network, not the host port.
+      - SYNAPSE_URL=http://backend:8000
+    ports:
+      - "${MCP_PORT:-8765}:8765"
+    depends_on:
+      backend:
+        condition: service_healthy
+
 volumes:
   neo4j_data:
   neo4j_logs:

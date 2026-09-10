@@ -2,6 +2,8 @@
 
 A production deploy is three managed pieces: **Neo4j Aura** (database),
 **Fly.io or Render** (backend), and **Vercel** (frontend). Each has a free tier.
+An optional fourth — the **MCP server** for agent hosts — runs from a published
+container image; see [Container images (GHCR)](#container-images-ghcr).
 
 ```mermaid
 flowchart LR
@@ -105,6 +107,94 @@ Two deployment-specific gotchas:
 2. Add env var `NEXT_PUBLIC_API_URL = https://synapse-backend.fly.dev` **[you]**.
 3. Deploy. Then set the backend's `CORS_ORIGINS` to the Vercel URL and redeploy
    the backend so the browser is allowed to call it.
+
+---
+
+## Container images (GHCR)
+
+Every `v*` tag runs [`.github/workflows/release.yml`](./.github/workflows/release.yml), which
+builds and pushes three images to the GitHub Container Registry:
+
+| Image | Built from | Tags |
+| --- | --- | --- |
+| `ghcr.io/ahmedmaaloul/synapse-backend` | `backend/Dockerfile` | `<version>` · `<major>.<minor>` · `latest` (`latest` is skipped for pre-release tags) |
+| `ghcr.io/ahmedmaaloul/synapse-frontend` | `frontend/Dockerfile` (build-arg `NEXT_PUBLIC_API_URL` from the repo variable of the same name, default `http://localhost:8000`) | same |
+| `ghcr.io/ahmedmaaloul/synapse-mcp` | `packages/synapse-graphrag/Dockerfile` | same |
+
+All three are built from the **repo root** so `LICENSE` and `NOTICE` ship inside them. Pin the
+version you deploy — `latest` moves on every release:
+
+```bash
+docker pull ghcr.io/ahmedmaaloul/synapse-backend:0.4.0
+docker pull ghcr.io/ahmedmaaloul/synapse-mcp:0.4.0
+```
+
+The images appear when a `v*` tag is pushed and the release workflow finishes — nothing is
+published from `main` alone.
+
+### The MCP server over HTTP, behind an authenticating proxy
+
+The MCP image runs `synapse-mcp --transport streamable-http --host 0.0.0.0 --port 8765` and
+serves the protocol at **`/mcp`**. It carries **no authentication of its own**, and neither does
+the backend it talks to, so the pattern for anything beyond localhost is:
+
+1. keep the backend reachable **only** from the MCP container (compose network, private subnet,
+   or the same host) — never publish port 8000;
+2. publish the MCP server through a reverse proxy that authenticates — and terminates TLS —
+   before forwarding to `:8765`.
+
+```bash
+# MCP server next to a backend on the same private network
+docker run -d --name synapse-mcp --network synapse_default \
+  -e SYNAPSE_URL=http://synapse-backend:8000 \
+  -p 127.0.0.1:8765:8765 \
+  ghcr.io/ahmedmaaloul/synapse-mcp:0.4.0
+```
+
+A minimal [Caddy](https://caddyserver.com/) front, shared-secret style — hosts send the token as
+`Authorization: Bearer …`:
+
+```caddyfile
+mcp.example.com {
+    @unauthorized not header Authorization "Bearer {env.MCP_TOKEN}"
+    respond @unauthorized 401
+    reverse_proxy 127.0.0.1:8765
+}
+```
+
+Then register the remote server in the client (`claude mcp add --transport http synapse
+https://mcp.example.com/mcp`, or the `url` form in Cursor / VS Code — see
+[docs/mcp.md](./docs/mcp.md#install-per-client)). The same trick works one layer down: if you put
+an authenticating gateway in front of the *backend*, set `SYNAPSE_API_KEY` on the MCP server and
+it is forwarded as `Authorization: Bearer …` on every backend request.
+
+With docker compose, the `mcp` profile does steps 1–2 minus the proxy:
+`docker compose --profile mcp up -d` publishes `${MCP_PORT:-8765}` and points the server at
+`http://backend:8000`.
+
+| Variable | MCP server | Notes |
+| --- | :--: | --- |
+| `SYNAPSE_URL` | ✅ | backend base URL (`http://backend:8000` inside compose) |
+| `SYNAPSE_API_KEY` | optional | forwarded as a Bearer token to an authenticating gateway in front of the backend |
+| `SYNAPSE_MAX_CONTEXT_CHARS` / `SYNAPSE_CACHE_TTL` / `SYNAPSE_TIMEOUT` | optional | context budget, retrieve cache, HTTP timeout — see [docs/mcp.md](./docs/mcp.md#environment-variables) |
+| `MCP_PORT` | compose only | host port for the `mcp` profile (default 8765) |
+
+### Publishing the package to PyPI
+
+The release workflow's `publish-pypi` job is **opt-in** and uses PyPI trusted publishing (OIDC —
+no API token stored anywhere). It only runs when the repository variable `PYPI_PUBLISH` is
+`true`. One-time setup **[you]**:
+
+1. On PyPI, open the `synapse-graphrag` project (or *Your projects → Publishing* for a pending
+   first release) → **Add a new publisher** → GitHub: owner `ahmedmaaloul`, repository
+   `synapse`, workflow `release.yml`, environment `pypi`.
+2. In the GitHub repo: *Settings → Environments* → create `pypi` (optionally with required
+   reviewers, which turns every publish into an approval click).
+3. *Settings → Secrets and variables → Actions → Variables* → `PYPI_PUBLISH` = `true`.
+
+Until step 3 the job is skipped and everything else in the release — images, GitHub Release,
+attached wheel and sdist — still ships. Set `PYPI_PUBLISH` back to anything else to pause
+publishing without touching the workflow.
 
 ---
 

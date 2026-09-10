@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import pkg from "../../../package.json";
 import {
   ChevronRight,
   FileText,
@@ -319,7 +320,7 @@ export default function ChatPanel({
           <Sparkles size={13} className="text-indigo-400" />
           GraphRAG Chat
         </h3>
-        <div className="font-mono text-[11px] text-[#71717a]">v0.3.0</div>
+        <div className="font-mono text-[11px] text-[#71717a]">v{pkg.version}</div>
       </div>
 
       {/* Messages */}

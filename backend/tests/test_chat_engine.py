@@ -12,8 +12,10 @@ from app.services.chat_engine import (
     _to_lc_history,
     build_reasoning_paths,
     classify_query,
+    estimate_tokens,
     generate_rag_response,
     retrieve_subgraph,
+    truncate_context,
 )
 
 
@@ -705,6 +707,54 @@ class TestSourceExcerpts:
         assert names[:3] == ["E0", "E1", "E2"]
 
 
+# ── Context budget ───────────────────────────────────────────────────────────
+class TestContextBudget:
+    def test_no_budget_is_a_no_op(self):
+        assert truncate_context("a\nb\nc", None) == ("a\nb\nc", False)
+
+    def test_text_that_fits_is_untouched(self):
+        text = "line one\nline two"
+        assert truncate_context(text, len(text)) == (text, False)
+
+    def test_cuts_at_the_last_line_boundary_within_budget(self):
+        text = "line one\nline two\nline three"
+        cut, truncated = truncate_context(text, 20)
+        assert truncated is True
+        assert cut == "line one\nline two\n…[context truncated to 20 chars]"
+
+    def test_a_newline_exactly_at_the_budget_counts(self):
+        text = "line one\nline two\nline three"  # "\n" at index 17
+        cut, _ = truncate_context(text, 17)
+        assert cut.startswith("line one\nline two\n…")
+
+    def test_hard_cuts_when_the_line_boundary_would_waste_the_budget(self):
+        text = "ab\n" + "x" * 100  # the only newline keeps 2 of 50 chars
+        cut, truncated = truncate_context(text, 50)
+        assert truncated is True
+        assert cut == text[:50] + "\n…[context truncated to 50 chars]"
+
+    def test_keep_ratio_is_the_threshold(self):
+        # A newline that keeps exactly 60% of the budget is still preferred…
+        text = "a" * 60 + "\n" + "b" * 100
+        cut, _ = truncate_context(text, 100)
+        assert cut == "a" * 60 + "\n…[context truncated to 100 chars]"
+        # …one char short of that and the hard cut wins.
+        text = "a" * 59 + "\n" + "b" * 100
+        cut, _ = truncate_context(text, 100)
+        assert cut == text[:100] + "\n…[context truncated to 100 chars]"
+
+    def test_marker_states_the_budget(self):
+        cut, _ = truncate_context("x" * 500, 200)
+        assert cut.endswith("…[context truncated to 200 chars]")
+
+    @pytest.mark.parametrize(
+        ("text", "tokens"),
+        [("", 0), ("abcd", 1), ("abcde", 2), ("x" * 4000, 1000)],
+    )
+    def test_estimate_tokens_is_ceil_of_chars_over_four(self, text, tokens):
+        assert estimate_tokens(text) == tokens
+
+
 # ── Streaming ────────────────────────────────────────────────────────────────
 class _Chunk:
     def __init__(self, content):
@@ -736,6 +786,35 @@ class TestStreaming:
         assert "paths" not in types  # no paths → no empty event
         assert types[-1] == "done"
         assert "".join(e["data"] for e in events if e["type"] == "token") == "Hello world"
+
+    async def test_done_event_reports_what_the_answer_cost(self, monkeypatch):
+        async def fake_retrieve(q, k=8):
+            return "CONTEXT", [{"name": "Ada", "type": "PERSON"}]
+
+        monkeypatch.setattr(chat_engine, "retrieve_subgraph", fake_retrieve)
+        _install_fake_llm(monkeypatch)  # streams "Hello world"
+
+        events = [e async for e in generate_rag_response("hi", [])]
+        assert events[-1] == {
+            "type": "done",
+            "usage": {
+                "context_chars": len("CONTEXT"),
+                "context_tokens_est": estimate_tokens("CONTEXT"),
+                "answer_chars": len("Hello world"),
+            },
+        }
+
+    async def test_usage_counts_the_context_the_model_actually_saw(self, monkeypatch):
+        """An empty retrieval is prompted as a placeholder sentence — count that."""
+
+        async def fake_retrieve(q, k=8):
+            return "", []
+
+        monkeypatch.setattr(chat_engine, "retrieve_subgraph", fake_retrieve)
+        _install_fake_llm(monkeypatch)
+
+        events = [e async for e in generate_rag_response("hi", [])]
+        assert events[-1]["usage"]["context_chars"] == len("No relevant information found.")
 
     async def test_events_order_citations_paths_tokens_done(self, monkeypatch):
         paths = [

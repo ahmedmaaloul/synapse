@@ -1,0 +1,5 @@
+# The sdist carries everything needed to run the test suite and build the image;
+# LICENSE/NOTICE/README come from pyproject (license-files / readme).
+graft tests
+include server.json Dockerfile
+global-exclude __pycache__ *.py[cod] .DS_Store

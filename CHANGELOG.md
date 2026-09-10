@@ -11,12 +11,77 @@ closed-source, proprietary or SaaS use.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-09
+
+The release that turns Synapse into a GraphRAG *engine* you can call from anywhere: entity
+resolution, communities and multi-hop reasoning inside; a retrieval-only API, an MCP server, a CLI
+and a Python client outside; and release automation that ships all of it on a tag.
+
 ### Added
 
+- **GraphRAG "brain".** *Entity resolution* merges near-duplicates only when embedding-cosine
+  **and** fuzzy-name similarity agree, and never across entity types. *Communities:* Louvain
+  clustering (`networkx`, `seed=42`, reproducible) with LLM-written titles and summaries, exposed
+  at `GET /api/communities` and rebuildable on an existing graph with `POST /api/communities/rebuild`
+  (SSE progress). *Query routing:* corpus-level questions are answered from community summaries
+  ("global" search), specific ones from the subgraph ("local" search). *Multi-hop retrieval:*
+  the reasoning paths between seed entities are returned alongside the answer, bounded by
+  `retrieval_max_hops`. *Source chunks:* text units are persisted as `(:Chunk)` nodes linked to
+  their entities and returned as `sources`, so answers carry graph structure **and** verbatim
+  evidence, with provenance shown in the UI.
+- **`POST /api/retrieve`** — retrieval only, no generation. Returns the GraphRAG context with
+  `citations`, `paths` and `sources`, cut to an optional `max_context_chars` budget at the
+  last line boundary that keeps most of it, plus a `usage` block (`context_chars`, `context_tokens_est`,
+  `truncated`, and the citation / path / source counts). Built for MCP and agent hosts that
+  already have an LLM and should not pay for a second one.
+- **`usage` on the chat `done` event** (`context_chars`, `context_tokens_est`, `answer_chars`).
+  Additive; the frontend event type accepts it.
+- **`synapse-graphrag`** — a new package in `packages/synapse-graphrag/` (PyPI name
+  `synapse-graphrag`, Python ≥ 3.11, runtime deps `mcp`, `httpx` and `pydantic` only):
+  - an **MCP server** (`synapse-mcp`, stdio or streamable HTTP at `/mcp`) with eight tools —
+    `synapse_retrieve`, `synapse_ask`, `synapse_ingest_pdf`, `synapse_communities`,
+    `synapse_find_entities`, `synapse_graph_stats`, `synapse_status`, `synapse_clear_graph` — a
+    `synapse://about` resource and the `answer_with_graph` and `safety_brief` prompts; `synapse_retrieve` applies a
+    default budget (`SYNAPSE_MAX_CONTEXT_CHARS`), a TTL cache (`SYNAPSE_CACHE_TTL`) and reports
+    `usage.cached`;
+  - a **CLI** (`synapse-graphrag status | ask | retrieve | ingest | communities | stats | mcp |
+    install-config`) that prints ready-to-paste config for Claude Code, Claude Desktop, Cursor,
+    VS Code and Windsurf;
+  - an **async Python client** (`SynapseClient`) covering every endpoint, with an SSE parser
+    for the streaming ones.
+  - Shipped as a `synapse-mcp` Docker image and a `docker compose --profile mcp` service; guide in
+    [`docs/mcp.md`](./docs/mcp.md).
+- **`AI Safety` extraction theme** (`--theme "AI Safety"` on the CLI, *AI Safety / Evals* in the
+  UI): a safety vocabulary — `MODEL`, `CAPABILITY`, `RISK`, `FAILURE_MODE`, `MITIGATION`,
+  `EVALUATION`, `BENCHMARK`, `INCIDENT`, `POLICY`, `DATASET` — linked by `EXHIBITS`, `POSES`,
+  `MITIGATES`, `EVALUATED_BY`, `MEASURES`, `GOVERNS` and friends, with extraction rules that label
+  every risk `demonstrated:` or `hypothesised:` and forbid invented incidents; plus a
+  `safety_brief` MCP prompt that writes a structured, cited brief. Guide:
+  [`docs/ai-safety.md`](./docs/ai-safety.md).
+- **FinOps guide** — [`docs/finops.md`](./docs/finops.md): where a GraphRAG dollar goes, the setting
+  that bounds each cost, and the context-budget tooling above.
+- **Research-grade benchmark reporting** (`backend/benchmarks/`, `make benchmark`): both scoring
+  rules reported side by side, an effect-size floor below which a gap is "too close to call", and
+  numbers generated into the benchmark README by the script and guarded by a test so they cannot
+  rot. Source retrieval is now **rank-aware** — chunks are ordered by how many seed entities they
+  mention, then by best seed rank, *before* the limit is applied.
+- **HotpotQA / 2WikiMultihopQA harness** (`backend/benchmarks/public/`): dataset loaders with
+  fingerprinted caches, a deterministic seeded sampler, a token/USD cost ledger, a `--dry-run`
+  that spends nothing and a hard `--questions` cap.
+- **Release automation.** Pushing a `v*` tag runs `.github/workflows/release.yml`: a version
+  consistency check across the four version sources, changelog-section extraction, sdist + wheel
+  build, GHCR images (`synapse-backend`, `synapse-frontend`, `synapse-mcp`), a GitHub Release
+  with the changelog section as notes, and opt-in PyPI trusted publishing. Helpers in `scripts/`
+  (`check_versions.py`, `changelog_section.py`), `make release-check`, and a branch-protection
+  ruleset (`scripts/ruleset-main.json`, `make protect-main`).
+- CI gained an `MCP package · lint, tests & build` job and builds the MCP image; Dependabot
+  watches the package; the devcontainer installs it in editable mode. Documentation:
+  [`docs/mcp.md`](./docs/mcp.md), and new sections in `ARCHITECTURE.md` (clients, context budget),
+  `DEPLOYMENT.md` (GHCR images, PyPI) and `CONTRIBUTING.md` (cutting a release).
 - Community & DX scaffolding: GitHub issue forms (bug report, feature request, **new AI provider
   request**), pull-request template wired to the real `make test` / `make lint` gates, Code of
   Conduct (Contributor Covenant 2.1), `CHANGELOG.md`, `.editorconfig`, Dependabot config, and a
-  one-click **GitHub Codespaces devcontainer** (Python 3.12 + Node 20, ports 3000/8000/7474/7687).
+  one-click **GitHub Codespaces devcontainer** (Python 3.12 + Node 20, ports 3000/8000/8765/7474/7687).
 
 ### Changed
 
@@ -33,9 +98,22 @@ closed-source, proprietary or SaaS use.
 - `/api/graph-data` is now scoped to `:Entity`. Community detection writes `(:Community)` nodes
   joined by `[:IN_COMMUNITY]`; the previously unscoped `MATCH (n)` would have pulled those into
   the visualization as unnamed grey nodes.
+- Community clustering, which is CPU-bound, runs in a worker thread (`asyncio.to_thread`)
+  instead of blocking the event loop.
+- Dependabot no longer proposes LangChain-stack bumps: the effective `langchain-core` ceiling
+  cannot be expressed as a semver rule, so those upgrades are done by hand with the suites green.
+- Contact address is **ahmed.maaloul@proton.me** everywhere — SPDX headers, `LICENSE`,
+  `NOTICE`, package metadata and `/api/about`.
 
 ### Fixed
 
+- **Silent data loss in entity merging.** A null-unsafe Cypher predicate dropped relationships
+  to nameless nodes, duplicates were deleted even when the canonical node was absent, and
+  relationships with unsafe types were deleted rather than rewired.
+- **CI built the Docker images from the wrong context.** After both images moved to a
+  repo-root build context (so they can `COPY LICENSE NOTICE`), the workflow still ran
+  `docker build ./backend` and failed with `"/NOTICE": not found`. It now builds with
+  `-f backend/Dockerfile .` and asserts the notices are present inside the image.
 - **PEP 639 build break.** `backend/pyproject.toml` declared both an SPDX `license` expression and
   the legacy `License :: OSI Approved :: ...` classifier; setuptools ≥77 refuses that combination
   and fails the build outright.
@@ -122,7 +200,8 @@ retrieval, streaming end to end, and a test suite plus CI that keep it honest.
 - Initial prototype: FastAPI service, Next.js UI, and the first end-to-end
   document-to-graph-to-answer loop.
 
-[Unreleased]: https://github.com/ahmedmaaloul/synapse/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/ahmedmaaloul/synapse/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/ahmedmaaloul/synapse/releases/tag/v0.4.0
 [0.3.0]: https://github.com/ahmedmaaloul/synapse/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/ahmedmaaloul/synapse/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/ahmedmaaloul/synapse/releases/tag/v0.1.0

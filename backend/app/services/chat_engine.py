@@ -36,12 +36,15 @@ RAG, the engine *routes* the question and retrieves accordingly:
 The engine yields *typed events* ({"type": "citations"|"paths"|"sources"
 |"token"|"done"|"error"}) so the frontend can render streamed tokens, highlight
 the exact entities that grounded the answer, draw the reasoning chain, and show
-the source excerpts the answer was written from.
+the source excerpts the answer was written from. ``done`` carries a ``usage``
+block — the size of the context prompted and of the answer written — so every
+answer's cost is visible, not just its text.
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections import deque
 from collections.abc import AsyncGenerator
@@ -638,6 +641,47 @@ def _sources_payload(chunks: list[dict]) -> list[dict]:
     return payload
 
 
+# ── Context budget ───────────────────────────────────────────────────────────
+# ``/api/retrieve`` hands the context to a caller that runs its *own* model, so
+# every character returned is on that caller's bill. The budget is a cut made
+# after retrieval rather than a knob threaded through every stage: retrieval
+# already emits its parts in priority order (ranked seeds, then reasoning
+# paths, then excerpts), so the tail is by construction the least valuable
+# part and the cheapest to lose.
+TRUNCATION_KEEP_RATIO = 0.6  # a line-boundary cut must keep this much of the budget
+CHARS_PER_TOKEN = 4  # rough English average across the common tokenizers
+
+
+def truncate_context(context: str, max_chars: int | None) -> tuple[str, bool]:
+    """Cut ``context`` down to ``max_chars``; returns ``(text, truncated)``.
+
+    A no-op when there is no budget or the text already fits. Otherwise the cut
+    lands on the last newline at or before the budget — a whole line is a
+    whole fact, half a line is a fact the model will finish for itself — unless
+    that newline sits so early it would waste more than
+    ``1 - TRUNCATION_KEEP_RATIO`` of the budget, in which case the text is
+    hard-cut at ``max_chars``. A trailing marker states the budget, so the
+    consumer knows the evidence in front of it is partial.
+    """
+    if max_chars is None or len(context) <= max_chars:
+        return context, False
+    cut = context.rfind("\n", 0, max_chars + 1)
+    if cut < max_chars * TRUNCATION_KEEP_RATIO:
+        cut = max_chars
+    return f"{context[:cut]}\n…[context truncated to {max_chars} chars]", True
+
+
+def estimate_tokens(text: str) -> int:
+    """Approximate token count: ``ceil(len(text) / CHARS_PER_TOKEN)``.
+
+    A heuristic by design. The caller's tokenizer is unknown — that is the
+    point of handing context to someone else's model — and a free estimate
+    within ±25% is more useful for budgeting than an exact count for the wrong
+    model.
+    """
+    return math.ceil(len(text) / CHARS_PER_TOKEN)
+
+
 # ── Retrieval result ─────────────────────────────────────────────────────────
 class Retrieval(tuple):
     """Retrieval result: ``(context, citations)`` plus GraphRAG extras.
@@ -834,22 +878,34 @@ async def generate_rag_response(
     if sources:
         yield {"type": "sources", "data": _sources_payload(sources)}
 
+    prompt_context = context or "No relevant information found."
+    answer_chars = 0
     try:
         llm = get_chat_llm(streaming=True, temperature=settings.chat_temperature)
         chain = RAG_PROMPT | llm
         async for chunk in chain.astream(
             {
-                "context": context or "No relevant information found.",
+                "context": prompt_context,
                 "question": question,
                 "history": _to_lc_history(history),
             }
         ):
             token = getattr(chunk, "content", "")
             if token:
+                answer_chars += len(token)
                 yield {"type": "token", "data": token}
     except Exception as e:  # noqa: BLE001
         logger.exception("Generation failed: %s", e)
         yield {"type": "error", "data": f"Generation failed: {e}"}
         return
 
-    yield {"type": "done"}
+    # What this answer cost to prompt and to write, in the units
+    # ``/api/retrieve`` reports, so a UI or an agent can budget either path.
+    yield {
+        "type": "done",
+        "usage": {
+            "context_chars": len(prompt_context),
+            "context_tokens_est": estimate_tokens(prompt_context),
+            "answer_chars": answer_chars,
+        },
+    }
