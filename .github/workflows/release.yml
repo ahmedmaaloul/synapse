@@ -1,0 +1,221 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
+# Synapse — https://github.com/ahmedmaaloul/synapse
+#
+# Release pipeline. Pushing a `vX.Y.Z` tag (see CONTRIBUTING.md, "Cutting a
+# release") builds and publishes everything for that version:
+#
+#   verify ──┬── package ──── publish-pypi   (only when vars.PYPI_PUBLISH == 'true')
+#            │       │
+#            └── images ─┴─── github-release
+#
+#   verify          the four version sources must equal the tag, and CHANGELOG.md
+#                   must have a `## [X.Y.Z]` section — its body becomes the notes
+#   package         sdist + wheel of packages/synapse-graphrag, twine-checked
+#   publish-pypi    PyPI trusted publishing (OIDC, no API token) — opt-in via the
+#                   repository variable PYPI_PUBLISH=true and a `pypi` environment
+#   images          ghcr.io/<owner>/synapse-{backend,frontend,mcp}:{X.Y.Z, X.Y, latest}
+#   github-release  GitHub Release "Synapse vX.Y.Z" with the dist/ files attached
+#
+# Re-runnable: an existing release is updated in place (assets re-uploaded with
+# --clobber, notes refreshed from the changelog). `workflow_dispatch` takes an
+# existing tag for the same purpose.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to (re)publish, e.g. v0.4.0"
+        required: true
+        type: string
+
+# Least privilege by default; jobs that publish widen their own scope.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  # ── Gate: nothing ships unless the tree agrees with the tag ──
+  verify:
+    name: Verify versions & changelog
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: All version sources must equal the tag
+        run: python scripts/check_versions.py "$TAG"
+      - name: Extract the CHANGELOG section as release notes
+        id: meta
+        run: |
+          VERSION="${TAG#v}"
+          python scripts/changelog_section.py "$VERSION" > notes.md
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in
+            *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+          { echo "## Release notes for $TAG"; echo; cat notes.md; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: notes.md
+          if-no-files-found: error
+
+  # ── Python package: sdist + wheel ──
+  package:
+    name: Build synapse-graphrag (sdist + wheel)
+    needs: verify
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/synapse-graphrag
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install build tooling
+        run: pip install build twine
+      - name: Build
+        run: python -m build
+      - name: Twine check
+        run: twine check dist/*
+      - name: Smoke-test the wheel in a clean venv
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          "$RUNNER_TEMP/wheel-venv/bin/pip" install --quiet dist/*.whl
+          "$RUNNER_TEMP/wheel-venv/bin/synapse-graphrag" --version
+          "$RUNNER_TEMP/wheel-venv/bin/synapse-mcp" --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: packages/synapse-graphrag/dist/
+          if-no-files-found: error
+
+  # ── PyPI via trusted publishing (OIDC). Opt-in so a fork or a dry run
+  # never tries to publish: set the repo variable PYPI_PUBLISH=true and
+  # register this workflow + the `pypi` environment as a trusted publisher on
+  # pypi.org (DEPLOYMENT.md). No token is stored anywhere. ──
+  publish-pypi:
+    name: Publish to PyPI (trusted publishing)
+    needs: [verify, package]
+    if: vars.PYPI_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/synapse-graphrag/${{ needs.verify.outputs.version }}/
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          print-hash: true
+
+  # ── Container images → GHCR. All three build from the REPO ROOT so they can
+  # COPY LICENSE and NOTICE (same convention as ci.yml / docker-compose.yml). ──
+  images:
+    name: Image · ${{ matrix.name }}
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: backend/Dockerfile
+          - name: frontend
+            dockerfile: frontend/Dockerfile
+            # Baked in at build time (Next.js public env); override per deployment.
+            build_args: NEXT_PUBLIC_API_URL=${{ vars.NEXT_PUBLIC_API_URL || 'http://localhost:8000' }}
+          - name: mcp
+            dockerfile: packages/synapse-graphrag/Dockerfile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/synapse-${{ matrix.name }}
+          # `value=` makes semver work for workflow_dispatch too, where there is
+          # no tag ref on the event. `latest` is skipped for pre-releases.
+          tags: |
+            type=semver,pattern={{version}},value=${{ env.TAG }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ env.TAG }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.prerelease != 'true' }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build_args }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  # ── GitHub Release: notes from the changelog, dist/ attached ──
+  github-release:
+    name: GitHub Release
+    needs: [verify, package, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+      - name: Create the release, or update it if it already exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [ "$PRERELEASE" = "true" ]; then PRERELEASE_FLAG="--prerelease"; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG exists — re-uploading assets and refreshing notes"
+            gh release upload "$TAG" dist/* --clobber
+            gh release edit "$TAG" --title "Synapse $TAG" --notes-file notes.md $PRERELEASE_FLAG
+          else
+            gh release create "$TAG" --verify-tag --title "Synapse $TAG" \
+              --notes-file notes.md $PRERELEASE_FLAG dist/*
+          fi
+          gh release view "$TAG" --json url --jq .url

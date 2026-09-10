@@ -17,6 +17,10 @@ flowchart TB
         GP[GraphPanel] -->|GET /graph-data| API
     end
 
+    subgraph Agents [MCP hosts · CLI · SDK]
+        MCP[synapse-graphrag] -->|POST /retrieve · budgeted JSON| API
+    end
+
     subgraph Engine [FastAPI]
         API[/REST + SSE/] --> GB[graph_builder]
         API --> CE[chat_engine]
@@ -137,6 +141,14 @@ semantic ones), deduped, and the **top-k ranked seeds become the citations** —
 their neighborhoods enrich the LLM context but don't dilute the ranking. This
 ordering is what took Hit@1 from 12% → 88% in the eval.
 
+The same retrieval is exposed **without generation** as `POST /api/retrieve`.
+It returns the formatted context, the citations, the multi-hop reasoning
+paths and the source excerpts under an optional `max_context_chars` budget,
+plus a `usage` block — `context_chars`, `context_tokens_est`, `truncated`, and
+the citation / path / source counts. `/api/chat` reports the same `context_*`
+figures, plus `answer_chars`, on its `done` event. This is the endpoint the MCP
+server and the CLI build on; see [Clients](#clients-mcp-server-cli-and-sdk).
+
 ## Graph model
 
 ```mermaid
@@ -160,6 +172,67 @@ erDiagram
 - Embeddings are stored via `db.create.setNodeVectorProperty` and **never shipped
   to the browser** (stripped in the graph endpoint).
 
+## Clients: MCP server, CLI and SDK
+
+`packages/synapse-graphrag/` ships three front doors to the same engine — an
+[MCP](https://modelcontextprotocol.io) server (`synapse-mcp`), a CLI
+(`synapse-graphrag`) and an async Python client (`SynapseClient`) — and all
+three are **thin HTTP clients** over the API above. The package depends on
+`mcp` and `httpx` and nothing else.
+
+```mermaid
+flowchart LR
+    H[Claude Code · Claude Desktop<br/>Cursor · VS Code · Windsurf] -->|stdio or streamable HTTP| S[synapse-mcp]
+    CLI[synapse-graphrag CLI] --> C
+    SDK[SynapseClient] --> C
+    S --> C[httpx client]
+    C -->|/api/retrieve · /api/chat · /api/upload · …| API[FastAPI engine]
+```
+
+**Why not embed the engine in the package?** Because the engine is the part
+that owns secrets and state. Importing `chat_engine` into an agent host would
+drag LangChain, the Neo4j driver, every provider SDK and the provider
+credentials into that process — a process the user does not administer and
+often cannot audit. Keeping the engine behind HTTP means one deployment to
+secure, one schema to migrate, one place credentials live, and a client that
+installs in seconds with `uvx`. It also keeps the wire contract honest: the
+UI, the CLI and the MCP tools all consume the same endpoints, so a change that
+breaks one breaks the tests of all three.
+
+The MCP surface is deliberately small — eight tools, one resource and two
+prompts (`answer_with_graph`, `safety_brief`) — and the tool the server's
+instructions steer the model towards is
+`synapse_retrieve`, which returns context rather than an answer. The host
+already has a model; the `synapse_ask` tool exists for hosts that want the
+backend's provider to generate, and its description says plainly that it is a
+second LLM call. Tool annotations (`readOnlyHint`, `destructiveHint`) let hosts
+auto-approve reads and confirm the one destructive tool, `synapse_clear_graph`,
+which additionally refuses unless called with `confirm=true`.
+
+### Context budget
+
+Retrieval on a well-connected graph produces more text than a question needs:
+eight seeds, their 1-hop neighborhoods, the reasoning paths between them and
+the top source excerpts can run to many thousands of characters, and every
+character is a token the host's model pays for. `POST /api/retrieve` therefore
+accepts `max_context_chars` and enforces it in the engine, not the client:
+
+- The context lists the **highest-ranked entities first**, so truncating the
+  tail loses the least relevant material.
+- The cut happens at the **last line break** at or before the budget, provided
+  that keeps at least 60 % of it; otherwise it is a hard cut. Either way a
+  trailing `…[context truncated to N chars]` marker tells the model the context
+  is partial.
+- The response carries `usage` — `context_chars`, `context_tokens_est`
+  (`ceil(chars / 4)`, a deliberately provider-agnostic heuristic), `truncated`,
+  and the counts of citations, paths and sources — so callers can log cost per
+  question without a tokenizer.
+
+The MCP server layers a default budget (`SYNAPSE_MAX_CONTEXT_CHARS`, 6000) and
+a TTL cache keyed by `(query, k, budget)` on top, and adds `usage.cached` so a
+repeated question is visibly free. Nothing in the budget is model-specific;
+that is the point — the engine does not know which model will read the context.
+
 ## Design decisions
 
 | Decision | Why |
@@ -169,6 +242,8 @@ erDiagram
 | **`fastembed` as default embeddings** | Real semantic retrieval with **no API key and no GPU** — the demo works offline. A `fake` deterministic embedder keeps tests hermetic. |
 | **Pre-extracted demo graph** | `backend/scripts/seed_demo.py` loads a curated graph through the *production* write path (`ensure_schema` → `_embed_entities` → `_write_entities` → `_write_relationships`), skipping only the LLM extraction step. A fresh clone therefore shows a real, populated graph with **no API key** — see `make demo`. |
 | **SSE over WebSockets** | Streaming is one-directional (server→client). SSE is simpler, proxy-friendly, and needs no extra client library. |
+| **Retrieval-only endpoint + context budget** | `POST /api/retrieve` returns budgeted context with `usage` and no generation, so an MCP host or agent that already has an LLM pays for one generation, not two. The budget is enforced server-side and reported, never silently applied — see [Context budget](#context-budget). |
+| **Clients are thin HTTP wrappers** | The MCP server, CLI and SDK never import the engine: secrets, schema and provider SDKs stay in one deployable, and the package installs with `uvx` in seconds — see [Clients](#clients-mcp-server-cli-and-sdk). |
 | **In-memory job bus** | Single-replica-appropriate and dependency-free. The interface is deliberately small so swapping in Redis pub/sub for horizontal scaling is mechanical. |
 | **Best-effort degradation** | No vector index yet? Fall back to full-text. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
 | **Diffed graph polling** | The client only re-heats the force simulation when the node/link set actually changes, avoiding constant jitter. |

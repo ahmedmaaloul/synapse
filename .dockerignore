@@ -43,6 +43,11 @@ env
 **/.ruff_cache
 dist
 build
+# Bare `dist`/`build` only match at the context root; the MCP image COPYs
+# packages/synapse-graphrag/ wholesale, so its local build outputs need the
+# nested form (egg-info is already covered by **/*.egg-info above).
+packages/**/dist
+packages/**/build
 
 # Docs & screenshots — pure weight, nothing imports them.
 docs/*.png

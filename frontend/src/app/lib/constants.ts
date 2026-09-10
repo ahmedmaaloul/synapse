@@ -29,6 +29,17 @@ export const TYPE_COLORS: Record<string, string> = {
   LAW: "#f43f5e",
   PRODUCT: "#f59e0b",
   FINANCIAL_METRIC: "#22c55e",
+  // AI safety / evals
+  MODEL: "#6366f1",
+  CAPABILITY: "#22d3ee",
+  RISK: "#ef4444",
+  FAILURE_MODE: "#f97316",
+  MITIGATION: "#10b981",
+  EVALUATION: "#0ea5e9",
+  BENCHMARK: "#3b82f6",
+  INCIDENT: "#dc2626",
+  POLICY: "#eab308",
+  DATASET: "#14b8a6",
   // Generic
   CONCEPT: "#a78bfa",
   EVENT: "#fb923c",
@@ -47,6 +58,7 @@ export const THEMES: { value: Theme; label: string }[] = [
   { value: "Generic", label: "Generic / Other" },
   { value: "Medical/Scientific", label: "Medical / Scientific" },
   { value: "Business/Legal", label: "Business / Legal" },
+  { value: "AI Safety", label: "AI Safety / Evals" },
 ];
 
 // Pipeline stage → human label. Keep in sync with `IngestStage` and with

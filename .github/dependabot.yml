@@ -47,6 +47,23 @@ updates:
       - dependency-name: "langchain-anthropic"
       - dependency-name: "langsmith"
 
+  # ── MCP package (pip, PEP 621 pyproject) ─────────────────
+  - package-ecosystem: pip
+    directory: /packages/synapse-graphrag
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "mcp"]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      dev-tooling:
+        patterns: ["pytest*", "ruff", "build", "twine"]
+
   # ── Frontend (npm) ───────────────────────────────────────
   - package-ecosystem: npm
     directory: /frontend

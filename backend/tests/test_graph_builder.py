@@ -69,6 +69,19 @@ class TestPromptSchema:
         rendered = prompt.format(text="t", theme="x", document_name="d")
         assert "CONCEPT" in rendered  # from the Generic schema
 
+    def test_ai_safety_theme_types_and_rules(self):
+        prompt = get_extraction_prompt("AI Safety")
+        rendered = prompt.format(text="t", theme="AI Safety", document_name="d")
+        for token in ("FAILURE_MODE", "MITIGATION", "INCIDENT", "MITIGATES", "EVALUATED_BY"):
+            assert token in rendered
+        assert "demonstrated:" in rendered and "hypothesised:" in rendered
+        assert "Never invent an incident" in rendered
+
+    def test_safety_rules_do_not_leak_into_other_themes(self):
+        prompt = get_extraction_prompt("Generic")
+        rendered = prompt.format(text="t", theme="Generic", document_name="d")
+        assert "SAFETY SPECIFIC" not in rendered
+
 
 class TestBuildKnowledgeGraph:
     async def test_end_to_end_with_mocks(self, monkeypatch, fake_neo4j):

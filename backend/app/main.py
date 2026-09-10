@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 Neo4j driver closed")
 
 
-APP_VERSION = "0.2.0"
+APP_VERSION = "0.4.0"
 AUTHOR = "Ahmed Maaloul"
 AUTHOR_EMAIL = "ahmed.maaloul@proton.me"
 REPO_URL = "https://github.com/ahmedmaaloul/synapse"

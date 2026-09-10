@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.ahmedmaaloul/synapse",
+  "description": "Budgeted GraphRAG context (no second LLM bill), entity search and PDF ingestion on a Synapse graph.",
+  "repository": {
+    "url": "https://github.com/ahmedmaaloul/synapse",
+    "source": "github"
+  },
+  "version": "0.4.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "synapse-graphrag",
+      "version": "0.4.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "runtimeHint": "uvx",
+      "environmentVariables": [
+        {
+          "name": "SYNAPSE_URL",
+          "description": "Base URL of the Synapse backend (FastAPI) the server talks to.",
+          "isRequired": false,
+          "default": "http://localhost:8000"
+        },
+        {
+          "name": "SYNAPSE_API_KEY",
+          "description": "Optional bearer token forwarded as Authorization: Bearer for an authenticating proxy in front of the backend.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "SYNAPSE_MAX_CONTEXT_CHARS",
+          "description": "Default character budget for synapse_retrieve: 0 disables the budget, otherwise at least 200 (the backend's floor).",
+          "isRequired": false,
+          "default": "6000"
+        },
+        {
+          "name": "SYNAPSE_CACHE_TTL",
+          "description": "Seconds identical retrievals are served from the in-process cache (0 disables).",
+          "isRequired": false,
+          "default": "300"
+        }
+      ]
+    }
+  ]
+}

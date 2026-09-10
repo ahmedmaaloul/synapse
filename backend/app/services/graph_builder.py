@@ -60,6 +60,10 @@ THEMES: dict[str, dict[str, list[str]]] = {
         "entities": ["COMPANY", "PERSON", "CONTRACT", "LAW", "FINANCIAL_METRIC", "PRODUCT", "LOCATION"],
         "relationships": ["OWNS", "PARTNERS_WITH", "REGULATES", "SUED_BY", "SELLS", "EMPLOYS"],
     },
+    "AI Safety": {
+        "entities": ["MODEL", "ORGANIZATION", "PERSON", "CAPABILITY", "RISK", "FAILURE_MODE", "MITIGATION", "EVALUATION", "BENCHMARK", "INCIDENT", "POLICY", "DATASET", "CONCEPT"],
+        "relationships": ["DEVELOPED_BY", "EXHIBITS", "POSES", "MITIGATES", "EVALUATED_BY", "MEASURES", "INVOLVED_IN", "GOVERNS", "PROPOSED_BY", "RELATED_TO"],
+    },
     "Generic": {
         "entities": ["PERSON", "ORGANIZATION", "CONCEPT", "EVENT", "LOCATION", "THING"],
         "relationships": ["RELATED_TO", "PART_OF", "CAUSED", "PARTICIPATED_IN"],
@@ -81,6 +85,19 @@ def get_extraction_prompt(theme: str) -> ChatPromptTemplate:
 8. CV SPECIFIC: Extract highly granular skills and technologies. Instead of generic terms like 'Data Science', extract "Python", "Pandas", "React", "Docker", "PyTorch" as individual SKILL or TOOL entities.
 9. CV SPECIFIC: Always ensure the main PERSON is linked directly to their skills using HAS_SKILL or USES_TOOL.
 10. CV SPECIFIC: Capture all universities and companies as UNIVERSITY and COMPANY, linked to the PERSON via STUDIED_AT and WORKED_AT.
+"""
+    elif theme == "AI Safety":
+        # Safety literature mixes observations with forecasts; keeping the two
+        # apart in the description is what lets a downstream brief say which is
+        # which. Canonical model names stop "GPT-4" / "GPT-4 (March 2023)" from
+        # becoming two nodes, and the last rule is the one that matters most:
+        # a graph that contains an incident the corpus does not is worse than
+        # an empty one.
+        extra_instructions = """
+8. SAFETY SPECIFIC: Start every RISK and FAILURE_MODE description with "demonstrated:" when the text reports an observation (an eval result, an incident, a red-team finding) and with "hypothesised:" when it is argued or forecast.
+9. SAFETY SPECIFIC: Use canonical model names ("GPT-4", "Claude 3 Opus", "Llama 3 70B") so versions of one model merge into a single MODEL entity, and link each MODEL to its ORGANIZATION with DEVELOPED_BY.
+10. SAFETY SPECIFIC: Link MITIGATION -> RISK with MITIGATES, MODEL -> FAILURE_MODE with EXHIBITS, EVALUATION or BENCHMARK -> CAPABILITY or RISK with MEASURES, and MODEL -> EVALUATION with EVALUATED_BY, so "which mitigations were actually evaluated" is a path in the graph.
+11. SAFETY SPECIFIC: Extract only the INCIDENT, EVALUATION and BENCHMARK entities the text names. Never invent an incident or a result.
 """
 
     system_prompt = f"""You are an elite knowledge graph extraction expert.

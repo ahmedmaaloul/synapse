@@ -114,7 +114,17 @@ export type ChatEvent =
   // actually retrieved — an answer grounded in the graph alone has none.
   | { type: "sources"; data: Source[] }
   | { type: "token"; data: string }
-  | { type: "done" }
+  // Closes the stream. `usage` is what this answer cost to prompt and to
+  // write (`context_tokens_est` is a chars/4 heuristic, not a tokenizer
+  // count); optional for resilience against older backends.
+  | {
+      type: "done";
+      usage?: {
+        context_chars: number;
+        context_tokens_est: number;
+        answer_chars: number;
+      };
+    }
   | { type: "error"; data: string };
 
 // Server-Sent Events emitted by the ingestion endpoint.
@@ -208,4 +218,5 @@ export type Theme =
   | "Technology, Tools & Docs"
   | "Generic"
   | "Medical/Scientific"
-  | "Business/Legal";
+  | "Business/Legal"
+  | "AI Safety";

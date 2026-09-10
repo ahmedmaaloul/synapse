@@ -16,6 +16,7 @@ Maintainer: **Ahmed Maaloul** <ahmed.maaloul@proton.me> ·
 - [Before opening a PR](#before-opening-a-pr)
 - [Conventions](#conventions)
 - [The dependency constraint you must respect](#the-dependency-constraint-you-must-respect)
+- [Cutting a release](#cutting-a-release)
 - [Licensing of contributions](#licensing-of-contributions)
 
 ---
@@ -50,6 +51,9 @@ pip install -r requirements.txt -r requirements-dev.txt
 
 # Frontend
 cd ../frontend && npm install
+
+# MCP server / CLI / Python client — needed by `make mcp-test` and `make release-check` (from the repo root)
+cd .. && pip install -e "packages/synapse-graphrag[dev]"
 ```
 
 Run it with `make up` (full Docker stack) or `make backend-dev` / `make frontend-dev` for local
@@ -234,6 +238,7 @@ Everything CI enforces, run locally:
 ```bash
 make lint     # ruff (backend) + eslint + tsc (frontend)
 make test     # backend hermetic unit tests
+make mcp-test # ruff + pytest for packages/synapse-graphrag (if you touched it)
 ```
 
 If you touched retrieval or ingestion, also run the integration tests and the eval against a local
@@ -282,6 +287,64 @@ with a real `pip install` — not by reading the changelog. Practically this mea
 pip explore the whole langchain 0.3 matrix and abort with `resolution-too-deep`).
 `backend/requirements-providers.txt` documents the exact reasoning per package — read it before
 adding a pin, and add the same kind of comment for yours.
+
+---
+
+## Cutting a release
+
+Releases are tag-driven: push `vX.Y.Z` and
+[`.github/workflows/release.yml`](./.github/workflows/release.yml) does the rest. The checks it
+runs are the same ones you can run locally, so a release that passes `make release-check` will
+not fail on the version or changelog steps.
+
+1. **Bump the four version sources** to the same `X.Y.Z` — the workflow refuses a tag that does
+   not match all of them:
+
+   | Source | Field |
+   | --- | --- |
+   | `backend/pyproject.toml` | `version = "X.Y.Z"` |
+   | `backend/app/main.py` | `APP_VERSION = "X.Y.Z"` (served by `/api/about`) |
+   | `packages/synapse-graphrag/pyproject.toml` | `version = "X.Y.Z"` |
+   | `frontend/package.json` (+ `package-lock.json`) | `cd frontend && npm version X.Y.Z --no-git-tag-version` |
+
+2. **Update `CHANGELOG.md`.** Rename `## [Unreleased]` to `## [X.Y.Z] — YYYY-MM-DD`, add a fresh
+   empty `## [Unreleased]` above it, and update the link references at the bottom
+   (`[Unreleased]: …/compare/vX.Y.Z...HEAD`, `[X.Y.Z]: …/compare/vPREV...vX.Y.Z`, or `…/releases/tag/vX.Y.Z` when the previous
+   version was never tagged, as for 0.4.0). The body of
+   that section becomes the GitHub Release notes verbatim.
+
+3. **Check locally** (once: `pip install -e "packages/synapse-graphrag[dev]"` — `release-check`
+   needs its `build` and `twine`):
+
+   ```bash
+   make release-check   # versions agree · changelog section exists · package builds
+   make test && make lint && make mcp-test
+   ```
+
+4. **Tag and push** (annotated tag; the tag and `main` go together):
+
+   ```bash
+   git commit -am "chore(release): vX.Y.Z"
+   git tag -a vX.Y.Z -m "Synapse vX.Y.Z"
+   git push origin main vX.Y.Z
+   ```
+
+**What the workflow does.** `verify` gates everything (`scripts/check_versions.py`, then
+`scripts/changelog_section.py` extracts the notes). From there it fans out: `package` (sdist +
+wheel of `synapse-graphrag`, `twine check`) feeds both `publish-pypi` (trusted publishing; runs
+only when the repository variable `PYPI_PUBLISH` is `true` — setup in
+[DEPLOYMENT.md](./DEPLOYMENT.md#publishing-the-package-to-pypi)) and `github-release`; `images`
+(backend, frontend and MCP images to GHCR, tagged `X.Y.Z`, `X.Y` and — for non-pre-release tags —
+`latest`) runs alongside; `github-release` waits for `package` + `images`, then creates the
+release with the changelog section as notes and the wheel and sdist attached. A tag containing
+`-` (e.g. `v0.5.0-rc1`) is marked a pre-release.
+
+**Re-running.** The workflow also accepts *Run workflow* (`workflow_dispatch`) with a `tag`
+input, so a transient failure can be re-run from the Actions tab without re-tagging; the
+`github-release` job uploads assets with `--clobber` when the release already exists. If the
+*tag itself* was wrong, delete it locally and remotely (`git tag -d vX.Y.Z && git push origin
+:refs/tags/vX.Y.Z`), fix, and tag again. Never move a tag that has already been published to
+PyPI — bump the version instead.
 
 ---
 

@@ -97,13 +97,46 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
 
-  # ── Both Docker images build cleanly ──
+  # ── MCP package: lint + hermetic tests + a wheel that installs and runs ──
+  mcp-package:
+    name: MCP package · lint, tests & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/synapse-graphrag
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: packages/synapse-graphrag/pyproject.toml
+      - name: Install package + dev tooling
+        run: pip install -e ".[dev]"
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Pytest
+        run: pytest -q
+      - name: Build sdist + wheel
+        run: python -m build
+      - name: Twine check
+        run: twine check dist/*
+      # A separate venv proves the wheel is self-contained: the editable install
+      # above would otherwise mask a missing package-data file or entry point.
+      - name: Install the wheel in a clean venv and run the entry points
+        run: |
+          python -m venv "$RUNNER_TEMP/wheel-venv"
+          "$RUNNER_TEMP/wheel-venv/bin/pip" install --quiet dist/*.whl
+          "$RUNNER_TEMP/wheel-venv/bin/synapse-graphrag" --version
+          "$RUNNER_TEMP/wheel-venv/bin/synapse-mcp" --help
+
+  # ── All three Docker images build cleanly ──
   docker-build:
     name: Docker · build images
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # Both images build from the REPO ROOT so they can COPY LICENSE and NOTICE
+      # All images build from the REPO ROOT so they can COPY LICENSE and NOTICE
       # (the attribution terms require the notices to ship inside distributed
       # container images). The Dockerfiles therefore reference paths like
       # `backend/requirements.txt`; building with `./backend` as the context
@@ -113,5 +146,9 @@ jobs:
         run: docker build -f backend/Dockerfile -t synapse-backend .
       - name: Build frontend image
         run: docker build -f frontend/Dockerfile -t synapse-frontend .
-      - name: Verify the notices actually ship inside the image
-        run: docker run --rm synapse-backend ls /app/LICENSE /app/NOTICE
+      - name: Build MCP server image
+        run: docker build -f packages/synapse-graphrag/Dockerfile -t synapse-mcp .
+      - name: Verify the notices actually ship inside the images
+        run: |
+          docker run --rm synapse-backend ls /app/LICENSE /app/NOTICE
+          docker run --rm synapse-mcp ls /app/LICENSE /app/NOTICE

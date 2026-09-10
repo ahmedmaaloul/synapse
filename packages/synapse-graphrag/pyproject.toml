@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "synapse-graphrag"
+version = "0.4.0"
+description = "MCP server, CLI and async client for Synapse — budgeted GraphRAG context for any LLM host"
+readme = "README.md"
+requires-python = ">=3.11"
+# PEP 639: an SPDX `license` expression and the legacy
+# "License :: OSI Approved :: ..." classifier are mutually exclusive —
+# setuptools>=77 hard-fails the build if both are present.
+license = "AGPL-3.0-or-later"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
+maintainers = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
+keywords = ["mcp", "model-context-protocol", "graphrag", "knowledge-graph", "rag", "neo4j", "llm", "claude", "cursor"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
+dependencies = [
+    "mcp>=2.0,<3",
+    "httpx>=0.27,<1",
+    "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+    "build>=1.2",
+    "twine>=5.0",
+]
+
+[project.scripts]
+synapse-graphrag = "synapse_graphrag.cli:main"
+synapse-mcp = "synapse_graphrag.mcp_server:main"
+
+[project.urls]
+Homepage = "https://github.com/ahmedmaaloul/synapse"
+Documentation = "https://github.com/ahmedmaaloul/synapse/blob/main/docs/mcp.md"
+Repository = "https://github.com/ahmedmaaloul/synapse"
+Issues = "https://github.com/ahmedmaaloul/synapse/issues"
+Changelog = "https://github.com/ahmedmaaloul/synapse/blob/main/CHANGELOG.md"
+License = "https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+synapse_graphrag = ["py.typed"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+# No "-q" here: CI and the Makefile pass it themselves (see backend/pyproject.toml).
+addopts = ""
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4"]
+ignore = [
+    "E501",   # long tool descriptions / prompts are fine
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
