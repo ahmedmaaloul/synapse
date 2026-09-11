@@ -123,10 +123,10 @@ export default function Home() {
                 href="https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE"
                 target="_blank"
                 rel="noreferrer"
-                title="Licensed under the GNU AGPL v3.0 or later"
+                title="Source-available under the PolyForm Noncommercial License 1.0.0 — commercial use requires a licence"
                 className="rounded border border-[#27272a] px-1.5 py-0.5 font-mono text-[10px] text-[#52525b] transition-colors hover:border-indigo-500/40 hover:text-[#a1a1aa]"
               >
-                AGPL-3.0
+                PolyForm-NC
               </a>
             </div>
             <div className="mb-1 h-px w-full bg-[#27272a]" />

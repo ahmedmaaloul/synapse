@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """API-level tests with the FastAPI TestClient (no real DB / LLM).
@@ -117,12 +117,15 @@ def test_about_reports_authorship_and_license(client):
     assert r.status_code == 200
     body = r.json()
     assert body["author"] == "Ahmed Maaloul"
-    assert body["license"] == "AGPL-3.0-or-later"
+    assert body["license"] == "PolyForm-Noncommercial-1.0.0"
     assert "Ahmed Maaloul" in r.text
-    assert "AGPL-3.0-or-later" in r.text
-    # AGPL §13: network users must be pointed at the corresponding source.
+    assert "PolyForm-Noncommercial-1.0.0" in r.text
+    # Network users are pointed at the source and told the terms: noncommercial
+    # use is free, any commercial use needs a licence, the client is Apache-2.0.
     assert body["source_code"] == "https://github.com/ahmedmaaloul/synapse"
+    assert body["commercial_license"]["required_for"].startswith("any commercial use")
     assert body["commercial_license"]["contact"] == "ahmed.maaloul@proton.me"
+    assert body["client_package"] == {"name": "synapse-graphrag", "license": "Apache-2.0"}
     assert body["llm_provider"] and body["embedding_provider"]
 
 

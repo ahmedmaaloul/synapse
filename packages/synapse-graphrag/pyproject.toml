@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 # PEP 639: an SPDX `license` expression and the legacy
 # "License :: OSI Approved :: ..." classifier are mutually exclusive —
 # setuptools>=77 hard-fails the build if both are present.
-license = "AGPL-3.0-or-later"
+license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
 authors = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
 maintainers = [{ name = "Ahmed Maaloul", email = "ahmed.maaloul@proton.me" }]
@@ -53,7 +53,7 @@ Documentation = "https://github.com/ahmedmaaloul/synapse/blob/main/docs/mcp.md"
 Repository = "https://github.com/ahmedmaaloul/synapse"
 Issues = "https://github.com/ahmedmaaloul/synapse/issues"
 Changelog = "https://github.com/ahmedmaaloul/synapse/blob/main/CHANGELOG.md"
-License = "https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE"
+License = "https://github.com/ahmedmaaloul/synapse/blob/main/packages/synapse-graphrag/LICENSE"
 
 [tool.setuptools.packages.find]
 where = ["src"]

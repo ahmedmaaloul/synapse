@@ -170,7 +170,7 @@ raises the `SynapseConnectionError` subclass.
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `SYNAPSE_URL` | `http://localhost:8000` | Backend base URL (`--url` overrides it). |
-| `SYNAPSE_API_KEY` | — | If set, sent as `Authorization: Bearer …`. The open-source backend ignores it; an authenticating proxy in front of it will not. |
+| `SYNAPSE_API_KEY` | — | If set, sent as `Authorization: Bearer …`. The Synapse backend itself ignores it; an authenticating proxy in front of it will not. |
 | `SYNAPSE_TIMEOUT` | `120` | Per-request timeout in seconds (also the idle timeout between SSE events). |
 | `SYNAPSE_MAX_CONTEXT_CHARS` | `6000` | Default budget for `synapse_retrieve` and `retrieve --budget`; `0` disables the budget; positive values below 200 (the backend's floor) are rejected. |
 | `SYNAPSE_CACHE_TTL` | `300` | Seconds identical retrievals are served from the cache; `0` disables it. |
@@ -188,9 +188,15 @@ such a proxy. The same applies to the MCP server over streamable HTTP: bind it t
 
 ## License
 
-AGPL-3.0-or-later — see [LICENSE](https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE)
-and [NOTICE](https://github.com/ahmedmaaloul/synapse/blob/main/NOTICE) (both ship in this
-package). A commercial license for closed-source or proprietary use is available from the
-author: ahmed.maaloul@proton.me.
+Apache-2.0 — see [LICENSE](https://github.com/ahmedmaaloul/synapse/blob/main/packages/synapse-graphrag/LICENSE)
+and [NOTICE](https://github.com/ahmedmaaloul/synapse/blob/main/packages/synapse-graphrag/NOTICE)
+(both ship in this package), so agents and products can talk to Synapse with no obligations
+beyond Apache's.
+
+The Synapse **backend** this package talks to is licensed separately: free for noncommercial
+use under the [PolyForm Noncommercial License 1.0.0](https://github.com/ahmedmaaloul/synapse/blob/main/LICENSE);
+any commercial use — by or for a business, internal or external, on-prem or SaaS — needs a
+[commercial licence](https://github.com/ahmedmaaloul/synapse/blob/main/COMMERCIAL-LICENSE.md)
+from the author: ahmed.maaloul@proton.me.
 
 Copyright (c) 2026 Ahmed Maaloul.

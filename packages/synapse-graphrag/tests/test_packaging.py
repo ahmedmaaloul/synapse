@@ -1,10 +1,11 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Packaging and attribution invariants.
 
-NOTICE requires LICENSE and NOTICE to travel with every distribution, so the
-copies inside this package must be byte-identical to the repo-root originals.
+This package is Apache-2.0 on its own — the backend it talks to is not — so the
+LICENSE and NOTICE shipped here must be the Apache pair, declared in pyproject
+and copied into the container image, never the repo-root PolyForm ones.
 Version numbers live in three places (pyproject, the installed metadata,
 server.json) and the release workflow refuses to ship if they drift.
 """
@@ -16,15 +17,12 @@ import re
 import tomllib
 from pathlib import Path
 
-import pytest
-
 import synapse_graphrag
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = PACKAGE_ROOT.parents[1]
 
 SPDX_HEADER = (
-    "# SPDX-License-Identifier: AGPL-3.0-or-later\n"
+    "# SPDX-License-Identifier: Apache-2.0\n"
     "# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>\n"
     "# Synapse — https://github.com/ahmedmaaloul/synapse\n"
 )
@@ -34,20 +32,23 @@ def _pyproject() -> dict:
     return tomllib.loads((PACKAGE_ROOT / "pyproject.toml").read_text())
 
 
-@pytest.mark.parametrize("name", ["LICENSE", "NOTICE"])
-def test_license_files_identical_to_repo_root(name: str):
-    original = REPO_ROOT / name
-    if not original.is_file():
-        pytest.skip(f"{name} not found at the repo root — running outside the monorepo")
-    assert (PACKAGE_ROOT / name).read_bytes() == original.read_bytes(), (
-        f"packages/synapse-graphrag/{name} drifted from the repo-root {name}"
-    )
+def test_license_is_the_apache_2_0_text():
+    text = (PACKAGE_ROOT / "LICENSE").read_text(encoding="utf-8")
+    assert text.startswith("Apache License")
+    assert "Version 2.0" in text
+
+
+def test_notice_names_the_apache_license_and_the_author():
+    text = (PACKAGE_ROOT / "NOTICE").read_text(encoding="utf-8")
+    assert "Apache License, Version 2.0" in text
+    assert "Ahmed Maaloul" in text
 
 
 def test_pyproject_declares_license_files_and_scripts():
     project = _pyproject()["project"]
-    assert project["license"] == "AGPL-3.0-or-later"
+    assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE", "NOTICE"]
+    assert project["urls"]["License"].endswith("/packages/synapse-graphrag/LICENSE")
     assert not any(c.startswith("License ::") for c in project["classifiers"])
     assert project["scripts"] == {
         "synapse-graphrag": "synapse_graphrag.cli:main",
@@ -77,7 +78,7 @@ def test_every_python_file_has_the_spdx_header():
 def test_dockerfile_has_the_spdx_header_and_ships_notices():
     dockerfile = (PACKAGE_ROOT / "Dockerfile").read_text()
     assert dockerfile.startswith(SPDX_HEADER)
-    assert "COPY LICENSE NOTICE /app/" in dockerfile
+    assert "COPY packages/synapse-graphrag/LICENSE packages/synapse-graphrag/NOTICE /app/" in dockerfile
     assert "EXPOSE 8765" in dockerfile
     assert '"synapse-mcp", "--transport", "streamable-http"' in dockerfile
     assert re.search(r"^USER \w+", dockerfile, re.MULTILINE), "the image must not run as root"

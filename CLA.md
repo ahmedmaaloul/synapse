@@ -1,10 +1,11 @@
 # Contributor License Agreement
 
 **Short version:** you keep the copyright to what you write. You additionally
-grant Ahmed Maaloul the right to ship your contribution under both the AGPL-3.0
-*and* the commercial license. Without that second right, Synapse could
-not offer a commercial license at all, and the dual-license model would break the
-first time a contribution was merged.
+grant Ahmed Maaloul the right to ship your contribution under both the PolyForm
+Noncommercial License *and* the commercial license — and, for the client
+package in `packages/synapse-graphrag/`, under Apache-2.0. Without that second
+right, Synapse could not offer a commercial license at all, and the
+dual-license model would break the first time a contribution was merged.
 
 This is the same arrangement used by Grafana, Elastic, Qt, and most other
 dual-licensed projects.
@@ -13,14 +14,17 @@ dual-licensed projects.
 
 ## Why this exists
 
-Synapse is [dual-licensed](./COMMERCIAL-LICENSE.md): free under
-AGPL-3.0-or-later, with a separate commercial license for closed-source use.
+Synapse is [dual-licensed](./COMMERCIAL-LICENSE.md): free under the PolyForm
+Noncommercial License 1.0.0 for noncommercial use, with a separate commercial
+license for any commercial use. The client package in
+`packages/synapse-graphrag/` is Apache-2.0.
 
 Copyright law makes that possible only if **one party can license the whole
 work**. When you contribute, you automatically own the copyright to your patch.
-If the project could only use it under the AGPL, then the commercial license
-could never include your code — and the project would have to either rip your
-contribution back out or stop offering commercial licenses.
+If the project could only use it under the PolyForm Noncommercial License,
+then the commercial license could never include your code — and the project
+would have to either rip your contribution back out or stop offering
+commercial licenses.
 
 This agreement solves that, and nothing more.
 
@@ -39,8 +43,9 @@ contribution you submit:
    non-exclusive, royalty-free, irrevocable copyright license to reproduce,
    prepare derivative works of, publicly display and perform, sublicense, and
    distribute your contribution and derivative works — **including the right to
-   license it under terms other than the AGPL, such as the project's commercial
-   license.**
+   license it under terms other than the PolyForm Noncommercial License,
+   such as the project's commercial license or, for the client package,
+   Apache-2.0.**
 
 3. **Patent license.** You grant a perpetual, worldwide, non-exclusive,
    royalty-free, irrevocable (except as stated below) patent license to make,

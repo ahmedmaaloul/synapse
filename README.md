@@ -11,7 +11,8 @@
 <!-- Enable after the first PyPI publish (vars.PYPI_PUBLISH=true on the release workflow):
 [![PyPI](https://img.shields.io/pypi/v/synapse-graphrag)](https://pypi.org/project/synapse-graphrag/)
 -->
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](./LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](./LICENSE)
+[![Client: Apache 2.0](https://img.shields.io/badge/Client-Apache_2.0-green.svg)](./packages/synapse-graphrag/LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
 [![Stars](https://img.shields.io/github/stars/ahmedmaaloul/synapse?style=flat&logo=github)](https://github.com/ahmedmaaloul/synapse/stargazers)
 [![Forks](https://img.shields.io/github/forks/ahmedmaaloul/synapse?style=flat&logo=github)](https://github.com/ahmedmaaloul/synapse/network/members)
@@ -354,27 +355,37 @@ Start with **[CONTRIBUTING.md](./CONTRIBUTING.md)** (dev setup, conventions, and
 
 ## 📄 Licensing
 
-Synapse is **dual-licensed**, and almost everyone only ever needs the free side.
+Synapse is **source-available**: free for noncommercial use, licensed for commercial use — and the
+client package is Apache-2.0.
 
-### ✅ Free under [AGPL-3.0-or-later](./LICENSE) — no permission, no cost, no registration
+### ✅ Free for noncommercial use under [PolyForm Noncommercial 1.0.0](./LICENSE) — no permission, no cost, no registration
 
-Use it, **fork it**, study it, modify it, self-host it (including at work and including to make
-money), sell hosting for it, and contribute back. The AGPL does **not** ban commercial use.
+Personal projects, research, study, teaching, hobby and amateur pursuits, and use by universities,
+public research organisations, charities and the other nonprofits the license names (public-safety,
+health and environmental organisations), and government institutions. Use it, **fork it**, study it,
+modify it, self-host it and contribute back. There is no copyleft, so you may keep your changes
+private. What it asks in return: keep the license and the attribution — the `Required Notice:` line
+at the top of [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE) — with every copy.
 
-What it asks in return is reciprocity: keep the license and the attribution
-(see [`NOTICE`](./NOTICE)), and — under **AGPL section 13** — if you run a *modified* Synapse as a
-network service, offer your users the corresponding source of your modified version.
+### 💼 A commercial license is needed if…
 
-### 💼 A commercial license is needed only if…
+…you use it **at or for a business** — in production or internally, on-prem or as SaaS — or **ship it
+inside a product**. Under this license, use by or for a company is commercial even when it is purely
+internal and nothing is ever redistributed: "we only run it on our own servers" still needs a license.
+Attribution is required either way (see [`NOTICE`](./NOTICE)).
 
-…you want to ship Synapse (or a derivative) inside a **closed-source product**, run a **proprietary
-SaaS** on a modified version without offering its source, **relicense** it under other terms, or your
-legal team **prohibits AGPL** dependencies. A commercial license waives the copyleft obligations
-(attribution is still required either way).
+### 🤖 The client package is Apache-2.0
 
-**Only Ahmed Maaloul can grant one.** Email **<ahmed.maaloul@proton.me>** with the subject
-`[Commercial License] <your company>`. Startups, academic spin-outs and nonprofits: say so, pricing
-is flexible. Full details and FAQ: **[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md)**.
+[`packages/synapse-graphrag/`](./packages/synapse-graphrag/) — the MCP server, CLI and Python SDK — is
+licensed under [Apache-2.0](./packages/synapse-graphrag/LICENSE) so agents and products can talk to
+Synapse with no obligations beyond Apache's. The backend it talks to is what the two paragraphs above
+are about.
+
+**Only Ahmed Maaloul can grant a commercial license.** Email **<ahmed.maaloul@proton.me>** with the
+subject `[Commercial License] <your company>`. Startups and academic spin-outs: say so, pricing is
+flexible, and evaluation licenses are available on request. Full details and FAQ:
+**[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md)**. Versions released before this change stay as
+published — MIT up to commit `91ee2f2`, AGPL-3.0-or-later for 0.3.0 and 0.4.0.
 
 <sub>Plain-English summary, not legal advice. [`LICENSE`](./LICENSE) is the binding document.</sub>
 
@@ -385,7 +396,7 @@ is flexible. Full details and FAQ: **[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENS
 **Synapse** — created and maintained by **[Ahmed Maaloul](https://github.com/ahmedmaaloul)**
 &lt;ahmed.maaloul@proton.me&gt;
 
-Copyright © 2026 Ahmed Maaloul · SPDX-License-Identifier: `AGPL-3.0-or-later`
+Copyright © 2026 Ahmed Maaloul · SPDX-License-Identifier: `PolyForm-Noncommercial-1.0.0` (core) · client `Apache-2.0`
 · <https://github.com/ahmedmaaloul/synapse>
 
 If this saved you time, a ⭐ helps other people find it.

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """
@@ -46,7 +46,7 @@ APP_VERSION = "0.4.0"
 AUTHOR = "Ahmed Maaloul"
 AUTHOR_EMAIL = "ahmed.maaloul@proton.me"
 REPO_URL = "https://github.com/ahmedmaaloul/synapse"
-LICENSE_ID = "AGPL-3.0-or-later"
+LICENSE_ID = "PolyForm-Noncommercial-1.0.0"
 
 app = FastAPI(
     title="Synapse API",
@@ -93,8 +93,10 @@ async def health():
 async def about():
     """Project, authorship and licensing metadata.
 
-    Also satisfies AGPL-3.0 §13: users interacting with this instance over a
-    network are told exactly where to obtain the corresponding source.
+    Tells network users what they are running, who wrote it, where the source
+    is and under which terms: free for noncommercial use, any commercial use
+    needs a licence, and the client package they may be calling through is
+    Apache-2.0.
     """
     return {
         "name": settings.app_name,
@@ -107,10 +109,11 @@ async def about():
         "license": LICENSE_ID,
         "license_url": f"{REPO_URL}/blob/main/LICENSE",
         "commercial_license": {
-            "required_for": "closed-source, proprietary or SaaS use",
+            "required_for": "any commercial use (by or for a business, internal or external, on-prem or SaaS)",
             "contact": AUTHOR_EMAIL,
             "granted_by": AUTHOR,
         },
+        "client_package": {"name": "synapse-graphrag", "license": "Apache-2.0"},
         "llm_provider": settings.llm_provider,
         "embedding_provider": settings.embedding_provider,
     }

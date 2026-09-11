@@ -265,10 +265,13 @@ Then open the PR using the [template](./.github/PULL_REQUEST_TEMPLATE.md) — it
 - **New source files** carry the project header, matching the existing modules:
 
   ```python
-  # SPDX-License-Identifier: AGPL-3.0-or-later
+  # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
   # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
   # Synapse — https://github.com/ahmedmaaloul/synapse
   ```
+
+  Files under `packages/synapse-graphrag/` — the Apache-2.0 client package — use
+  `# SPDX-License-Identifier: Apache-2.0` as the first line instead; the other two lines are the same.
 
 - **Error messages are documentation.** Every provider error in this codebase names the env var, says
   what's wrong, and links to where the credential comes from. Keep that bar.
@@ -350,23 +353,28 @@ PyPI — bump the version instead.
 
 ## Licensing of contributions
 
-Synapse is licensed under **AGPL-3.0-or-later** and is additionally offered under a separate
-commercial license by the author (see [`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md)).
+Synapse's core is licensed under the **PolyForm Noncommercial License 1.0.0** and is additionally
+offered under a separate commercial license by the author (see
+[`COMMERCIAL-LICENSE.md`](./COMMERCIAL-LICENSE.md)); the client package in
+`packages/synapse-graphrag/` is **Apache-2.0**.
 
 By submitting a pull request you agree that:
 
-1. Your contribution is licensed under **AGPL-3.0-or-later**, and
+1. Your contribution is licensed under **PolyForm-Noncommercial-1.0.0** — or **Apache-2.0** if it
+   lives under `packages/synapse-graphrag/` — and
 2. **Ahmed Maaloul may also license it under the commercial terms** described in
    `COMMERCIAL-LICENSE.md` — this is what makes the dual-licensing model possible, and
 3. You have the right to contribute the code (it's yours, or your employer permits it).
 
 **You keep the copyright in your own contribution.** You may add your own copyright line for
 substantial work; you may not remove or replace the existing copyright notices — see
-[`NOTICE`](./NOTICE). If a formal CLA is ever introduced, it will be added to the repository and you
-will be asked to sign it explicitly.
+[`NOTICE`](./NOTICE). The [Contributor License Agreement](./CLA.md) says exactly this in full; you
+accept it once, by ticking the box in the pull-request template.
 
-Forks are welcome and encouraged. A fork must stay under AGPL-3.0-or-later and keep `LICENSE` and
-`NOTICE` intact; mark your changes as yours and it's yours to take wherever you want.
+Forks are welcome and encouraged. A fork stays under the same licenses and keeps `LICENSE` — with
+its `Required Notice:` line — and `NOTICE` intact (we ask that you also mark your changes as
+yours), and it's yours to take wherever you want, for noncommercial purposes or with a commercial
+license.
 
 ---
 

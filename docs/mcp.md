@@ -11,7 +11,7 @@ retrieval logic; the package gives every agent host the same eight tools.
 | Source | [`packages/synapse-graphrag/`](../packages/synapse-graphrag/) |
 | Console scripts | `synapse-graphrag` (CLI) · `synapse-mcp` (MCP server) |
 | Docker image | `ghcr.io/ahmedmaaloul/synapse-mcp` — see [Docker](#docker) |
-| License | AGPL-3.0-or-later (+ [commercial](../COMMERCIAL-LICENSE.md)), same as the rest of Synapse |
+| License | Apache-2.0 — [LICENSE](../packages/synapse-graphrag/LICENSE) · the backend it talks to is PolyForm Noncommercial 1.0.0 (+ [commercial](../COMMERCIAL-LICENSE.md)) |
 
 **Contents**
 
@@ -211,8 +211,8 @@ docker run --rm -p 8765:8765 \
   ghcr.io/ahmedmaaloul/synapse-mcp:0.4.0
 ```
 
-**Build it yourself** — the Dockerfile uses the repo root as build context so it can ship
-`LICENSE` and `NOTICE` inside the image, as every Synapse image must:
+**Build it yourself** — the Dockerfile uses the repo root as build context, like every Synapse
+image, and ships the package's own Apache-2.0 `LICENSE` and `NOTICE` inside the image:
 
 ```bash
 docker build -f packages/synapse-graphrag/Dockerfile -t synapse-mcp .
@@ -409,8 +409,8 @@ first. A successful clear also empties the server's retrieve cache.
 ## Resource and prompts
 
 - **Resource `synapse://about`** — the JSON of `GET /api/about` (name, version, author,
-  repository, license, providers). It is what AGPL §13 asks a network service to expose, one
-  `resources/read` away.
+  repository, licence and commercial-licence terms, providers). It tells an agent what it is
+  talking to, who wrote it and under which terms, one `resources/read` away.
 - **Prompt `answer_with_graph(question)`** — a ready-made instruction: call `synapse_retrieve`
   with the question, answer **only** from the returned context, cite entity names, and say so
   plainly when the graph does not contain the answer. The server's `instructions` text tells the

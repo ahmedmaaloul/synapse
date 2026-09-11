@@ -46,7 +46,7 @@ Everything CI enforces, run locally before requesting review:
 
 - [ ] I have read and agree to the [Contributor License Agreement](../CLA.md).
 
-<sub>In short: **you keep the copyright to your work.** You additionally grant Ahmed Maaloul the right to ship your contribution under both **AGPL-3.0-or-later** and the project's [commercial licence](../COMMERCIAL-LICENSE.md) — the grant that makes dual-licensing legally possible. You only need to accept this once.</sub>
+<sub>In short: **you keep the copyright to your work.** You additionally grant Ahmed Maaloul the right to ship your contribution under both the **PolyForm Noncommercial License 1.0.0** and the project's [commercial licence](../COMMERCIAL-LICENSE.md) — and, for the client package in `packages/synapse-graphrag/`, under **Apache-2.0**. That grant is what makes dual-licensing legally possible. You only need to accept this once.</sub>
 
 ## Notes for the reviewer
 

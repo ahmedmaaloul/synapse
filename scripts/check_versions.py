@@ -1,14 +1,15 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Refuse to release unless every version source agrees with the tag.
 
 The version is declared in four independent places — the backend package, the
-``APP_VERSION`` constant served by ``/api/about`` (the AGPL §13 offer), the
-``synapse-graphrag`` package that goes to PyPI, and the frontend ``package.json``.
-Nothing ties them together at build time, so a tag pushed after a partial bump
-would ship a release whose artifacts disagree about what version they are. The
-release workflow runs this first and stops before anything is published.
+``APP_VERSION`` constant served by ``/api/about`` (the authorship-and-licence
+endpoint), the ``synapse-graphrag`` package that goes to PyPI, and the frontend
+``package.json``. Nothing ties them together at build time, so a tag pushed
+after a partial bump would ship a release whose artifacts disagree about what
+version they are. The release workflow runs this first and stops before
+anything is published.
 
 Usage::
 

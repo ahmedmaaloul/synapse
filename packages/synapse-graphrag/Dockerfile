@@ -1,10 +1,11 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 #
-# BUILD CONTEXT IS THE REPO ROOT, like the backend and frontend images — the
-# image must ship LICENSE and NOTICE (NOTICE requires the notices be retained
-# in container images), and those live at the repo root. Build with:
+# BUILD CONTEXT IS THE REPO ROOT, like the backend and frontend images, so
+# compose, CI and the release workflow build all three the same way. The image
+# ships the client package's OWN LICENSE and NOTICE (Apache-2.0) — not the
+# backend's PolyForm Noncommercial pair at the repo root. Build with:
 #   docker build -f packages/synapse-graphrag/Dockerfile -t synapse-mcp .
 #
 # Runs the MCP server over streamable HTTP on :8765 (/mcp). Point it at the
@@ -21,8 +22,9 @@ COPY packages/synapse-graphrag/ ./
 # lives in site-packages, so nothing under /app is imported at runtime.
 RUN pip install --no-cache-dir . && rm -rf build src/synapse_graphrag.egg-info
 
-# Attribution — required by NOTICE for every distribution of this image.
-COPY LICENSE NOTICE /app/
+# Attribution — the client's Apache-2.0 LICENSE and NOTICE travel with every
+# distribution of this image (CI checks `ls /app/LICENSE /app/NOTICE`).
+COPY packages/synapse-graphrag/LICENSE packages/synapse-graphrag/NOTICE /app/
 
 RUN useradd --system --uid 10001 --create-home synapse
 USER synapse

@@ -1,20 +1,23 @@
 # Commercial Licensing
 
-Synapse is **dual-licensed**. You get to pick the option that fits what
-you are building:
+Synapse is **source-available under the PolyForm Noncommercial License 1.0.0**,
+with a commercial license for everyone that license does not cover. You get to
+pick the option that fits what you are building:
 
-| | Open source | Commercial |
+| | Noncommercial (free) | Commercial (paid) |
 | --- | --- | --- |
-| License | AGPL-3.0-or-later | Private agreement |
-| Cost | Free, forever | Negotiated |
-| Copyleft obligations | Yes | Waived |
-| Must publish your modifications | Yes, if you serve them over a network | No |
-| Ship inside a closed-source product | No | Yes |
-| Attribution to Ahmed Maaloul | Required | Required |
+| License | [PolyForm-Noncommercial-1.0.0](LICENSE) | Private agreement |
+| Cost | Free | Negotiated |
+| Who it is for | Individuals, researchers, students, educators, charities and the other nonprofits the license names, government | Any company or for-profit purpose — internal tools included, on-prem or SaaS |
+| Use inside a business | No | Yes |
+| Ship inside a product or hosted service | Noncommercial ones only | Yes |
+| Keep your modifications private | Yes — there is no copyleft | Yes |
+| Warranty, indemnity, support | None | Negotiable |
+| Attribution to Ahmed Maaloul | Required — the `Required Notice:` line | Required — the `Required Notice:` line plus a credits-screen mention |
 
-Almost everyone lands in the left column and never needs to talk to anyone.
-The commercial license exists for one narrow case: you want to build something
-proprietary on top of Synapse and not release the source.
+Anyone learning from, researching with, or tinkering on Synapse lands in the
+left column and never needs to talk to anyone. The commercial license exists
+for one case, and it is a broad one: **you are using Synapse for a business.**
 
 > **Not legal advice.** This page is a plain-English summary written for
 > convenience. It is *not* legal advice and it is *not* the license. The
@@ -23,61 +26,78 @@ proprietary on top of Synapse and not release the source.
 
 ---
 
-## The free option: AGPL-3.0-or-later
+## The free option: PolyForm Noncommercial 1.0.0
 
-Under the AGPL you may, at no cost and without asking permission:
+For a **noncommercial purpose**, at no cost and without asking permission, you
+may:
 
-- **Self-host it** — for yourself, for your team, for your company, in
-  production, including for commercial purposes and to make money.
+- **Self-host it** — on your laptop, your lab's cluster, your university's or
+  your nonprofit's infrastructure.
 - **Study it** — read every line, take it apart, learn from it, write about it.
-- **Modify it** — change anything you want, for any reason.
+- **Modify it** — change anything you want, for any reason, and keep the
+  changes to yourself if you like. There is no copyleft.
 - **Fork it** — publicly, on GitHub or anywhere else.
-- **Redistribute it** — including selling copies or paid hosting.
+- **Redistribute it** — copies and modified versions alike, as long as the
+  license terms and the `Required Notice:` line travel with them.
 - **Contribute back** — pull requests are very welcome.
-- **Use it internally** — run it on your company's infrastructure for your own
-  operations.
 
-A common misconception worth clearing up: **the AGPL does not ban commercial
-use.** You can absolutely use Synapse to make money. What the AGPL asks in
-return is *reciprocity* — if you distribute it or serve it over a network, the
-people on the other end get the same freedoms you got.
+"Noncommercial" is defined by the license, not by this page. In short it
+covers:
+
+- **Personal use** — research, experiment and testing for the benefit of public
+  knowledge, personal study, private entertainment, hobby projects, amateur
+  pursuits or religious observance, *without any anticipated commercial
+  application*.
+- **Noncommercial organisations** — charities, educational institutions, public
+  research organisations, public safety or health organisations, environmental
+  protection organisations and government institutions, regardless of how they
+  are funded.
 
 In exchange for all of the above you must:
 
-1. **Keep the license.** Derivative works and modified versions must also be
-   AGPL-3.0-or-later. You cannot relicense it under more restrictive terms.
-2. **Keep the attribution.** Retain the copyright notices, `LICENSE`, and
-   `NOTICE`. See [`NOTICE`](NOTICE) for exactly what this means, including
-   user-facing credits screens.
-3. **Provide source when you convey it.** Anyone you give a binary or a
-   deployment to is entitled to the corresponding source.
-4. **Honour section 13.** See immediately below — this is the clause that makes
-   the AGPL different from the plain GPL, and the one that catches people out.
+1. **Keep the notices.** Anyone who gets a copy of any part of Synapse from you
+   must also get the license terms (or their URL) and the `Required Notice:`
+   line at the top of [`LICENSE`](LICENSE). Keeping `LICENSE` and
+   [`NOTICE`](NOTICE) intact does exactly that.
+2. **Stay noncommercial.** The moment a use is commercial, the free license
+   stops covering it — see immediately below, this is the part that catches
+   people out.
 
-### AGPL section 13: the network/SaaS clause
+### What "commercial" means here
 
-This is the heart of the AGPL, so it is worth quoting the obligation plainly:
+It is worth being blunt:
 
-> **If you modify Synapse and let users interact with your modified
-> version remotely over a network, you must prominently offer those users an
-> opportunity to receive the complete corresponding source code of your modified
-> version, at no charge.**
+> **Under PolyForm Noncommercial, use by or for a business is commercial — even
+> if it is purely internal, and even if you never redistribute anything.**
 
-Two details that matter, in both directions:
+Some concrete consequences:
 
-- **It is triggered by *use over a network*, not by distribution.** The ordinary
-  GPL only kicks in when you hand someone software. The AGPL closes that gap:
-  running modified code as a hosted service counts, even though nobody ever
-  downloads a copy. "Just SaaS-ing it" is not a way around copyleft here.
-- **It is triggered by *modification*.** If you deploy Synapse completely
-  unmodified, section 13 adds no new obligation of its own — there is no
-  modified version whose source you would need to offer. In practice, though,
-  anyone running a real deployment ends up changing *something*, so plan for
-  this clause rather than betting against it.
+- **Internal tools count.** A company running Synapse on its own servers, for
+  its own employees, over its own documents, is using it commercially.
+- **Redistribution is irrelevant.** The copyleft-era question — "do I have to
+  publish my changes?" — has no counterpart here. The question is *who is using
+  it and why*, never *who receives a copy*.
+- **Hosting counts.** Offering Synapse, modified or not, as a service for or to
+  a business is commercial.
+- **"Free of charge" is not "noncommercial".** An internal proof of concept
+  that costs nobody anything is still use for the benefit of a business.
+- **The purpose is what matters, not the person.** A student is noncommercial;
+  the same person building the same thing at their employer's request is not.
 
-"Complete corresponding source" means what it says: the whole modified work —
-your changes to the backend, the frontend, the retrieval pipeline, build
-scripts, everything needed to build and run it — not a diff or a summary.
+If you are unsure, the license's own definitions — "Noncommercial Purposes",
+"Personal Uses" and "Noncommercial Organizations" — are short and in plain
+English; read them in [`LICENSE`](LICENSE). If you are still unsure after
+that, ask. The answer is usually quick.
+
+### The client package needs no license at all
+
+The `synapse-graphrag` package in
+[`packages/synapse-graphrag/`](packages/synapse-graphrag/) — the MCP server,
+the CLI and the Python SDK — is licensed under **Apache-2.0**, with its own
+[`LICENSE`](packages/synapse-graphrag/LICENSE) and
+[`NOTICE`](packages/synapse-graphrag/NOTICE). Embed it in anything, commercial
+or not, with no obligations beyond Apache's. What it talks to — a Synapse
+backend — is what the noncommercial-or-commercial choice is about.
 
 ---
 
@@ -85,21 +105,20 @@ scripts, everything needed to build and run it — not a diff or a summary.
 
 Get in touch if any of these describe you:
 
-- **Closed-source product.** You want to embed Synapse (or a derivative) in
-  software you ship without publishing the source.
-- **Proprietary SaaS.** You want to run a modified Synapse as a hosted service
-  for your customers without offering them the corresponding source under
-  section 13.
-- **Copyleft is a blocker.** Your legal or procurement team prohibits AGPL
-  dependencies, or you need to combine Synapse with proprietary code whose
-  license is incompatible with the AGPL.
-- **Relicensing.** You want to redistribute Synapse or a derivative under terms
-  other than AGPL-3.0-or-later.
-- **You want a warranty, indemnity, or support commitment.** The AGPL
-  explicitly provides none of these. A commercial agreement can.
+- **You use it at a company.** Any for-profit organisation, for any purpose —
+  in production or internally, on-prem or as SaaS, modified or vanilla.
+- **You ship it inside a product.** Synapse (or a derivative) embedded in
+  software or a service you sell, license, or otherwise put in front of
+  customers.
+- **You host it for others** as a paid or otherwise commercial service.
+- **You build it for a client** as a contractor or consultancy — the client's
+  use is what matters (see the FAQ).
+- **You want a warranty, indemnity, or support commitment.** The noncommercial
+  license explicitly provides none of these. A commercial agreement can.
 
-A commercial license waives the copyleft obligations for you. It does **not**
-waive attribution — credit to Ahmed Maaloul is required under either option.
+A commercial license covers commercial use. It does **not** waive attribution —
+credit to Ahmed Maaloul is required under either option, and a credits-screen
+attribution (see [`NOTICE`](NOTICE)) is a term of the commercial agreement.
 
 **Only Ahmed Maaloul can grant a commercial license.** No fork, redistributor,
 or third party has that authority.
@@ -114,56 +133,62 @@ Email **Ahmed Maaloul** — <ahmed.maaloul@proton.me> — with subject line
 Helpful things to include, so the first reply can be useful:
 
 - Who you are and what you are building
-- How Synapse fits in — embedded, hosted for customers, internal-only?
+- How Synapse fits in — internal tool, embedded in a product, hosted for
+  customers?
 - Rough scale (users, deployments, seats) and your timeline
 - Whether you need support, a warranty, or indemnification
+- Whether you want an evaluation license first (see below)
 
-Terms are negotiated case by case. Startups, small teams, academic spin-outs,
-and nonprofits should say so — pricing is flexible, and the goal is a workable
-arrangement, not a toll booth.
+Terms are negotiated case by case. Startups, small teams and academic
+spin-outs should say so — pricing is flexible, and the goal is a workable
+arrangement, not a toll booth. **Evaluation licenses** — time-boxed, free or
+nominal, for a proof of concept inside a company — are available on request.
 
 ---
 
 ## FAQ
 
-**Can I evaluate it before deciding?**
-Yes. Download it, run it, benchmark it, build a prototype, show it to your
-team — no permission, no license purchase, no time limit. The AGPL covers
-evaluation like any other use. You only need to think about the commercial
-license when you go to ship something proprietary.
+**Can I evaluate it at my company before deciding?**
+Ask for an evaluation license — it is a short email, and the answer is normally
+yes. Strictly, a proof of concept inside a company is use for the benefit of a
+business, which the noncommercial license does not cover, so please do not rely
+on "we are only testing it". Evaluating it *personally* — on your own machine,
+in your own time, to learn how it works — needs nothing from anyone.
+
+**I am a contractor or agency building on Synapse for a client. Who needs the
+license?**
+If the client is a business, or the work has a commercial purpose, the use is
+commercial. Usually the client takes the commercial license, since they are the
+ones using it; a contractor can also hold one that covers work for named
+clients. Either way, get in touch before the engagement rather than after.
+
+**Can I host Synapse for other people?**
+For or to a business, or for money: that is commercial, and you need the
+commercial license. A nonprofit or a university hosting it for its own members
+for a noncommercial purpose is covered by the free license.
 
 **Can I use it internally at my company?**
-Yes. Running Synapse on your own infrastructure for your own operations is
-fully permitted under the AGPL, free of charge, including at a for-profit
-company. The one thing to be aware of: if you modify it and your employees use
-it over your internal network, section 13 means those employees are entitled to
-the corresponding source. Since they are inside your organisation, satisfying
-that is usually as simple as pointing them at your internal Git repository. No
-obligation to publish anything externally arises from internal use.
-
-**Can I fork it and contribute?**
-Please do — that is the point of publishing it. Fork it, open issues, send pull
-requests. Your fork must stay under AGPL-3.0-or-later and keep the attribution
-intact (see [`NOTICE`](NOTICE)), and you should mark your changes as yours, but
-otherwise it is yours to take wherever you want.
+That needs the commercial license. Internal use by a business is commercial
+under this license even though nothing leaves your network. This is the biggest
+change from the AGPL-licensed versions, where internal use was free; it is
+deliberate, and pricing for internal-only use reflects it.
 
 **Do I need a license to self-host for my own personal use?**
-No. Self-hosting for yourself requires nothing from you beyond keeping the
+No. Personal noncommercial use requires nothing from you beyond keeping the
 license and notices in place. There is no registration, no key, and nothing to
 pay.
 
-**I want to offer Synapse as a paid hosted service. Is that allowed?**
-Under the AGPL, yes — selling hosting is explicitly permitted. The condition is
-that if you have modified it, your users must be offered the corresponding
-source of your modified version. If you would rather keep your modifications
-private, that is exactly what the commercial license is for.
+**Can I fork it and contribute?**
+Please do — that is the point of publishing the source. Fork it, open issues,
+send pull requests. Your fork stays under the same license and keeps the
+`Required Notice:` line, `LICENSE` and `NOTICE` intact (see
+[`NOTICE`](NOTICE)); we ask that you mark your changes as yours. Contributions
+come with the [Contributor License Agreement](CLA.md), which is what lets
+contributed code be offered under both licenses.
 
-**Does the AGPL "infect" the rest of my codebase?**
-It applies to Synapse and to works derived from it. Whether a separate program
-that merely talks to Synapse over HTTP forms a single combined work is a
-genuinely fact-specific legal question, and this document cannot answer it for
-your architecture. If your integration is close enough that you are unsure, ask
-your counsel — or take the commercial license and stop worrying about it.
+**Does the noncommercial license apply to the MCP server, CLI and SDK too?**
+No — that package is Apache-2.0. See
+[above](#the-client-package-needs-no-license-at-all).
 
 **What about the third-party dependencies?**
 They keep their own licenses (see `backend/requirements.txt` and
@@ -172,19 +197,31 @@ Ahmed's code in this repository; it cannot and does not change the terms of
 anyone else's software.
 
 **I bought a commercial license. Do I still have to credit the author?**
-Yes. Attribution is required under both options. See [`NOTICE`](NOTICE) for the
-specific wording and where it needs to appear.
+Yes. Attribution is required under both options: keep the `Required Notice:`
+line, `LICENSE` and `NOTICE` in every copy, and — as a term of the commercial
+license — add a credits or "About" screen attribution in the form
+[`NOTICE`](NOTICE) describes.
+
+**What about versions released before this change?**
+They stay as published. Everything up to and including commit `91ee2f2` was
+released under MIT and remains MIT. Versions 0.3.0 and 0.4.0 — every commit
+after `91ee2f2` up to and including the `v0.4.0` tag (`34300d6`) — were
+released under AGPL-3.0-or-later and remain available under it, copyleft
+obligations included. The PolyForm Noncommercial + commercial model applies
+from the change that introduced it onward (0.5.0 and later); code from 0.5.0 on
+is not available under the AGPL.
 
 **Can my contribution be included in the commercially licensed version?**
-Yes, and that is worth being upfront about: for a dual-licensing model to work,
-the maintainer needs the right to offer contributed code under the commercial
-license too. By submitting a pull request you agree that your contribution is
-licensed under AGPL-3.0-or-later **and** that Ahmed Maaloul may also license it
-under the commercial terms described here. You keep the copyright in your own
-contribution. If a formal CLA is ever required, it will be added to the
-repository and you will be asked to sign it explicitly.
+Yes, and that is worth being upfront about: for this model to work, the
+maintainer needs the right to offer contributed code under the commercial
+license too. By ticking the CLA checkbox in the pull-request template you agree
+that your contribution may be shipped under the PolyForm Noncommercial License
+**and** the commercial terms described here — and, for the client package,
+under Apache-2.0. You keep the copyright in your own contribution. The full
+text is short: [`CLA.md`](CLA.md).
 
 ---
 
 Copyright (c) 2026 Ahmed Maaloul · <https://github.com/ahmedmaaloul/synapse> ·
-SPDX-License-Identifier: AGPL-3.0-or-later
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0 (core) · Apache-2.0
+(`packages/synapse-graphrag`)

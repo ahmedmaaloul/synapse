@@ -9,74 +9,107 @@ Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 
 Canonical repository: https://github.com/ahmedmaaloul/synapse
 
-Licensed under the GNU Affero General Public License, version 3 or later.
-SPDX-License-Identifier: AGPL-3.0-or-later
+Licensed under the PolyForm Noncommercial License 1.0.0.
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 --------------------------------------------------------------------------------
 LICENSE
 --------------------------------------------------------------------------------
 
-This product is free software: you can redistribute it and/or modify it under
-the terms of the GNU Affero General Public License as published by the Free
-Software Foundation, either version 3 of the License, or (at your option) any
-later version.
+This product is licensed under the PolyForm Noncommercial License 1.0.0
+(SPDX: PolyForm-Noncommercial-1.0.0). The full text is in the file named
+LICENSE, and at <https://polyformproject.org/licenses/noncommercial/1.0.0>.
 
-This product is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+It is free for noncommercial purposes as defined by that license: personal
+use for research, experiment, study, hobby projects and the like, with no
+anticipated commercial application; and use by charitable, educational,
+public-research, public-safety or health, environmental and government
+organisations.
 
-You should have received a copy of the GNU Affero General Public License along
-with this product, in the file named LICENSE. If not, see
-<https://www.gnu.org/licenses/>.
+ANY COMMERCIAL USE REQUIRES A SEPARATE COMMERCIAL LICENSE from Ahmed Maaloul.
+Under this license, use by or for a business is commercial even when it is
+purely internal and even when nothing is ever redistributed. The commercial
+license can be granted only by Ahmed Maaloul. See COMMERCIAL-LICENSE.md, or
+contact ahmed.maaloul@proton.me.
 
-If you run a modified version of this software as a network service, AGPL
-section 13 requires you to offer its users access to the complete corresponding
-source code of your modified version.
+The LICENSE file begins with this plain-text line:
 
-A separate commercial license, which removes the AGPL copyleft obligations, is
-available from the copyright holder for closed-source and proprietary use. It
-can be granted only by Ahmed Maaloul. See COMMERCIAL-LICENSE.md, or contact
-ahmed.maaloul@proton.me.
+Required Notice: Copyright (c) 2026 Ahmed Maaloul (https://github.com/ahmedmaaloul/synapse)
+
+The "Notices" section of the PolyForm Noncommercial License requires that
+anyone who gets a copy of any part of this software from you also gets the
+license terms (or the URL above) and every such "Required Notice:" line.
+That line must therefore travel with every copy.
+
+This product is distributed WITHOUT ANY WARRANTY OR CONDITION, as set out in
+the "No Liability" section of the license.
 
 --------------------------------------------------------------------------------
-ATTRIBUTION REQUIREMENT
+ATTRIBUTION
 --------------------------------------------------------------------------------
 
-Attribution to Ahmed Maaloul is a condition of the license and MUST be
-preserved. Specifically:
+Attribution to Ahmed Maaloul MUST be preserved. Specifically:
 
-  1. This NOTICE file, the LICENSE file, and all copyright notices in the
-     source code MUST be retained, unmodified and unobscured, in:
+  1. The "Notices" section of the license — a condition of every license
+     you hold under it — requires that anyone who gets a copy of any part
+     of this software from you also gets the license terms (or their URL)
+     and the "Required Notice:" line quoted above. That applies to every
+     copy you pass on:
        - all copies of this software, in source or binary form;
        - all forks and mirrors;
        - all modified versions and derivative works;
        - all distributions, packages, container images, and bundles that
          include this software or a substantial part of it.
+     Keeping the LICENSE and NOTICE files intact in each of them is the
+     simplest way to comply. We also ask that you keep the copyright
+     notices in the source code.
 
   2. If your product, fork, or deployment presents a user-facing "About",
-     "Credits", "Legal", "Open Source Licenses", or equivalent surface, it MUST
-     include an attribution substantially in the following form:
+     "Credits", "Legal", "Open Source Licenses", or equivalent surface, an
+     attribution substantially in the following form:
 
          Based on Synapse
          Copyright (c) 2026 Ahmed Maaloul
          https://github.com/ahmedmaaloul/synapse
-         Licensed under AGPL-3.0-or-later
+         Licensed under PolyForm-Noncommercial-1.0.0
 
-     If your product has no such surface, the attribution MUST appear in the
-     accompanying documentation (for example, the README).
+     is REQUIRED under the commercial license (it is a term of that
+     agreement) and REQUESTED under the noncommercial license, whose own
+     requirement is item 1 above. If your product has no such surface, the
+     README or accompanying documentation is the right place for it.
 
-  3. If you modify this software, you MUST carry forward the notices above and
-     mark your own changes as yours, as required by AGPL section 5. You may add
-     your own copyright notice for your contributions; you may not remove or
-     replace the copyright notice of Ahmed Maaloul.
-
-  4. Removing, replacing, or obscuring this attribution terminates your rights
-     under the license (see AGPL section 8).
+  3. If you modify this software, carry forward the notices above; we ask
+     that you mark your own changes as yours. You may add your own
+     copyright notice for your contributions; you may not remove or replace
+     the copyright notice of Ahmed Maaloul.
 
 Nothing in this NOTICE grants permission to use the name "Synapse" or
 the name of the author to endorse or promote derived products. Factual
 statements of origin ("derived from Synapse") are always permitted and
 encouraged.
+
+--------------------------------------------------------------------------------
+CLIENT PACKAGE
+--------------------------------------------------------------------------------
+
+The client package in packages/synapse-graphrag/ — the synapse-graphrag MCP
+server, CLI and Python SDK, published to PyPI as "synapse-graphrag" — is
+licensed separately under the Apache License, Version 2.0
+(SPDX: Apache-2.0), so that agents and products can talk to Synapse with no
+obligations beyond Apache's. It ships its own LICENSE and NOTICE files in
+that directory, and those govern it in place of this NOTICE. The Synapse
+backend the client talks to remains under the terms above.
+
+--------------------------------------------------------------------------------
+PRIOR VERSIONS
+--------------------------------------------------------------------------------
+
+Prior versions stay as published. Everything up to and including commit
+91ee2f2 was published under the MIT License and remains available under MIT.
+Versions 0.3.0 and 0.4.0 — every commit after 91ee2f2 up to and including
+the v0.4.0 tag (commit 34300d6) — were published under AGPL-3.0-or-later and
+remain available under those terms. The licenses described in this NOTICE
+apply from the change that introduced them onward (version 0.5.0 and later).
 
 --------------------------------------------------------------------------------
 THIRD-PARTY COMPONENTS

@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Regression tests for packaging, attribution, and the shared DB fixture.
@@ -181,7 +181,7 @@ class TestContainerAttribution:
 
 # ── 3. SPDX headers ──────────────────────────────────────
 SPDX_HEADER = (
-    "# SPDX-License-Identifier: AGPL-3.0-or-later",
+    "# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0",
     "# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>",
     "# Synapse — https://github.com/ahmedmaaloul/synapse",
 )

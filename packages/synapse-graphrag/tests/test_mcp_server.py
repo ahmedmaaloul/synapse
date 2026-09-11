@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """The MCP server: tool catalogue, in-process calls, and a real client session.
@@ -326,7 +326,7 @@ async def test_end_to_end_client_session(backend: FakeBackend):
                 backend.unreachable = False
 
                 resource = await session.read_resource("synapse://about")
-                assert json.loads(resource.contents[0].text)["license"] == "AGPL-3.0-or-later"
+                assert json.loads(resource.contents[0].text)["license"] == "PolyForm-Noncommercial-1.0.0"
 
                 prompt = await session.get_prompt("answer_with_graph", {"question": "Why?"})
                 assert prompt.messages[0].content.text.endswith("Question: Why?")

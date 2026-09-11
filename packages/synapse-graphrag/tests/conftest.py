@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """Shared fixtures — a fake Synapse backend behind ``httpx.MockTransport``.
@@ -111,7 +111,7 @@ ABOUT = {
     "llm_provider": "gemini",
     "embedding_provider": "fastembed",
     "repository": "https://github.com/ahmedmaaloul/synapse",
-    "license": "AGPL-3.0-or-later",
+    "license": "PolyForm-Noncommercial-1.0.0",
 }
 
 COMMUNITIES = {

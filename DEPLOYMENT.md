@@ -121,8 +121,9 @@ builds and pushes three images to the GitHub Container Registry:
 | `ghcr.io/ahmedmaaloul/synapse-frontend` | `frontend/Dockerfile` (build-arg `NEXT_PUBLIC_API_URL` from the repo variable of the same name, default `http://localhost:8000`) | same |
 | `ghcr.io/ahmedmaaloul/synapse-mcp` | `packages/synapse-graphrag/Dockerfile` | same |
 
-All three are built from the **repo root** so `LICENSE` and `NOTICE` ship inside them. Pin the
-version you deploy — `latest` moves on every release:
+All three are built from the **repo root** so `LICENSE` and `NOTICE` ship inside them — the
+backend and frontend images carry the root PolyForm Noncommercial pair, the MCP image the client
+package's own Apache-2.0 pair. Pin the version you deploy — `latest` moves on every release:
 
 ```bash
 docker pull ghcr.io/ahmedmaaloul/synapse-backend:0.4.0

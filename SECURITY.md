@@ -36,7 +36,7 @@ The more of this you can provide, the faster a fix lands:
 | Fix or documented mitigation for high/critical issues | within **30 days** |
 | Fix for low/medium issues | next scheduled release, or within 90 days |
 
-This is a personally maintained open source project, so these are good-faith
+This is a personally maintained source-available project, so these are good-faith
 targets rather than a contractual SLA. If you have not heard back within 72
 hours, please send a follow-up — mail does occasionally go astray.
 
@@ -99,8 +99,10 @@ frontend, and the shipped Docker and deployment configuration.
 
 ## Security Expectations for Operators
 
-Synapse is provided **without warranty** under the AGPL-3.0-or-later
-license (see `LICENSE`). If you self-host it, you are responsible for your own
-deployment: change all default credentials, keep secrets and API keys out of
-version control, do not expose Neo4j or the backend API directly to the public
-internet without authentication and TLS, and keep your dependencies current.
+Synapse is provided **without warranty** under the PolyForm Noncommercial
+License 1.0.0 (see `LICENSE`; the `synapse-graphrag` client package is
+Apache-2.0, see `packages/synapse-graphrag/LICENSE`). If you self-host it, you
+are responsible for your own deployment: change all default credentials, keep
+secrets and API keys out of version control, do not expose Neo4j or the backend
+API directly to the public internet without authentication and TLS, and keep
+your dependencies current.

@@ -1,5 +1,5 @@
 # Synapse — developer task runner
-# Copyright (c) 2026 Ahmed Maaloul · AGPL-3.0-or-later
+# Copyright (c) 2026 Ahmed Maaloul · PolyForm-Noncommercial-1.0.0
 # https://github.com/ahmedmaaloul/synapse
 #
 # `make` on its own prints every documented target.

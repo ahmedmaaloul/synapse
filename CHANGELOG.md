@@ -6,10 +6,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 Maintained by **Ahmed Maaloul** <ahmed.maaloul@proton.me> ·
-Licensed under **AGPL-3.0-or-later**; a separate commercial licence is required for
-closed-source, proprietary or SaaS use.
+Core licensed under **PolyForm-Noncommercial-1.0.0** — free for noncommercial use, a separate
+commercial licence is required for any commercial use; the `synapse-graphrag` client package is
+**Apache-2.0**.
 
 ## [Unreleased]
+
+### Changed
+
+- **Relicensed from AGPL-3.0-or-later to PolyForm Noncommercial 1.0.0, plus a commercial licence;
+  the client package to Apache-2.0.** The core — backend, frontend, scripts, workflows, images and
+  docs — is now [`PolyForm-Noncommercial-1.0.0`](./LICENSE): free for noncommercial purposes as the
+  licence defines them (personal use; use by educational, public-research, charitable and the other
+  nonprofit organisations the licence names, and by government institutions), with no copyleft, so
+  modifications may stay private. **Any commercial use** — by or for a business,
+  internal or external, on-prem or SaaS, redistributed or not — requires a
+  [commercial licence](./COMMERCIAL-LICENSE.md) granted only by Ahmed Maaloul; evaluation licences
+  are available on request. The `synapse-graphrag` client package (MCP server, CLI, SDK) in
+  `packages/synapse-graphrag/` is [`Apache-2.0`](./packages/synapse-graphrag/LICENSE) with its own
+  `LICENSE` and `NOTICE`, so agents and products can talk to Synapse with no obligations beyond
+  Apache's. Prior versions stay as published: everything up to and including `91ee2f2` remains MIT;
+  versions 0.3.0 and 0.4.0 (every commit after `91ee2f2` up to and including the `v0.4.0` tag,
+  `34300d6`) remain AGPL-3.0-or-later. What it means for users: individuals, researchers, students,
+  educators, nonprofits and public bodies lose nothing and gain the right to keep changes private;
+  companies — including for purely internal use, which the AGPL versions allowed at no cost — now
+  need the commercial licence. Attribution rides on PolyForm's own `Required Notice:` mechanism
+  (the first line of `LICENSE`, which the licence's "Notices" section requires to travel with every
+  copy); the "About"/credits attribution is a term of the commercial licence and a request under
+  the noncommercial one. Updated: `LICENSE`, `NOTICE`, `COMMERCIAL-LICENSE.md`, `CLA.md`,
+  `CONTRIBUTING.md`, `SECURITY.md`, the SPDX headers across the tree (path-based: core →
+  `PolyForm-Noncommercial-1.0.0`, package → `Apache-2.0`), package metadata, `/api/about` — which
+  still tells network users what they are running, who wrote it, where the source is and under
+  which terms, and now also reports the client package's licence — and the UI footer badge.
 
 ## [0.4.0] — 2026-09-09
 

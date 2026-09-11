@@ -390,4 +390,4 @@ Stated by the author, before a referee has to find them.
 
 ---
 
-Synapse — © 2026 Ahmed Maaloul — AGPL-3.0-or-later
+Synapse — © 2026 Ahmed Maaloul — PolyForm Noncommercial License; commercial use requires a licence (see COMMERCIAL-LICENSE.md)

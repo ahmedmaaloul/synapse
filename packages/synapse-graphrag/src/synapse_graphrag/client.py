@@ -1,4 +1,4 @@
-# SPDX-License-Identifier: AGPL-3.0-or-later
+# SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 # Synapse — https://github.com/ahmedmaaloul/synapse
 """
@@ -20,7 +20,7 @@ looked. Nothing here logs; callers decide what to show.
 
 Configuration is read from the environment when an argument is omitted:
 ``SYNAPSE_URL`` (default ``http://localhost:8000``), ``SYNAPSE_API_KEY`` (sent
-as ``Authorization: Bearer …``; the open-source backend ignores it, an
+as ``Authorization: Bearer …``; the Synapse backend itself ignores it, an
 authenticating proxy in front of it will not), ``SYNAPSE_TIMEOUT`` (seconds),
 ``SYNAPSE_MAX_CONTEXT_CHARS`` (default retrieval budget; ``0`` disables it,
 anything else must be at least ``MIN_CONTEXT_CHARS``, the backend's floor) and
