@@ -1397,3 +1397,21 @@ class TestReport:
         # One ledger implementation and one price table for every harness.
         assert rp.cost is cost
         assert cost.resolve_price("gpt-4o-mini") is not None
+
+
+class TestReasoningAllowanceOverride:
+    """``--reasoning-allowance`` moves only the up-front bound, for reasoning models only."""
+
+    def test_default_is_the_conservative_constant(self):
+        assert rp.reasoning_allowance("gpt-5-nano") == rp.REASONING_TOKENS_ALLOWANCE
+
+    def test_a_calibrated_value_replaces_it(self):
+        assert rp.reasoning_allowance("gpt-5-nano", override=64) == 64
+        assert rp.reasoning_allowance("gpt-5-nano", override=-3) == 0
+
+    def test_non_reasoning_models_never_get_an_allowance(self):
+        assert rp.reasoning_allowance("gpt-4o-mini", override=64) == 0
+
+    def test_the_flag_is_parsed(self):
+        args = rp.build_parser().parse_args(["--reasoning-allowance", "64", "--dry-run"])
+        assert args.reasoning_allowance == 64

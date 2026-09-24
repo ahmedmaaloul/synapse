@@ -1367,10 +1367,21 @@ class Plan:
         return cost.usd(self.usage, cost.resolve_price(model))
 
 
-def reasoning_allowance(*models: str) -> int:
+def args_reasoning_override(plan) -> bool:
+    """Whether ``plan`` was estimated with a calibrated (non-default) allowance."""
+    return plan.reasoning_tokens_per_call not in (0, REASONING_TOKENS_ALLOWANCE)
+
+
+def reasoning_allowance(*models: str, override: int | None = None) -> int:
     """Per-call reasoning tokens to assume: the allowance if ANY of ``models``
-    reasons (the model called and the one it is priced as can differ), else 0."""
-    return REASONING_TOKENS_ALLOWANCE if any(is_reasoning_model(m) for m in models) else 0
+    reasons (the model called and the one it is priced as can differ), else 0.
+
+    ``override`` replaces the default :data:`REASONING_TOKENS_ALLOWANCE` with a
+    value calibrated on a measured run (``--reasoning-allowance``). It only moves
+    the up-front bound: the metered cap always counts the real reasoning tokens.
+    """
+    per_call = REASONING_TOKENS_ALLOWANCE if override is None else max(0, int(override))
+    return per_call if any(is_reasoning_model(m) for m in models) else 0
 
 
 def with_reasoning(usage: cost.Usage, per_call: int) -> cost.Usage:
@@ -1657,10 +1668,12 @@ def dry_run_lines(
         lines.append(
             f"  {model} is a REASONING model: its hidden reasoning tokens are billed as output, "
             f"so every call above also carries a {plan.reasoning_tokens_per_call:,}-token "
-            "reasoning allowance (REASONING_TOKENS_ALLOWANCE). That allowance is an ASSUMPTION "
-            "sized for reasoning effort 'minimal', not a bound — nothing caps reasoning — to be "
-            "calibrated on the pilot run (its report prints the measured mean per call). The "
-            f"metered caps count the real reasoning tokens. Effort sent: '{effort}'."
+            "reasoning allowance ("
+            + ("calibrated with --reasoning-allowance" if args_reasoning_override(plan) else
+               "REASONING_TOKENS_ALLOWANCE")
+            + "). That allowance is an ASSUMPTION, not a bound — nothing caps reasoning — "
+            "to be calibrated on a measured run (its report prints the measured mean per call). "
+            f"The metered caps count the real reasoning tokens. Effort sent: '{effort}'."
         )
         if effort != "minimal":
             lines.append(
@@ -2200,6 +2213,12 @@ def build_parser() -> argparse.ArgumentParser:
              "works for an unpriced model",
     )
     parser.add_argument(
+        "--reasoning-allowance", type=int, default=None, metavar="TOKENS",
+        help="per-call reasoning tokens the up-front bound assumes for a reasoning model "
+             f"(default {REASONING_TOKENS_ALLOWANCE}); set it from a measured run. The metered "
+             "--max-usd cap always counts the real reasoning tokens",
+    )
+    parser.add_argument(
         "--model", default="",
         help="price the --dry-run estimate as this model instead of the configured one. A "
              "real run is priced (and --max-usd enforced) as the configured model; --model "
@@ -2310,7 +2329,7 @@ async def main(argv: list[str] | None = None) -> int:
         evolve_guidance=args.evolve_guidance,
         metric=args.metric,
         settings=settings,
-        reasoning_tokens=reasoning_allowance(called, model),
+        reasoning_tokens=reasoning_allowance(called, model, override=args.reasoning_allowance),
     )
     floor = (
         evolution_floor(
