@@ -13,13 +13,30 @@ import pytest
 
 from synapse_graphrag import Answer, IngestResult, Retrieval, SynapseClient, SynapseError, run
 from synapse_graphrag.client import (
+    LONG_RUNNING_TIMEOUT,
     SynapseConnectionError,
+    env_long_timeout,
     env_max_context_chars,
     env_timeout,
     env_url,
     iter_sse,
+    qa_items,
 )
-from tests.conftest import BASE_URL, INGEST_DONE, RETRIEVAL, FakeBackend, split_bytes, sse
+from tests.conftest import (
+    AGENT_RESULT,
+    BASE_URL,
+    EVOLVE_REPORT,
+    INGEST_DONE,
+    PROC_GRAPH,
+    PROC_GRAPH_DATA,
+    PROC_NAME,
+    PROC_TEXT,
+    PROC_VERSIONS,
+    RETRIEVAL,
+    FakeBackend,
+    split_bytes,
+    sse,
+)
 
 
 # ── SSE parser ───────────────────────────────────────────────────────────────
@@ -267,6 +284,19 @@ def test_env_defaults_and_validation(monkeypatch):
         env_timeout()
 
 
+def test_long_running_requests_wait_at_least_ten_minutes(monkeypatch):
+    """Agent runs outlast SYNAPSE_TIMEOUT's default; timing out would not stop them."""
+    assert LONG_RUNNING_TIMEOUT == 600.0
+    assert env_long_timeout() == 600.0  # SYNAPSE_TIMEOUT unset → 120 → raised to 600
+    monkeypatch.setenv("SYNAPSE_TIMEOUT", "30")
+    assert env_long_timeout() == 600.0
+    monkeypatch.setenv("SYNAPSE_TIMEOUT", "900")
+    assert env_long_timeout() == 900.0
+    monkeypatch.setenv("SYNAPSE_TIMEOUT", "soon")
+    with pytest.raises(SynapseError, match="SYNAPSE_TIMEOUT must be a number"):
+        env_long_timeout()
+
+
 # ── error mapping ────────────────────────────────────────────────────────────
 async def test_http_error_with_json_detail(backend: FakeBackend):
     backend.failures["/api/retrieve"] = (500, "Failed to query the knowledge graph.")
@@ -418,3 +448,266 @@ async def test_follow_job_closes_the_event_stream_in_the_reader_task(backend: Fa
         assert backend.streams[-1].closed_by_reader is True
         await client.rebuild_communities()
         assert backend.streams[-1].closed_by_reader is True
+
+
+# ── procedural memory ────────────────────────────────────────────────────────
+TRAIN = [{"question": "Who wrote programs for the Analytical Engine?", "answer": "Ada Lovelace", "split": "train", "id": "q1"}]
+VAL = [{"question": "Who designed the Analytical Engine?", "answer": " Charles Babbage "}]
+
+
+async def test_procedures_read_endpoints(backend: FakeBackend):
+    async with backend.client() as client:
+        listed = await client.procedures()
+        graph = await client.procedure(PROC_NAME)
+        text = await client.procedure_text(PROC_NAME)
+        data = await client.procedure_graph_data(PROC_NAME)
+
+    assert listed["graphs"][0]["name"] == PROC_NAME and listed["graphs"][0]["version"] == 3
+    assert graph["nodes"] == PROC_GRAPH["nodes"] and graph["edges"] == PROC_GRAPH["edges"]
+    assert (graph["version"], graph["score"]) == (3, 0.5556)
+    assert text == PROC_TEXT
+    assert data == PROC_GRAPH_DATA
+    assert [(c.method, c.path, c.params) for c in backend.calls] == [
+        ("GET", "/api/procedures", {}),
+        ("GET", f"/api/procedures/{PROC_NAME}", {}),
+        ("GET", f"/api/procedures/{PROC_NAME}", {"format": "text"}),
+        ("GET", f"/api/procedures/{PROC_NAME}/graph-data", {}),
+    ]
+
+
+async def test_put_procedure_stores_a_new_version(backend: FakeBackend):
+    graph = {**PROC_GRAPH, "name": "copy"}
+    async with backend.client() as client:
+        first = await client.put_procedure("copy", graph)
+        second = await client.put_procedure("copy", {k: v for k, v in graph.items() if k != "name"})
+    assert first == {"name": "copy", "version": 1}
+    assert second == {"name": "copy", "version": 2}
+    call = backend.calls[0]
+    assert (call.method, call.path) == ("PUT", "/api/procedures/copy")
+    assert call.json == graph
+
+
+async def test_invalid_procedure_is_a_422_with_its_diagnostics(backend: FakeBackend):
+    async with backend.client() as client:
+        with pytest.raises(SynapseError) as info:
+            await client.put_procedure("broken", {"name": "broken", "nodes": [], "edges": []})
+        with pytest.raises(SynapseError, match="must be a JSON object"):
+            await client.put_procedure("broken", ["not", "a", "graph"])  # type: ignore[arg-type]
+    assert info.value.status == 422
+    assert info.value.detail == "Invalid procedural graph: missing Start node; no terminal node"
+    assert info.value.payload == {
+        "message": "Invalid procedural graph",
+        "diagnostics": ["missing Start node", "no terminal node"],
+    }
+    assert len(backend.calls) == 1  # the non-dict body never left the client
+
+
+def test_detail_objects_render_on_one_line():
+    from synapse_graphrag.client import _format_detail
+
+    assert _format_detail({"message": "Invalid", "diagnostics": []}) == "Invalid"
+    assert _format_detail({"message": "", "diagnostics": ["a", "b"]}) == "a; b"
+    assert _format_detail({"other": 1}) == '{"other": 1}'
+
+
+async def test_procedure_names_are_one_percent_encoded_path_segment(backend: FakeBackend):
+    backend.procedures["team/nav v2"] = {**PROC_GRAPH, "name": "team/nav v2", "version": 1, "score": None}
+    async with backend.client() as client:
+        await client.procedure_versions("team/nav v2")
+        with pytest.raises(SynapseError, match="name is required"):
+            await client.procedure("  ")
+    assert backend.calls[0].raw_path == "/api/procedures/team%2Fnav%20v2/versions"
+    assert len(backend.calls) == 1
+
+
+async def test_delete_procedure_and_unknown_names(backend: FakeBackend):
+    async with backend.client() as client:
+        assert await client.delete_procedure(PROC_NAME) == {"status": "success"}
+        with pytest.raises(SynapseError) as info:
+            await client.procedure(PROC_NAME)
+    assert (info.value.status, info.value.detail) == (404, f"Procedural graph '{PROC_NAME}' not found.")
+    assert backend.paths("DELETE") == [f"/api/procedures/{PROC_NAME}"]
+
+
+async def test_procedure_guidance_sends_a_reduced_trajectory(backend: FakeBackend):
+    steps = [
+        {"thought": "t1", "action": "search_entities", "args": {"query": "x"}, "observation": "found"},
+        {"action": "neighbors", "observation": None},
+    ]
+    async with backend.client() as client:
+        start = await client.procedure_guidance(PROC_NAME, "Who?")
+        later = await client.procedure_guidance(
+            PROC_NAME, "Who?", steps, mode="generative", hops=1, window=2
+        )
+
+    assert backend.calls[0].json == {"query": "Who?", "trajectory": []}  # unset options omitted
+    assert backend.calls[1].json == {
+        "query": "Who?",
+        "trajectory": [{"action": "search_entities", "observation": "found"}, {"action": "neighbors"}],
+        "mode": "generative",
+        "hops": 1,
+        "window": 2,
+    }
+    assert backend.paths() == [f"/api/procedures/{PROC_NAME}/guidance"] * 2
+    assert (start["active_node"], start["localization"], start["scope"]) == ("Start", "start", "local")
+    assert later["active_node"] == "neighbors" and later["next_actions"] == ["answer"]
+    assert later["guidance"] and later["usage"]["llm_calls"] == 1
+
+    async with backend.client() as client:
+        with pytest.raises(SynapseError, match="must be an object"):
+            await client.procedure_guidance(PROC_NAME, "q", ["search_entities"])  # type: ignore[list-item]
+
+
+async def test_record_trajectory_checks_the_score_before_sending(backend: FakeBackend):
+    steps = [{"action": "search_entities", "observation": "found"}, {"action": "answer"}]
+    async with backend.client() as client:
+        assert await client.record_trajectory(PROC_NAME, "q", steps, 0.75) == {"status": "recorded"}
+        await client.record_trajectory(PROC_NAME, "q", steps, 1, source="eval")
+        with pytest.raises(SynapseError, match=r"score must be in \[0, 1\], got 1.5"):
+            await client.record_trajectory(PROC_NAME, "q", steps, 1.5)
+        with pytest.raises(SynapseError, match="score must be a number"):
+            await client.record_trajectory(PROC_NAME, "q", steps, "high")  # type: ignore[arg-type]
+    assert backend.calls[0].path == f"/api/procedures/{PROC_NAME}/trajectories"
+    assert backend.calls[0].json == {"query": "q", "steps": steps, "score": 0.75, "source": "client"}
+    assert backend.calls[1].json["source"] == "eval" and backend.calls[1].json["score"] == 1.0
+    assert len(backend.calls) == 2
+
+
+async def test_versions_rollback_and_rejections(backend: FakeBackend):
+    async with backend.client() as client:
+        versions = await client.procedure_versions(PROC_NAME)
+        rolled = await client.rollback_procedure(PROC_NAME, 2)
+        rejections = await client.procedure_rejections(PROC_NAME, limit=5)
+
+    assert versions == PROC_VERSIONS
+    assert rolled == {"name": PROC_NAME, "version": 4}
+    assert rejections["rejections"][0]["round"] == 3
+    assert [(c.method, c.path) for c in backend.calls] == [
+        ("GET", f"/api/procedures/{PROC_NAME}/versions"),
+        ("POST", f"/api/procedures/{PROC_NAME}/rollback"),
+        ("GET", f"/api/procedures/{PROC_NAME}/rejections"),
+    ]
+    assert backend.calls[1].json == {"version": 2}
+    assert backend.calls[2].params == {"limit": "5"}
+
+
+async def test_evolve_procedure_posts_then_follows_the_job(backend: FakeBackend):
+    seen: list[dict] = []
+    async with backend.client() as client:
+        report = await client.evolve_procedure(
+            PROC_NAME, TRAIN, VAL, rounds=2, max_llm_calls=150, on_progress=seen.append
+        )
+
+    post = backend.calls[0]
+    assert (post.method, post.path) == ("POST", f"/api/procedures/{PROC_NAME}/evolve")
+    assert post.json == {
+        "train": [{"question": TRAIN[0]["question"], "answer": "Ada Lovelace"}],  # split/id dropped
+        "val": [{"question": VAL[0]["question"], "answer": "Charles Babbage"}],
+        "mode": "static",
+        "metric": "f1",
+        "guidance": "raw",
+        "rounds": 2,
+        "max_llm_calls": 150,
+    }  # batch_size unset → omitted, the backend's default applies
+    assert backend.paths("GET") == ["/api/procedures/evolve/job_000009/events"]
+    assert report == {"job_id": "job_000009", **EVOLVE_REPORT}
+    assert seen[0] == {"type": "accepted", "job_id": "job_000009", "status": "processing"}
+    assert [e.get("stage") for e in seen[1:]] == ["baseline", "baseline", "rollout", "refine", "accepted", "rejected"]
+    assert backend.streams[-1].closed_by_reader is True
+
+
+async def test_evolve_event_stream_waits_without_an_idle_timeout(backend: FakeBackend):
+    """Rounds can be minutes apart; SYNAPSE_TIMEOUT must not cut the job's stream."""
+    timeouts: dict[str, dict] = {}
+
+    async def spy(request: httpx.Request) -> httpx.Response:
+        timeouts[request.url.path] = request.extensions["timeout"]
+        return await backend.handle(request)
+
+    async with SynapseClient(BASE_URL, timeout=5, transport=httpx.MockTransport(spy)) as client:
+        await client.evolve_procedure(PROC_NAME, TRAIN, VAL)
+    events = timeouts["/api/procedures/evolve/job_000009/events"]
+    assert events["read"] is None and events["connect"] == 5
+    assert timeouts[f"/api/procedures/{PROC_NAME}/evolve"]["read"] == 5
+
+
+async def test_evolve_replace_is_sent_only_when_asked(backend: FakeBackend):
+    async with backend.client() as client:
+        await client.evolve_procedure(PROC_NAME, TRAIN, VAL, mode="scratch", replace=True)
+        await client.evolve_procedure(PROC_NAME, TRAIN, VAL, mode="scratch")
+    first, second = (c.json for c in backend.calls if c.method == "POST")
+    assert first["replace"] is True and first["mode"] == "scratch"
+    assert "replace" not in second  # the backend's default: refuse to overwrite
+
+
+async def test_evolve_refusals_keep_their_detail_and_start_nothing(backend: FakeBackend):
+    """A too-small cap (422) and scratch over a stored graph (409) are refused
+    before the job exists: no event stream is opened."""
+    path = f"/api/procedures/{PROC_NAME}/evolve"
+    backend.failures[path] = (
+        422,
+        {
+            "message": "max_llm_calls cannot pay for the baseline and one full round",
+            "diagnostics": ["max_llm_calls=16 cannot pay …; set max_llm_calls to at least 17"],
+            "minimum_max_llm_calls": 17,
+        },
+    )
+    async with backend.client() as client:
+        with pytest.raises(SynapseError) as too_small:
+            await client.evolve_procedure(PROC_NAME, TRAIN, VAL, max_llm_calls=16)
+        backend.failures[path] = (409, f"Procedural graph '{PROC_NAME}' already exists (v3)")
+        with pytest.raises(SynapseError) as exists:
+            await client.evolve_procedure(PROC_NAME, TRAIN, VAL, mode="scratch")
+    assert too_small.value.status == 422
+    assert too_small.value.payload["minimum_max_llm_calls"] == 17
+    assert "at least 17" in str(too_small.value) and "\n" not in str(too_small.value)
+    assert exists.value.status == 409 and "already exists" in str(exists.value)
+    assert backend.paths("GET") == []
+
+
+async def test_evolve_error_event_and_invalid_sets(backend: FakeBackend):
+    backend.evolve_events = [
+        {"type": "progress", "stage": "baseline", "round": 0},
+        {"type": "error", "data": "LLM provider not configured"},
+    ]
+    async with backend.client() as client:
+        with pytest.raises(SynapseError, match="LLM provider not configured"):
+            await client.evolve_procedure(PROC_NAME, TRAIN, VAL)
+        calls = len(backend.calls)
+        with pytest.raises(SynapseError, match="train must hold at least one"):
+            await client.evolve_procedure(PROC_NAME, [], VAL)
+        with pytest.raises(SynapseError, match=r"val\[0\] needs a non-empty 'question' and 'answer'"):
+            await client.evolve_procedure(PROC_NAME, TRAIN, [{"question": "q", "answer": ""}])
+    assert len(backend.calls) == calls  # nothing sent for invalid sets
+
+
+def test_qa_items_validation():
+    assert qa_items([{"question": " q ", "answer": 1990}], "x") == [{"question": "q", "answer": "1990"}]
+    # Several acceptable gold answers stay a list (the backend scores the best match).
+    assert qa_items([{"question": "q", "answer": ["NYC", " New York City ", "", None]}], "x") == [
+        {"question": "q", "answer": ["NYC", "New York City"]}
+    ]
+    with pytest.raises(SynapseError, match=r"x\[0\] needs"):
+        qa_items([{"question": "q", "answer": ["", None]}], "x")
+    with pytest.raises(SynapseError, match=r"x\[1\] must be an object"):
+        qa_items([{"question": "q", "answer": "a"}, "q2"], "x")
+    with pytest.raises(SynapseError, match=r"x\[0\] needs"):
+        qa_items([{"answer": "a"}], "x")
+
+
+async def test_agent_ask_graph_defaults_and_overrides(backend: FakeBackend):
+    async with backend.client() as client:
+        default = await client.agent_ask("Who wrote programs for the engine?")
+        bare = await client.agent_ask("q", graph=None, guidance="none", max_steps=3, record=True)
+        await client.agent_ask("q", graph=PROC_NAME, guidance="generative")
+        with pytest.raises(SynapseError) as info:
+            await client.agent_ask("q", graph="nope")
+
+    assert default == AGENT_RESULT
+    bodies = [c.json for c in backend.calls]
+    assert bodies[0] == {"query": "Who wrote programs for the engine?", "record": False}  # backend picks
+    assert bodies[1] == {"query": "q", "record": True, "graph": None, "guidance": "none", "max_steps": 3}
+    assert bodies[2] == {"query": "q", "record": False, "graph": PROC_NAME, "guidance": "generative"}
+    assert bare["graph"] is None
+    assert backend.paths() == ["/api/agent/ask"] * 4
+    assert info.value.status == 404

@@ -700,7 +700,8 @@ def threats(report) -> list[str]:
         "why the strict rule is reported alongside, why C scores 0.0 under it by construction, "
         "and why the channel split is printed.",
         "PRICES ARE HAND-RECORDED. Every USD figure is an estimate from a constant table checked "
-        f"on {cost.PRICES_CHECKED_ON}, not from an invoice.",
+        f"on {cost.PRICES_CHECKED_ON} (an entry re-verified later carries its own date, which the "
+        "cost lines quote), not from an invoice.",
         "SENTENCE MATCHING IS LEXICAL. Supporting-fact recall is whitespace-normalised substring "
         "matching over retrieved prose. It cannot see a paraphrase, and it credits a sentence "
         "that arrived inside a paragraph retrieved for some other reason. Same rule for every "

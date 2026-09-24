@@ -52,8 +52,8 @@ Open **<http://localhost:3000>** and you have a live, explorable knowledge graph
 | Backend API (Swagger) | <http://localhost:8000/docs> |
 | Neo4j Browser | <http://localhost:7474> · `neo4j` / `synapse_secret` |
 
-> **What works with no key:** the graph view, node inspector, hybrid vector + full-text retrieval, embeddings (local `fastembed`), and the whole test suite.
-> **What needs a key:** *generating* chat answers and ingesting your own PDFs — both call an LLM. Grab a **free** [Google AI Studio](https://aistudio.google.com/apikey) or [Groq](https://console.groq.com/keys) key, drop it in `.env`, restart, and you're done. Or run fully offline with [Ollama](#-provider-matrix).
+> **What works with no key:** the graph view, node inspector, hybrid vector + full-text retrieval, embeddings (local `fastembed`), the procedural-graph view and raw procedural guidance, and the whole test suite.
+> **What needs a key:** *generating* chat answers, ingesting your own PDFs and running the Navigator agent — all of them call an LLM. Grab a **free** [Google AI Studio](https://aistudio.google.com/apikey) or [Groq](https://console.groq.com/keys) key, drop it in `.env`, restart, and you're done. Or run fully offline with [Ollama](#-provider-matrix).
 
 <details>
 <summary>Prefer not to install Docker Desktop? Other ways to run it</summary>
@@ -111,7 +111,11 @@ Then ask your assistant *"What does the Synapse graph say about the Analytical E
 | `synapse_find_entities` | Case-insensitive substring search over entity labels and types | |
 | `synapse_graph_stats` | Node/edge counts, by entity type and relationship type | |
 | `synapse_status` | Health, readiness, version and the active providers | |
-| `synapse_clear_graph` | Wipe the graph — refuses unless called with `confirm=true` | ⚠️ |
+| `synapse_clear_graph` | Wipe the knowledge graph (procedural graphs are kept) — refuses unless called with `confirm=true` | ⚠️ |
+| `synapse_procedures` | The [procedural graphs](#-procedural-memory-agents-that-learn-how-to-use-the-graph) the backend keeps, with version and score | |
+| `synapse_procedure_guidance` | Call before each step of a multi-step task: the procedural subgraph around your last action (default graph `mcp-host`, built on these tools) — `raw` mode makes **no LLM call** | |
+| `synapse_record_trajectory` | Record a finished run (its steps and an honest score in [0, 1]) against a procedural graph | ✅ |
+| `synapse_agent_ask` | The backend's GraphRAG Navigator agent answers by walking the graph step by step (backend LLM calls — one per step) | |
 
 ### 💸 FinOps: budgeted context, not a second LLM bill
 
@@ -129,6 +133,70 @@ Working on AI safety? Ingest with `--theme "AI Safety"` (risks, failure modes, m
 
 ---
 
+## 🧭 Procedural memory: agents that learn *how* to use the graph
+
+The knowledge graph is *semantic* memory: what your documents say. It says nothing about *how* to
+use it: which lookup comes first, when a bridge entity has been found, when the evidence is enough
+to answer. Synapse adds **procedural memory**, an implementation of *Procedural Graphs* (Lu, Chen,
+Wu, Arık — [arXiv:2609.09153](https://arxiv.org/abs/2609.09153)).
+
+A procedural graph is a small directed graph of tool actions, reasoning steps and statuses. Every
+transition carries a **condition**, **guidance** and **pitfalls**. It lives in the same Neo4j as the
+entities it helps navigate, and every change is versioned and can be rolled back.
+
+- **Online.** An agent's last action places it on a node, and it is shown the transitions up to two
+  hops ahead. By default the guidance is that **raw subgraph: zero extra LLM calls**. The paper
+  instead has a guidance LLM rewrite it at every step. Its localized generative guidance cost
+  +33 % to +55 % total tokens over no graph (GDPval, ALFWorld). Raw guidance is Synapse's own
+  choice, and a hypothesis to measure rather than a result.
+- **Offline.** The paper's self-evolution loop refines the graph from scored question/answer
+  pairs: roll out, let an LLM propose edits, and keep a candidate only if the validation score does
+  not drop. It is a search, not a guaranteed gain: in the paper's HotpotQA study, evolving the
+  expert graph (what `evolve --mode static` does) scored 76.34 F1 at 10,658 tokens per question,
+  *below* the unevolved expert graph (76.61 at 9,046). Of the modes Synapse implements, only
+  evolution from scratch (`--mode scratch`) beat it (78.79).
+
+```mermaid
+flowchart LR
+    Q[💬 Question] --> S{{Navigator step<br/>Thought → Action}}
+    S -->|last action| L[Localize on the<br/>procedural graph · 2 hops]
+    PG[(Procedural graph<br/>conditions · guidance · pitfalls)] --> L
+    L -->|guidance · raw = no LLM call| S
+    S -->|deterministic tool| KG[(Knowledge graph<br/>entities · relations · passages)]
+    KG -->|observation| S
+    S --> A[💡 Answer + step trace]
+    QA[📋 QA pairs] --> EV[Self-evolution<br/>rollouts → refiner → validation gate]
+    EV -->|new version if the score holds| PG
+```
+
+The built-in consumer is the **GraphRAG Navigator**, a ReAct agent that answers by walking
+Synapse's own graph with six deterministic tools, steered by the `graphrag-navigator` graph (in
+the UI: *Chat | Navigator*, and *Knowledge | Procedures* to see the graph). MCP hosts get
+guidance for their own work through `synapse_procedure_guidance` and the `follow_procedure`
+prompt, on a second bundled graph, `mcp-host`, whose steps are the real `synapse_*` tool names:
+a host's own calls place it on the graph by exact name.
+
+```bash
+synapse-graphrag procedures show graphrag-navigator    # the bundled expert strategy, transition by transition
+synapse-graphrag agent "Who designed the machine that Ada Lovelace wrote a program for?"   # step trace + usage
+# evolve on the bundled demo QA set: a cap under one round, (9+6+9)×8 + 1 = 193 calls, is refused; prints the bound, asks first
+synapse-graphrag evolve graphrag-navigator \
+    --train backend/benchmarks/procedural/demo_qa.json --train-split train \
+    --val   backend/benchmarks/procedural/demo_qa.json --val-split val \
+    --rounds 1 --batch-size 6 --max-llm-calls 200
+```
+
+`agent` and `evolve` need an LLM key on the backend. The `procedures …` commands make no LLM call,
+except `procedures guide --mode generative`. The demo graph has no source chunks, so on it the
+Navigator's `read_sources` and `search_passages` return nothing. We have
+**not** reproduced the paper's numbers: a [cost-capped harness](./backend/benchmarks/procedural/README.md)
+compares systems on Synapse's own Navigator (no graph vs raw vs generative guidance), which is
+not a reproduction of the paper's tables. The data model, the localization cascade, Algorithm 1 as implemented, the
+API / MCP / CLI reference, costs and limitations are in
+**[docs/procedural-graphs.md](./docs/procedural-graphs.md)**.
+
+---
+
 ## ✨ Why it's interesting
 
 - **Real GraphRAG, not keyword lookup.** Retrieval seeds from a **Neo4j vector index** over entity embeddings *and* a full-text index, then expands each seed to its 1-hop neighborhood so the model reasons over *relationships*, not isolated facts.
@@ -136,7 +204,8 @@ Working on AI safety? Ingest with `--theme "AI Safety"` (risks, failure modes, m
 - **Genuinely pluggable AI.** **Ten chat providers and nine embedding providers** behind one small factory, chosen by a single env var — from OpenAI and Bedrock to a laptop running Ollama. No code change, no rebuild.
 - **Streamed everything.** Ingestion progress and chat answers both stream over **Server-Sent Events**; answers arrive token-by-token with the grounding entities highlighted live in the graph.
 - **Callable from any agent.** An MCP server, CLI and Python client ([`synapse-graphrag`](./docs/mcp.md)) expose the graph to Claude, Cursor, VS Code and friends — and the retrieval-only `synapse_retrieve` tool returns **budgeted** context with `usage` metadata, so a host that already has an LLM never pays for a second generation.
-- **Tested & CI'd.** 800+ hermetic unit tests plus integration tests against a **real Neo4j service container** in GitHub Actions, and frontend typecheck/lint/build on every push.
+- **Procedural memory, not just facts.** [Procedural Graphs](./docs/procedural-graphs.md) (arXiv:2609.09153) store *how* to navigate the graph next to the graph itself: step-local guidance with **zero extra LLM calls** by default, a ReAct navigator agent to use it, and the paper's self-evolution loop with versioned, rollback-able history — plus a cost-capped harness to measure whether it helps, instead of claiming it does.
+- **Tested & CI'd.** 1,300+ hermetic unit tests plus integration tests against a **real Neo4j service container** in GitHub Actions, and frontend typecheck/lint/build on every push.
 
 ---
 
@@ -160,7 +229,7 @@ flowchart LR
     R --> M[🤖 MCP host · CLI · SDK]
 ```
 
-Ingestion runs as a background job that streams progress; retrieval interleaves semantic and lexical seeds, preserves the vector ranking, and returns the entities that grounded the answer as citations. The retrieval step is also exposed on its own as **`POST /api/retrieve`** — context, citations, reasoning paths and source chunks under a `max_context_chars` budget, with `usage` metadata and no LLM call — which is what the MCP server and CLI build on. See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design.
+Ingestion runs as a background job that streams progress; retrieval interleaves semantic and lexical seeds, preserves the vector ranking, and returns the entities that grounded the answer as citations. The retrieval step is also exposed on its own as **`POST /api/retrieve`** — context, citations, reasoning paths and source chunks under a `max_context_chars` budget, with `usage` metadata and no LLM call — which is what the MCP server and CLI build on. A second, step-by-step path — the GraphRAG Navigator agent steered by a procedural graph (`POST /api/agent/ask`) — is described [above](#-procedural-memory-agents-that-learn-how-to-use-the-graph). See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design.
 
 ---
 
@@ -231,7 +300,7 @@ Because most GraphRAG repos are notebooks. This one is a running product with th
 
 - **Swap the whole AI layer with one env var.** Ten chat backends and nine embedding backends behind [one small factory](./backend/app/services/llm_provider.py). Benchmark Gemini vs. Groq vs. your own vLLM box without touching application code.
 - **A real vector GraphRAG reference implementation.** Neo4j native vector *and* full-text indexes, interleaved seeding, 1-hop expansion, streamed citations that map back to graph nodes. Not a `similarity_search()` wrapper.
-- **A test suite and CI you can build on.** 800+ hermetic backend tests (no network, no DB, no LLM), integration tests against a live Neo4j service container, ruff + eslint + tsc, and all three Docker image builds — all green on every push.
+- **A test suite and CI you can build on.** 1,300+ hermetic backend tests (no network, no DB, no LLM), integration tests against a live Neo4j service container, ruff + eslint + tsc, and all three Docker image builds — all green on every push.
 - **Docs that respect your time.** [ARCHITECTURE.md](./ARCHITECTURE.md) explains *why*, [DEPLOYMENT.md](./DEPLOYMENT.md) gets it online, [CONTRIBUTING.md](./CONTRIBUTING.md) walks you through your first PR, and every env var is documented in [`.env.example`](./.env.example).
 - **A clean seam to extend.** Provider branches are lazily imported and validate credentials *before* touching an SDK — which is why a new provider is a self-contained ~20-line change plus a test.
 
@@ -270,7 +339,7 @@ Every push runs [CI](./.github/workflows/ci.yml): backend lint + unit tests, **i
 | **Backend** | FastAPI, LangChain, async Neo4j driver, `pypdf`, SSE |
 | **AI** | 10 pluggable chat providers · 9 pluggable embedding providers · local `fastembed` default |
 | **Database** | Neo4j 5 (Bolt + APOC + native vector & full-text indexes) |
-| **Agents** | MCP server (stdio + streamable HTTP), CLI and async Python client — `synapse-graphrag` |
+| **Agents** | MCP server (stdio + streamable HTTP), CLI and async Python client — `synapse-graphrag` · GraphRAG Navigator (ReAct) steered by Procedural Graphs |
 | **Infra** | Docker Compose, GitHub Actions (CI + tag-driven releases to GHCR / PyPI), Codespaces devcontainer |
 
 ---
@@ -283,32 +352,40 @@ synapse/
 │   ├── app/
 │   │   ├── main.py                 # FastAPI app: CORS, lifespan, health/readiness, /api/about
 │   │   ├── config.py               # typed settings (every provider, one Literal)
-│   │   ├── neo4j_driver.py         # async driver + connectivity check
-│   │   ├── routers/                # upload (SSE jobs) · chat (SSE) + retrieve (JSON) · graph + communities
+│   │   ├── neo4j_driver.py         # async driver + connectivity check + one-transaction write batches
+│   │   ├── routers/                # upload (SSE jobs) · chat (SSE) + retrieve (JSON) · graph + communities · procedures + agent
+│   │   ├── data/procedural/        # bundled expert priors, seeded at startup — graphrag-navigator.json (the Navigator) · mcp-host.json (MCP hosts)
 │   │   └── services/
 │   │       ├── llm_provider.py     # ⭐ the pluggable chat + embeddings factory
 │   │       ├── graph_builder.py    # extract → dedupe → embed → write
-│   │       ├── graph_schema.py     # vector + full-text index bootstrap
+│   │       ├── graph_schema.py     # vector + full-text index bootstrap (+ procedural constraints)
 │   │       ├── chat_engine.py      # hybrid GraphRAG retrieval, multi-hop paths, budgeting, streaming
 │   │       ├── entity_resolution.py# embedding + fuzzy-name duplicate merging
 │   │       ├── communities.py      # Louvain communities + LLM summaries (global search)
 │   │       ├── chunk_store.py      # source chunks (text units) linked to entities
+│   │       ├── procedural_graph.py # 🧭 Procedural Graphs: the pure data structure, edits, validation, serializers
+│   │       ├── procedural_store.py # procedural memory in Neo4j: versions, rollback, rejections, trajectories
+│   │       ├── procedural_guidance.py # step-local guidance: localization cascade, raw / generative modes
+│   │       ├── graph_agent.py      # the GraphRAG Navigator: a ReAct agent over deterministic graph tools
+│   │       ├── procedural_evolution.py # offline self-evolution (the paper's Algorithm 1), LLM-call budget
+│   │       ├── qa_metrics.py       # SQuAD / HotpotQA EM + F1
 │   │       ├── pdf_parser.py       # sentence-aware chunking
 │   │       └── jobs.py             # in-memory SSE job bus
 │   ├── scripts/seed_demo.py        # zero-API-key demo graph seeder (`make demo`)
 │   ├── tests/                      # hermetic unit tests + integration tests
 │   ├── eval/                       # retrieval eval harness + results
-│   ├── benchmarks/                 # GraphRAG vs vector RAG harness · public/ HotpotQA & 2Wiki loaders
+│   ├── benchmarks/                 # GraphRAG vs vector RAG harness · public/ HotpotQA & 2Wiki loaders · procedural/ Procedural Graphs harness
 │   ├── requirements.txt            # batteries-included providers
 │   └── requirements-providers.txt  # opt-in cloud SDKs (`make providers`)
 ├── frontend/
 │   └── src/app/
 │       ├── lib/                    # typed API client, types, constants
-│       └── components/             # GraphPanel · ChatPanel · FileUpload · Inspector · ThemesPanel
+│       └── components/             # GraphPanel · ProceduralPanel · ChatPanel (Chat | Navigator) · FileUpload · Inspector · ThemesPanel
 ├── packages/
 │   └── synapse-graphrag/           # 🤖 MCP server · CLI · async Python client (PyPI: synapse-graphrag)
 ├── scripts/                        # release checks (versions, changelog) + branch-protection ruleset
 ├── docs/mcp.md                     # MCP / CLI / SDK guide
+├── docs/procedural-graphs.md       # procedural memory: guidance, the Navigator, self-evolution, limits
 ├── docs/finops.md                  # cost model: where a GraphRAG dollar goes, and the knob for each
 ├── docs/ai-safety.md               # the `AI Safety` theme and `safety_brief` prompt
 ├── .devcontainer/                  # one-click Codespaces environment
@@ -344,6 +421,9 @@ Start with **[CONTRIBUTING.md](./CONTRIBUTING.md)** (dev setup, conventions, and
 - [x] Entity resolution with embedding-similarity merging
 - [x] MCP server, CLI & Python client (`synapse-graphrag`)
 - [x] `AI Safety` extraction theme + `safety_brief` MCP prompt
+- [x] Procedural memory — Procedural Graphs: step-local guidance, the GraphRAG Navigator agent, self-evolution with version history & rollback
+- [ ] Measure procedural guidance on HotpotQA with the navigator (tokens per correct answer) — a comparison between systems, not a reproduction of the paper's tables
+- [ ] Learn from recorded agent trajectories (today they are stored, but evolution learns only from its own rollouts)
 - [ ] Publish to the MCP Registry & PyPI (trusted publishing)
 - [ ] Per-answer cost accounting across providers (FinOps)
 - [ ] Per-document management (list / delete individual sources)

@@ -26,12 +26,20 @@ Provider SDKs are imported lazily inside each branch so the app boots (and the
 test suite runs) even when an optional provider package isn't installed. Missing
 credentials raise a clear, actionable error only when that provider is invoked;
 the heavier SDKs live in ``requirements-providers.txt``.
+
+OpenAI *reasoning* models (the gpt-5 family and the o-series, see
+:func:`is_reasoning_model`) are built differently on the three ``ChatOpenAI``
+branches (openai, azure_openai, openai_compatible): they accept only the
+default temperature, so none is sent, and they get
+``reasoning_effort=OPENAI_REASONING_EFFORT`` instead (default ``minimal``,
+because hidden reasoning tokens are billed as output tokens).
 """
 
 from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
@@ -64,6 +72,12 @@ CHAT_PROVIDERS = (
     "openai_compatible",
 )
 
+#: OpenAI reasoning models: the gpt-5 family and the o-series (o1, o3-mini,
+#: o4-mini, …). They reject any temperature but the default and take a
+#: ``reasoning_effort`` instead. Matched on the model id the provider is given —
+#: for Azure that is the DEPLOYMENT name, so name the deployment after the model.
+REASONING_MODEL_PATTERN = re.compile(r"^(gpt-5|o[1-9])")
+
 #: Embedding providers accepted by :func:`get_embeddings`.
 EMBEDDING_PROVIDERS = (
     "fastembed",
@@ -76,6 +90,40 @@ EMBEDDING_PROVIDERS = (
     "bedrock",
     "cohere",
 )
+
+
+def is_reasoning_model(model: str | None) -> bool:
+    """True for an OpenAI reasoning model id (see :data:`REASONING_MODEL_PATTERN`)."""
+    return bool(REASONING_MODEL_PATTERN.match((model or "").strip().lower()))
+
+
+def reasoning_effort_for(model: str | None, effort: str) -> str:
+    """The ``reasoning_effort`` actually sent to ``model``.
+
+    ``minimal`` exists only on the gpt-5 family; the o-series accepts
+    ``low | medium | high`` and answers ``minimal`` with a 400, so it gets the
+    closest effort it has. Every other value is passed through for the API to
+    validate.
+    """
+    effort = (effort or "").strip().lower() or "minimal"
+    name = (model or "").strip().lower()
+    if effort == "minimal" and is_reasoning_model(name) and not name.startswith("gpt-5"):
+        logger.info("reasoning_effort 'minimal' is gpt-5-only; sending 'low' to %s", model)
+        return "low"
+    return effort
+
+
+def _openai_sampling_kwargs(model: str | None, temp: float, settings: Settings) -> dict:
+    """``temperature`` for a classic model; ``reasoning_effort`` for a reasoning one.
+
+    langchain-openai 0.3.x declares ``reasoning_effort`` as a ``ChatOpenAI``
+    field and drops a ``None`` temperature from the request payload, so
+    leaving ``temperature`` out means none is sent. (The one exception is the
+    library's own o1 rule, which sets temperature=1 — the only value o1 takes.)
+    """
+    if not is_reasoning_model(model):
+        return {"temperature": temp}
+    return {"reasoning_effort": reasoning_effort_for(model, settings.openai_reasoning_effort)}
 
 
 def _missing_package(
@@ -199,7 +247,7 @@ def get_chat_llm(
         kwargs: dict = {
             "model": settings.openai_chat_model,
             "api_key": settings.openai_api_key,
-            "temperature": temp,
+            **_openai_sampling_kwargs(settings.openai_chat_model, temp, settings),
             "streaming": streaming,
         }
         if json_mode:
@@ -230,7 +278,7 @@ def get_chat_llm(
             # Local servers (vLLM/LM Studio/llama.cpp) ignore the key, but the
             # OpenAI SDK refuses to construct without one.
             "api_key": settings.openai_compatible_api_key or "not-needed",
-            "temperature": temp,
+            **_openai_sampling_kwargs(settings.openai_compatible_chat_model, temp, settings),
             "streaming": streaming,
         }
         if json_mode:
@@ -248,7 +296,8 @@ def get_chat_llm(
             "azure_deployment": settings.azure_openai_chat_deployment,
             "api_version": settings.azure_openai_api_version,
             "api_key": settings.azure_openai_api_key,
-            "temperature": temp,
+            # Azure has no model id here, only the deployment name.
+            **_openai_sampling_kwargs(settings.azure_openai_chat_deployment, temp, settings),
             "streaming": streaming,
         }
         if json_mode:

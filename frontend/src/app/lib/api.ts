@@ -1,5 +1,7 @@
 import { API_URL } from "./constants";
 import type {
+  AgentAskOptions,
+  AgentResult,
   ChatEvent,
   ChatMessage,
   Community,
@@ -8,6 +10,12 @@ import type {
   CommunityList,
   GraphData,
   IngestEvent,
+  ProcedureList,
+  ProceduralGraphSummary,
+  ProcGraphData,
+  ProcVersion,
+  ProcVersionList,
+  RollbackResult,
   Source,
   Theme,
   UploadJob,
@@ -150,4 +158,124 @@ export async function streamChat(
     const usable = withVerifiableSources(event);
     if (usable) onEvent(usable);
   });
+}
+
+// ── Procedural memory ─────────────────────────────────
+
+/**
+ * A non-2xx response that keeps the status and the server's own explanation,
+ * so the UI can tell "no LLM key configured" (503) apart from "no such graph"
+ * (404) instead of printing a bare status code.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly detail: string;
+
+  constructor(status: number, message: string, detail: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detail = detail;
+  }
+}
+
+/**
+ * FastAPI's `detail` comes in three shapes: a string, the procedures router's
+ * `{message, diagnostics}` object, or request validation's list of `{msg}`.
+ */
+function describeDetail(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((d) => (d && typeof d === "object" && "msg" in d ? String(d.msg) : String(d)))
+      .join("; ");
+  }
+  if (detail && typeof detail === "object" && "message" in detail) {
+    return String(detail.message);
+  }
+  return "";
+}
+
+async function apiError(res: Response, what: string): Promise<ApiError> {
+  const body = await res.json().catch(() => null);
+  const detail = describeDetail(body?.detail);
+  return new ApiError(res.status, `${what} ${res.status}`, detail);
+}
+
+const procedurePath = (name: string) =>
+  `${API_URL}/api/procedures/${encodeURIComponent(name)}`;
+
+/** Every stored procedural graph, with its live version and validation score. */
+export async function fetchProcedures(
+  signal?: AbortSignal,
+): Promise<ProceduralGraphSummary[]> {
+  const res = await fetch(`${API_URL}/api/procedures`, { signal });
+  if (!res.ok) throw await apiError(res, "procedures");
+  const body: ProcedureList = await res.json();
+  return body.graphs ?? [];
+}
+
+/** One procedural graph in react-force-graph's `{nodes, links}` shape. */
+export async function fetchProcedureGraph(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ProcGraphData> {
+  const res = await fetch(`${procedurePath(name)}/graph-data`, { signal });
+  if (!res.ok) throw await apiError(res, "procedure graph");
+  return res.json();
+}
+
+/** Version history, newest first. */
+export async function fetchProcedureVersions(
+  name: string,
+  signal?: AbortSignal,
+): Promise<ProcVersion[]> {
+  const res = await fetch(`${procedurePath(name)}/versions`, { signal });
+  if (!res.ok) throw await apiError(res, "procedure versions");
+  const body: ProcVersionList = await res.json();
+  return body.versions ?? [];
+}
+
+/**
+ * Re-save an old version as a *new* one (history is append-only: nothing is
+ * deleted, and the rollback itself can be rolled back).
+ */
+export async function rollbackProcedure(
+  name: string,
+  version: number,
+): Promise<RollbackResult> {
+  const res = await fetch(`${procedurePath(name)}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version }),
+  });
+  if (!res.ok) throw await apiError(res, "rollback");
+  return res.json();
+}
+
+/**
+ * Ask the GraphRAG Navigator: a ReAct agent that answers by walking the
+ * knowledge graph with deterministic tools, steered by a procedural graph.
+ * Non-streaming — the whole run (every step) comes back at once.
+ */
+export async function agentAsk(
+  query: string,
+  { graph, guidance, maxSteps, record }: AgentAskOptions = {},
+  signal?: AbortSignal,
+): Promise<AgentResult> {
+  const body: Record<string, unknown> = { query };
+  // `graph: null` is meaningful (run without a procedural graph), so only an
+  // omitted graph falls back to the server's default.
+  if (graph !== undefined) body.graph = graph;
+  if (guidance) body.guidance = guidance;
+  if (maxSteps != null) body.max_steps = maxSteps;
+  if (record != null) body.record = record;
+  const res = await fetch(`${API_URL}/api/agent/ask`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) throw await apiError(res, "agent");
+  return res.json();
 }

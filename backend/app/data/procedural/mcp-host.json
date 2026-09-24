@@ -1,0 +1,216 @@
+{
+  "name": "mcp-host",
+  "description": "Expert prior for an MCP host (Claude, Cursor or any Model Context Protocol client) answering a question from Synapse with the synapse_* tools. Its ACTION nodes are those tool names, so the host's own tool calls localise it on the graph; graphrag-navigator is the backend navigator's own graph, whose actions are the navigator's internal tools. Hand-designed as the starting point (G0). Structure after Lu, Chen, Wu, Arık, 'Procedural Graphs: Self-Evolving Execution Structures for LLM Agents', arXiv:2609.09153.",
+  "cycle_policy": "forbid",
+  "tools": [
+    "synapse_retrieve",
+    "synapse_find_entities",
+    "synapse_communities",
+    "synapse_graph_stats",
+    "synapse_status",
+    "synapse_ask"
+  ],
+  "nodes": [
+    {
+      "id": "Start",
+      "type": "STATUS",
+      "description": "A question about the user's documents has been received and no Synapse tool has been called yet."
+    },
+    {
+      "id": "Plan_Question",
+      "type": "REASONING",
+      "description": "Classify the question before calling a tool: about specific entities or facts, a thematic overview of the corpus, or the knowledge graph itself; and decide what a complete answer must contain."
+    },
+    {
+      "id": "synapse_retrieve",
+      "type": "ACTION",
+      "description": "Retrieve budgeted GraphRAG context for a question (context, citations, reasoning paths, source excerpts and usage) without generating an answer; embedding and graph queries only, no LLM call on the backend."
+    },
+    {
+      "id": "synapse_find_entities",
+      "type": "ACTION",
+      "description": "Find entities whose name or type contains a substring; returns the labels the graph actually uses, with their types, descriptions and degree."
+    },
+    {
+      "id": "synapse_communities",
+      "type": "ACTION",
+      "description": "List the corpus' themes: community titles and summaries, largest first."
+    },
+    {
+      "id": "synapse_graph_stats",
+      "type": "ACTION",
+      "description": "Size and shape of the knowledge graph: node and edge counts, entities and relationships per type, and the best-connected entities."
+    },
+    {
+      "id": "synapse_status",
+      "type": "ACTION",
+      "description": "Diagnose the backend: liveness, readiness, whether Neo4j is up, its version and its providers."
+    },
+    {
+      "id": "synapse_ask",
+      "type": "ACTION",
+      "description": "Get the backend's own generated answer with citations and sources; costs a second LLM call on top of the host's."
+    },
+    {
+      "id": "Verify_Against_Sources",
+      "type": "REASONING",
+      "description": "Check every claim of the draft answer against the returned context, citations, reasoning paths and source excerpts, and note whether the context was truncated."
+    },
+    {
+      "id": "Answer_From_Context",
+      "type": "REASONING",
+      "description": "Write the final answer from the verified context only, citing the entity names relied on, and say plainly what the graph does not contain."
+    },
+    {
+      "id": "End",
+      "type": "STATUS",
+      "description": "The answer, or the reason there is none, has been given; the run is over."
+    }
+  ],
+  "edges": [
+    {
+      "source": "Start",
+      "target": "Plan_Question",
+      "relation": "LEADS_TO",
+      "condition": null,
+      "guidance": "Before calling any Synapse tool, decide what the question needs: facts about named entities or their relationships, a thematic overview of the documents, or facts about the knowledge graph itself; and what a complete answer must contain.",
+      "pitfalls": "Do not answer from your own knowledge: the user is asking about their documents, so every claim must come from what Synapse returns."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_retrieve",
+      "relation": "LEADS_TO",
+      "condition": "When the question asks about specific entities, facts or relationships in the documents (the usual case)",
+      "guidance": "Start with synapse_retrieve under a budget: the question as query, k=8 (up to 12 for a broad question) and the default max_context_chars, lowered when tokens are scarce. It makes no backend LLM call, and identical calls are served from a cache.",
+      "pitfalls": "Do not start with synapse_ask: it bills a second LLM call for an answer you can write yourself from the retrieved context. Do not raise max_context_chars before the default budget has proven too small."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_find_entities",
+      "relation": "TRIGGERS",
+      "condition": "When the question names an entity whose exact label in the graph is uncertain (an abbreviation, a partial name or an alternative spelling)",
+      "guidance": "Call synapse_find_entities with the shortest distinctive fragment of the name (a surname, a key word) to learn the label the graph uses before retrieving.",
+      "pitfalls": "It is a substring match over names and types, not a search engine: a whole sentence matches nothing, and an empty result does not prove the entity is absent."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_communities",
+      "relation": "TRIGGERS",
+      "condition": "When the question is thematic or global: what the documents are about, their main topics, or a summary across the whole corpus",
+      "guidance": "Call synapse_communities once to read the corpus' themes (titles and summaries, largest first) and pick the ones the question is about.",
+      "pitfalls": "Community summaries are overviews written at ingestion time, not evidence: a concrete claim still needs an entity or a source excerpt from synapse_retrieve."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_graph_stats",
+      "relation": "TRIGGERS",
+      "condition": "When the question is about the knowledge graph itself (its size, entity or relationship types, best-connected entities) or you need to know whether anything has been ingested",
+      "guidance": "Call synapse_graph_stats; it makes no LLM call, and its counts and per-type breakdowns answer questions about the graph directly.",
+      "pitfalls": "Do not call it before every question: it describes the graph, not the answer to a question about the documents."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_status",
+      "relation": "TRIGGERS",
+      "condition": "When Synapse tools failed earlier in the conversation (backend unreachable, HTTP error) or the user asks whether Synapse is running",
+      "guidance": "Call synapse_status to see whether the backend is live and ready and whether Neo4j is up before retrying anything.",
+      "pitfalls": "Do not call it as a routine first step; it only diagnoses failures."
+    },
+    {
+      "source": "Plan_Question",
+      "target": "synapse_ask",
+      "relation": "TRIGGERS",
+      "condition": "Only when the user explicitly asks for Synapse's own generated answer",
+      "guidance": "Call synapse_ask with the question; it returns the backend's grounded answer with its citations, reasoning paths and sources.",
+      "pitfalls": "Never call synapse_ask by default, to double-check, or to save writing: every call bills a second LLM generation on top of yours, while synapse_retrieve returns the same evidence without one."
+    },
+    {
+      "source": "synapse_status",
+      "target": "synapse_retrieve",
+      "relation": "LEADS_TO",
+      "condition": "When the backend reports healthy and ready with Neo4j up",
+      "guidance": "The backend is fine, so the earlier failure came from the request: retry synapse_retrieve once with a shorter query or the default budget.",
+      "pitfalls": "Do not retry the same failing call in a loop; if it fails again, report its error message to the user."
+    },
+    {
+      "source": "synapse_status",
+      "target": "End",
+      "relation": "TRIGGERS",
+      "condition": "When the backend is unreachable, not ready, or reports Neo4j down",
+      "guidance": "Tell the user Synapse is unavailable, quote what synapse_status reported, and stop.",
+      "pitfalls": "Do not fall back to answering from your own knowledge as if it came from the user's documents."
+    },
+    {
+      "source": "synapse_find_entities",
+      "target": "synapse_retrieve",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": null,
+      "guidance": "Retrieve with the question rewritten to use the entity label exactly as synapse_find_entities returned it; if several labels match, take the one whose type fits the question (the best-connected one when in doubt). If nothing matched even a short fragment, retrieve with the question as written: retrieval matches by meaning, not spelling.",
+      "pitfalls": "Do not answer from the entity list: labels, types and short descriptions are pointers to evidence, not evidence."
+    },
+    {
+      "source": "synapse_communities",
+      "target": "synapse_retrieve",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": "When the answer needs concrete evidence behind a theme (a name, a number, a date or a claim)",
+      "guidance": "Retrieve with the theme's key terms plus the question's focus (k=12 for a broad topic), one retrieval per theme you need evidence on.",
+      "pitfalls": "Do not call synapse_communities again for each sub-question; the theme list does not change within a task."
+    },
+    {
+      "source": "synapse_communities",
+      "target": "Verify_Against_Sources",
+      "relation": "CONVERGES_TO",
+      "condition": "When the question only asks what the documents are about and the titles and summaries answer it",
+      "guidance": "Check that each theme you will name appears in the returned titles or summaries, and keep the largest themes first.",
+      "pitfalls": "Do not present a summary's wording as a quoted fact from a document."
+    },
+    {
+      "source": "synapse_graph_stats",
+      "target": "synapse_retrieve",
+      "relation": "LEADS_TO",
+      "condition": "When the graph holds entities of the kinds the question is about",
+      "guidance": "Retrieve with the question; the top entities and entity types in the stats suggest which labels to use in the query.",
+      "pitfalls": "Do not retrieve from an empty graph: with zero nodes there is nothing to find, so report that instead."
+    },
+    {
+      "source": "synapse_graph_stats",
+      "target": "Answer_From_Context",
+      "relation": "CONVERGES_TO",
+      "condition": "When the question is about the graph itself, or the graph is empty",
+      "guidance": "Answer with the counts and per-type breakdowns exactly as returned; for an empty graph, say nothing has been ingested yet and that documents can be added with synapse_ingest_pdf.",
+      "pitfalls": "The counts describe what was extracted from the ingested documents, not the world; do not present them as facts about the domain."
+    },
+    {
+      "source": "synapse_retrieve",
+      "target": "Verify_Against_Sources",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": null,
+      "guidance": "Draft the answer from the returned context only, then check each claim against the citations, reasoning paths and source excerpts. Read usage.truncated: when it is true, the context was cut to the budget.",
+      "pitfalls": "Do not fill a gap with outside knowledge. If the context misses what the question needs, retrieve again with a narrower query (or a larger max_context_chars when usage.truncated is true), or resolve the name with synapse_find_entities, at most twice more. If the call returned an error, call synapse_status before retrying."
+    },
+    {
+      "source": "synapse_ask",
+      "target": "Verify_Against_Sources",
+      "relation": "CONVERGES_TO",
+      "condition": null,
+      "guidance": "Check the generated answer against its own citations and source excerpts before relaying it, and relay it with those citations.",
+      "pitfalls": "Do not pass the answer on as verified when its sources do not state it; the backend's model can be wrong too. Do not call synapse_ask again just to rephrase it."
+    },
+    {
+      "source": "Verify_Against_Sources",
+      "target": "Answer_From_Context",
+      "relation": "LEADS_TO",
+      "condition": "When every claim you will make is supported by what Synapse returned, or you have established what the graph does not contain",
+      "guidance": "Write the answer from the verified context only, cite the entity names you relied on, mention a reasoning path when it connects the answer, and say plainly which parts the graph does not contain. Then record the run.",
+      "pitfalls": "Do not present a partial answer as complete: when usage.truncated was true or a part is unsupported, say so. Never guess to fill a gap."
+    },
+    {
+      "source": "Answer_From_Context",
+      "target": "End",
+      "relation": "LEADS_TO",
+      "condition": null,
+      "guidance": "After answering, record the run with synapse_record_trajectory: the question, every Synapse call as [{action, observation}] and an honest score in [0, 1].",
+      "pitfalls": "Never inflate the score: 1 only when the answer is complete and supported by the graph, 0 when it failed. Do not call more Synapse tools after answering."
+    }
+  ]
+}

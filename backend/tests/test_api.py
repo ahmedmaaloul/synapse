@@ -548,10 +548,45 @@ class TestGraph:
         assert "MATCH (a:Entity)-[r]->(b:Entity)" in calls[1][0]
 
     def test_clear_graph(self, client, fake_neo4j):
-        fake_neo4j(lambda q, p: [])
+        calls = fake_neo4j(lambda q, p: [])
         r = client.delete("/api/graph")
         assert r.status_code == 200
-        assert r.json()["status"] == "success"
+        assert r.json() == {
+            "status": "success",
+            "message": "Knowledge graph cleared (procedural memory kept)",
+        }
+        assert len(calls) == 1
+
+    def test_clear_graph_keeps_procedural_memory(self, client, fake_neo4j):
+        """A corpus reset must not wipe strategies learned over paid evolution rounds."""
+        from app.services.graph_schema import PROCEDURAL_LABELS
+
+        calls = fake_neo4j(lambda q, p: [])
+        client.delete("/api/graph")
+
+        [(query, params)] = calls
+        assert "DETACH DELETE n" in query
+        # Label EXCLUSION, not a bare wipe and not an allow-list of knowledge
+        # labels (which would silently leave any future knowledge label behind).
+        assert "WHERE NOT any(" in query and "IN $keep" in query
+        assert set(params["keep"]) == set(PROCEDURAL_LABELS)
+        assert {
+            "Procedure",
+            "ProcedureGraph",
+            "ProcedureVersion",
+            "ProcedureRejection",
+            "ProcedureTrajectory",
+        } <= set(params["keep"])
+        assert not {"Entity", "Chunk", "Community"} & set(params["keep"])
+
+    def test_clear_graph_failure_is_a_500(self, client, fake_neo4j):
+        def boom(q, p):
+            raise RuntimeError("neo4j down")
+
+        fake_neo4j(boom)
+        r = client.delete("/api/graph")
+        assert r.status_code == 500
+        assert "neo4j down" in r.json()["detail"]
 
 
 SAMPLE_COMMUNITY = {

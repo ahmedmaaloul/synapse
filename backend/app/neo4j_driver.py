@@ -46,6 +46,32 @@ async def execute_query(query: str, parameters: dict | None = None) -> list[dict
         return records
 
 
+async def execute_write_batch(statements: list[tuple[str, dict]]) -> list[list[dict]]:
+    """Run every statement in ONE managed write transaction; results per statement.
+
+    ``execute_query`` auto-commits each statement on its own, so a multi-step
+    write (e.g. "replace a procedural graph's nodes, then record the version")
+    can crash half-done. Here either every statement commits or none does.
+
+    ``session.execute_write`` retries the whole unit of work on transient errors
+    (deadlocks, leader switches), so ``work`` rebuilds its result list from
+    scratch on each attempt and must stay free of other side effects.
+    """
+    if not statements:
+        return []
+
+    async def work(tx) -> list[list[dict]]:
+        results: list[list[dict]] = []
+        for query, parameters in statements:
+            result = await tx.run(query, parameters or {})
+            results.append(await result.data())
+        return results
+
+    driver = await get_driver()
+    async with driver.session() as session:
+        return await session.execute_write(work)
+
+
 async def verify_connectivity() -> bool:
     """Return True if Neo4j is reachable (used by the readiness probe)."""
     try:

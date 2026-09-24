@@ -12,8 +12,83 @@ commercial licence is required for any commercial use; the `synapse-graphrag` cl
 
 ## [Unreleased]
 
+### Added
+
+- **Procedural memory: Procedural Graphs.** An implementation of Lu, Chen, Wu, Arık,
+  *"Procedural Graphs: Self-Evolving Execution Structures for LLM Agents"*
+  ([arXiv:2609.09153](https://arxiv.org/abs/2609.09153)). The entity graph records *what* the
+  corpus says; a procedural graph records *how* to navigate it: a small directed graph of `ACTION`,
+  `REASONING` and `STATUS` nodes whose transitions carry a `condition`, `guidance` and `pitfalls`.
+  Guide: [`docs/procedural-graphs.md`](./docs/procedural-graphs.md).
+  - **Data structure** (`procedural_graph.py`, pure): the refiner's edits applied in the paper's
+    order, cycle repair, structural validation, and the local and full serializers.
+  - **Storage** (`procedural_store.py`): graphs live in the same Neo4j under their own labels
+    (`Procedure`, `ProcedureGraph`, `ProcedureVersion`, `ProcedureRejection`,
+    `ProcedureTrajectory`), with uniqueness constraints created at startup. Each save is one write
+    transaction (`neo4j_driver.execute_write_batch`) and appends a version with its edits and
+    diff. Rollback re-saves an old version as a new one.
+  - **Expert prior:** the bundled `graphrag-navigator` (11 nodes, 14 transitions) is seeded at
+    startup when absent and never overwritten.
+- **Step-local guidance** — `POST /api/procedures/{name}/guidance`. The agent's last action is
+  localized to a node (`start` → `exact` → `normalized` → `semantic` → `none`, which means the full
+  graph), and the node's outgoing transitions up to `PROCEDURAL_HOPS=2` hops are returned. The
+  default `raw` mode returns that subgraph serialized, with **zero LLM calls**. `generative` is the
+  paper's mode: one LLM call per step, cached in-process. The raw default and the cascade are
+  Synapse's additions, documented as hypotheses to measure.
+- **GraphRAG Navigator** — `POST /api/agent/ask`. A ReAct agent that answers by walking the
+  knowledge graph with six deterministic tools (`search_entities`, `neighbors`, `read_sources`,
+  `search_passages`, `find_path`, `answer`), steered by a procedural graph. It returns the full
+  step trace, parse failures and token usage (measured, or estimated and flagged).
+- **Offline self-evolution** (the paper's Algorithm 1) — `POST /api/procedures/{name}/evolve`,
+  followed over SSE.
+  - Rollouts on training QA pairs feed a refiner LLM that proposes edits. A candidate is kept iff
+    its validation score does not drop (ties accepted); a structurally invalid one is rejected
+    without a validation rollout.
+  - Rejections are fed back to the refiner and stored as `ProcedureRejection` rows.
+  - A hard `max_llm_calls` budget stops the run cleanly.
+  - `static` and `scratch` modes; one run per graph at a time (409).
+  - Scoring comes from the new `qa_metrics` module: SQuAD normalization, EM / F1, and the official
+    HotpotQA yes/no rule.
+- **Procedures API:** list, get (JSON or `?format=text`), `graph-data`, `PUT` (validated; a 422
+  lists every diagnostic), `DELETE`, `trajectories`, `versions`, `rollback`, `rejections`.
+- **14 settings**, each documented in `.env.example`: `PROCEDURAL_ENABLED`,
+  `PROCEDURAL_DEFAULT_GRAPH`, `PROCEDURAL_HOPS`, `PROCEDURAL_WINDOW`, `PROCEDURAL_GUIDANCE_MODE`,
+  `PROCEDURAL_SEMANTIC_THRESHOLD`, `PROCEDURAL_GUIDANCE_CACHE_SIZE`, `AGENT_MAX_STEPS`,
+  `AGENT_OBSERVATION_MAX_CHARS`, `AGENT_TEMPERATURE`, `EVOLUTION_TRAJECTORY_MAX_CHARS`,
+  `EVOLUTION_MAX_LLM_CALLS`, `EVOLUTION_DEFAULT_ROUNDS`, `EVOLUTION_DEFAULT_BATCH_SIZE`.
+- **`synapse-graphrag`: procedural memory from any agent host.**
+  - Four MCP tools: `synapse_procedures`, `synapse_procedure_guidance` (raw by default, no LLM
+    call), `synapse_record_trajectory` and `synapse_agent_ask`.
+  - A `follow_procedure` prompt.
+  - Deliberately **no** evolve tool: it is long-running and costly.
+  - CLI commands: `procedures list | show | export | import | versions | rollback | guide`,
+    `agent` (prints the step trace) and `evolve`. `evolve` prints an upper-bound LLM-call estimate
+    and refuses to start without `--yes` or an interactive "y".
+  - A client method for every new endpoint. `SynapseError.payload` carries a 422's
+    `diagnostics`.
+- **UI.**
+  - The graph panel gains a **Knowledge | Procedures** switch. The procedural graph is drawn with
+    directed, labelled transitions, a card showing each transition's condition, guidance and
+    pitfalls, and a version list with rollback.
+  - The chat panel gains a **Chat | Navigator** switch that renders the agent's numbered step trace
+    and its usage.
+- **Procedural benchmark harness** (`backend/benchmarks/procedural/`).
+  - Systems compared: `no_pg`, `pg_raw_local`, `pg_gen_local`, `pg_gen_full` and, with
+    `--evolve`, the evolved graph.
+  - Questions: 30 self-authored, programmatically verified QA pairs over the zero-key demo graph
+    (train 12 / val 9 / test 9), or an already-ingested HotpotQA sample.
+  - Report: EM / F1, steps, LLM calls and tokens under an effect floor.
+  - Cost controls: a `--dry-run` cost bound, and `--max-usd` / `--max-llm-calls` hard stops.
+  - Results are gitignored, and **none are committed**: the paper's numbers have not been
+    reproduced.
+
 ### Changed
 
+- **`DELETE /api/graph` keeps procedural memory.** It now deletes every node *except* those with a
+  procedural label (`graph_schema.PROCEDURAL_LABELS`), and answers "Knowledge graph cleared
+  (procedural memory kept)". A strategy learned over paid evolution rounds should not vanish when a
+  corpus is re-ingested. `synapse_clear_graph`'s description says so; `DELETE
+  /api/procedures/{name}` removes a procedural graph explicitly.
 - **Relicensed from AGPL-3.0-or-later to PolyForm Noncommercial 1.0.0, plus a commercial licence;
   the client package to Apache-2.0.** The core — backend, frontend, scripts, workflows, images and
   docs — is now [`PolyForm-Noncommercial-1.0.0`](./LICENSE): free for noncommercial purposes as the

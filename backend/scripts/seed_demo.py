@@ -62,11 +62,15 @@ ALLOWED_ENTITY_TYPES: frozenset[str] = frozenset(
     }
 )
 
-#: Every node label Synapse itself writes. ``--clear`` must cover all of
+#: Every KNOWLEDGE-graph label Synapse writes. ``--clear`` must cover all of
 #: them: it used to delete only ``:Entity``, which left the previous run's
 #: ``:Community`` nodes behind — and since ``make demo`` is the README's headline
 #: command, a re-seed was the most likely way anyone saw ghost themes in the UI.
-#: Keep this list in step with any new label the backend starts writing.
+#: Procedural memory (``graph_schema.PROCEDURAL_LABELS``: the ``:Procedure*``
+#: graphs, versions, rejections and trajectories) is deliberately NOT listed:
+#: like ``DELETE /api/graph``, a re-seed keeps it, because evolved strategies
+#: cost paid LLM rounds to learn. Keep this list in step with any new
+#: knowledge-graph label the backend starts writing.
 SYNAPSE_LABELS: tuple[str, ...] = ("Entity", "Community", "Chunk")
 
 # --clear wipes Synapse's own nodes (and their relationships) for a clean demo.

@@ -7,7 +7,7 @@ import FileUpload from "./components/FileUpload";
 import GraphPanel from "./components/GraphPanel";
 import Inspector from "./components/Inspector";
 import ThemesPanel from "./components/ThemesPanel";
-import type { Community, GraphNode, IngestResult } from "./lib/types";
+import type { AgentResult, Community, GraphNode, IngestResult } from "./lib/types";
 
 export default function Home() {
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
@@ -25,6 +25,9 @@ export default function Home() {
     null,
   );
   const focusNonce = useRef(0);
+  // The latest Navigator run, so the Procedures view can show which steps of
+  // the procedural graph the agent actually took.
+  const [navigatorRun, setNavigatorRun] = useState<AgentResult | null>(null);
 
   const bumpThemes = useCallback(() => setThemesVersion((n) => n + 1), []);
 
@@ -156,6 +159,7 @@ export default function Home() {
             // Fires only after the DELETE resolves — refetching any earlier
             // races the wipe and re-seats the themes that were just deleted.
             onClearComplete={bumpThemes}
+            navigatorRun={navigatorRun}
           />
         </div>
 
@@ -164,6 +168,7 @@ export default function Home() {
             ingestResult={ingestResult}
             onCitations={showCitations}
             onFocusCitation={focusNode}
+            onNavigatorRun={setNavigatorRun}
           />
         </div>
       </main>

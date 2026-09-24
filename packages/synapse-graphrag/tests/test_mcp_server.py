@@ -11,7 +11,9 @@ text is the message. Both paths are covered so the error policy documented in
 
 from __future__ import annotations
 
+import copy
 import json
+from pathlib import Path
 
 import anyio
 import pytest
@@ -21,13 +23,40 @@ from mcp.shared.memory import create_client_server_memory_streams
 
 from synapse_graphrag import __version__
 from synapse_graphrag.mcp_server import (
+    DEFAULT_PROCEDURE,
+    NAVIGATOR_PROCEDURE,
     SERVER_NAME,
     build_server,
+    build_trajectory,
     find_entities,
     graph_stats,
     main,
 )
-from tests.conftest import GRAPH, INGEST_DONE, FakeBackend
+from tests.conftest import AGENT_RESULT, GRAPH, INGEST_DONE, PROC_NAME, FakeBackend
+
+# The bundled prior the host-facing tools default to, in the repo checkout (absent
+# from an sdist, where the test that reads it skips).
+HOST_PRIOR_PATH = (
+    Path(__file__).resolve().parents[3] / "backend" / "app" / "data" / "procedural" / "mcp-host.json"
+)
+
+# A trimmed stand-in for that prior: the backend seeds it at startup next to
+# graphrag-navigator, so the fake backend here stores both.
+HOST_GRAPH = {
+    "name": "mcp-host",
+    "description": "How an MCP host answers from Synapse with the synapse_* tools.",
+    "cycle_policy": "forbid",
+    "tools": ["synapse_retrieve"],
+    "nodes": [
+        {"id": "Start", "type": "STATUS", "description": "A question has been received."},
+        {"id": "synapse_retrieve", "type": "ACTION", "description": "Budgeted GraphRAG context."},
+        {"id": "End", "type": "STATUS", "description": "Answered."},
+    ],
+    "edges": [
+        {"source": "Start", "target": "synapse_retrieve", "relation": "LEADS_TO", "condition": None, "guidance": "Retrieve under a budget.", "pitfalls": "Do not start with synapse_ask."},
+        {"source": "synapse_retrieve", "target": "End", "relation": "LEADS_TO", "condition": None, "guidance": "Answer from the context.", "pitfalls": "Do not guess."},
+    ],
+}
 
 TOOLS = {
     "synapse_retrieve": {"readOnlyHint": True, "idempotentHint": True},
@@ -38,7 +67,19 @@ TOOLS = {
     "synapse_graph_stats": {"readOnlyHint": True},
     "synapse_status": {"readOnlyHint": True},
     "synapse_clear_graph": {"destructiveHint": True},
+    # procedural memory
+    "synapse_procedures": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_procedure_guidance": {"readOnlyHint": True, "idempotentHint": True},
+    "synapse_record_trajectory": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
+    "synapse_agent_ask": {"readOnlyHint": True, "idempotentHint": False},
 }
+
+
+@pytest.fixture
+def backend(backend: FakeBackend) -> FakeBackend:
+    """conftest's fake backend, also holding the host prior the real backend seeds."""
+    backend.procedures[HOST_GRAPH["name"]] = {**copy.deepcopy(HOST_GRAPH), "version": 1, "score": None}
+    return backend
 
 
 def make_server(backend: FakeBackend, **kwargs):
@@ -81,7 +122,7 @@ async def test_resource_and_prompt(backend: FakeBackend):
     assert json.loads(contents[0].content)["version"] == "0.4.0"
 
     prompts = await server.list_prompts()
-    assert [p.name for p in prompts] == ["answer_with_graph", "safety_brief"]
+    assert [p.name for p in prompts] == ["answer_with_graph", "safety_brief", "follow_procedure"]
     assert [a.name for a in prompts[0].arguments] == ["question"]
     prompt = await server.get_prompt("answer_with_graph", {"question": "Who is Ada?"})
     text = prompt.messages[0].content.text
@@ -248,6 +289,219 @@ async def test_clear_graph_invalidates_the_retrieval_cache(backend: FakeBackend)
     assert backend.paths("POST") == ["/api/retrieve", "/api/retrieve"]
 
 
+# ── procedural memory ────────────────────────────────────────────────────────
+async def test_procedural_catalogue_has_no_evolve_tool_and_says_what_costs(backend: FakeBackend):
+    server = make_server(backend)
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    # Evolution is long-running and spends hundreds of LLM calls: CLI/API only.
+    assert not any("evolve" in name for name in tools)
+    guidance = tools["synapse_procedure_guidance"]
+    assert "before choosing your next step" in guidance.description
+    assert "NO extra LLM call" in guidance.description
+    props = guidance.input_schema["properties"]
+    assert guidance.input_schema["required"] == ["query"]
+    assert props["graph"]["default"] == DEFAULT_PROCEDURE == "mcp-host"
+    assert props["mode"]["enum"] == ["raw", "generative"] and props["mode"]["default"] == "raw"
+    assert props["last_action"]["default"] is None
+    assert "'synapse_retrieve'" in props["last_action"]["description"]
+    assert "COSTS BACKEND LLM CALLS" in tools["synapse_agent_ask"].description
+    agent = tools["synapse_agent_ask"].input_schema["properties"]
+    assert agent["max_steps"]["default"] == 8 and agent["max_steps"]["maximum"] == 20
+    assert agent["guidance"]["enum"] == ["none", "raw", "generative"]
+    record = tools["synapse_record_trajectory"].input_schema
+    assert set(record["required"]) == {"query", "steps", "score"}
+    assert (record["properties"]["score"]["minimum"], record["properties"]["score"]["maximum"]) == (0.0, 1.0)
+    assert "synapse_procedure_guidance" in server.instructions
+    assert "follow_procedure" in server.instructions
+
+
+async def test_host_tools_default_to_the_host_graph_and_the_agent_to_its_own(backend: FakeBackend):
+    """A graph localises on the caller's last action, so each caller gets the graph of its own tools.
+
+    A host's actions are the synapse_* tools (mcp-host); the backend navigator's
+    are its internal tools (graphrag-navigator). The guidance tool says which is which.
+    """
+    server = make_server(backend)
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    for name in ("synapse_procedure_guidance", "synapse_record_trajectory"):
+        assert tools[name].input_schema["properties"]["graph"]["default"] == "mcp-host", name
+    assert tools["synapse_agent_ask"].input_schema["properties"]["graph"]["default"] == NAVIGATOR_PROCEDURE == PROC_NAME
+    description = tools["synapse_procedure_guidance"].description
+    assert "mcp-host" in description
+    assert "graphrag-navigator is the backend navigator's own graph" in description
+    assert "mcp-host" in server.instructions
+
+
+async def test_default_graph_is_the_bundled_prior_built_on_this_servers_tools(backend: FakeBackend):
+    """Drift guard: every ACTION node of mcp-host must be a tool this server really registers."""
+    if not HOST_PRIOR_PATH.is_file():
+        pytest.skip("the backend's bundled priors are not in this checkout")
+    prior = json.loads(HOST_PRIOR_PATH.read_text(encoding="utf-8"))
+    assert prior["name"] == DEFAULT_PROCEDURE
+    actions = {node["id"] for node in prior["nodes"] if node["type"] == "ACTION"}
+    assert actions == set(prior["tools"])
+    registered = {tool.name for tool in await make_server(backend).list_tools()}
+    assert actions <= registered, actions - registered
+    assert actions == {
+        "synapse_retrieve",
+        "synapse_find_entities",
+        "synapse_communities",
+        "synapse_graph_stats",
+        "synapse_status",
+        "synapse_ask",
+    }
+
+
+async def test_procedures_tool_lists_graphs(backend: FakeBackend):
+    server = make_server(backend)
+    result = _structured(await server.call_tool("synapse_procedures", {}))
+    assert result["graphs"][0]["name"] == PROC_NAME and result["graphs"][0]["version"] == 3
+    assert backend.paths() == ["/api/procedures"]
+
+
+async def test_procedure_guidance_first_step_is_raw_and_starts_at_start(backend: FakeBackend):
+    server = make_server(backend)
+    result = _structured(await server.call_tool("synapse_procedure_guidance", {"query": "Who wrote it?"}))
+    call = backend.calls[0]
+    assert (call.method, call.path) == ("POST", "/api/procedures/mcp-host/guidance")
+    assert call.json == {"query": "Who wrote it?", "trajectory": [], "mode": "raw"}
+    assert result["graph"] == "mcp-host"
+    assert (result["active_node"], result["localization"]) == ("Start", "start")
+    assert result["usage"]["llm_calls"] == 0
+
+
+async def test_procedure_guidance_sends_a_host_qualified_tool_name_bare(backend: FakeBackend):
+    """Claude Code shows the tool as mcp__synapse__synapse_retrieve; the graph's node is synapse_retrieve."""
+    server = make_server(backend)
+    await server.call_tool(
+        "synapse_procedure_guidance",
+        {
+            "query": "q",
+            "recent_steps": [{"action": "mcp__synapse__synapse_find_entities", "observation": "Ada Lovelace"}],
+            "last_action": 'mcp__synapse__synapse_retrieve(query="Ada Lovelace")',
+        },
+    )
+    assert backend.calls[0].json["trajectory"] == [
+        {"action": "synapse_find_entities", "observation": "Ada Lovelace"},
+        {"action": 'synapse_retrieve(query="Ada Lovelace")'},
+    ]
+
+
+async def test_procedure_guidance_appends_the_last_step(backend: FakeBackend):
+    server = make_server(backend)
+    result = _structured(
+        await server.call_tool(
+            "synapse_procedure_guidance",
+            {
+                "query": "q",
+                "graph": PROC_NAME,
+                "recent_steps": [{"action": "search_entities", "observation": "Analytical Engine (TOOL)", "thought": "x"}],
+                "last_action": "neighbors",
+                "last_observation": "Ada Lovelace -WROTE_PROGRAMS_FOR-> Analytical Engine",
+                "mode": "generative",
+            },
+        )
+    )
+    assert backend.calls[0].json == {
+        "query": "q",
+        "trajectory": [
+            {"action": "search_entities", "observation": "Analytical Engine (TOOL)"},
+            {"action": "neighbors", "observation": "Ada Lovelace -WROTE_PROGRAMS_FOR-> Analytical Engine"},
+        ],
+        "mode": "generative",
+    }
+    assert result["active_node"] == "neighbors" and result["guidance"]
+    with pytest.raises(ToolError):
+        await server.call_tool("synapse_procedure_guidance", {"query": "q", "mode": "psychic"})
+    assert len(backend.calls) == 1
+
+
+def test_build_trajectory_merges_a_repeated_last_step():
+    recent = [{"action": "search_entities", "observation": "found"}, {"action": "neighbors"}]
+    assert build_trajectory(None, None) == []
+    assert build_trajectory(None, "  ", "ignored") == []
+    assert build_trajectory(recent, "neighbors", "Ada") == [
+        {"action": "search_entities", "observation": "found"},
+        {"action": "neighbors", "observation": "Ada"},
+    ]
+    assert build_trajectory(recent, "answer") == [*recent, {"action": "answer"}]
+    assert build_trajectory([], 'search_entities(query="x")') == [{"action": 'search_entities(query="x")'}]
+
+
+def test_build_trajectory_strips_only_a_host_tool_prefix():
+    assert build_trajectory(None, "mcp__synapse__synapse_retrieve") == [{"action": "synapse_retrieve"}]
+    # Claude Code plugin servers: mcp__plugin_<plugin>_<server>__<tool>
+    assert build_trajectory(None, "mcp__plugin_kb_synapse__synapse_status") == [{"action": "synapse_status"}]
+    # A repeated last step still merges once both sides are bare.
+    recent = [{"action": "synapse_retrieve"}]
+    assert build_trajectory(recent, "mcp__synapse__synapse_retrieve", "ctx") == [
+        {"action": "synapse_retrieve", "observation": "ctx"}
+    ]
+    for unchanged in ("synapse_retrieve", "mcp__synapse__", "my_mcp__tool", "Verify_Against_Sources"):
+        assert build_trajectory(None, unchanged) == [{"action": unchanged}]
+
+
+async def test_record_trajectory_tool_tags_the_source_and_bounds_the_score(backend: FakeBackend):
+    server = make_server(backend)
+    steps = [{"action": "synapse_retrieve", "observation": "context"}, {"action": "Answer_From_Context", "observation": ""}]
+    result = _structured(
+        await server.call_tool("synapse_record_trajectory", {"query": "q", "steps": steps, "score": 0.5})
+    )
+    assert result == {"status": "recorded"}
+    call = backend.calls[0]
+    # Recorded against the graph that guided the host by default: mcp-host.
+    assert call.path == f"/api/procedures/{DEFAULT_PROCEDURE}/trajectories"
+    assert call.json == {"query": "q", "steps": steps, "score": 0.5, "source": "mcp"}
+    for bad in ({"score": 1.2}, {"score": -0.1}, {"steps": []}):
+        with pytest.raises(ToolError):
+            await server.call_tool("synapse_record_trajectory", {"query": "q", "steps": steps, "score": 0.5, **bad})
+    assert len(backend.calls) == 1
+
+
+async def test_agent_ask_tool_defaults_and_no_graph(backend: FakeBackend):
+    server = make_server(backend)
+    result = _structured(await server.call_tool("synapse_agent_ask", {"query": "Who wrote programs for it?"}))
+    assert result == AGENT_RESULT
+    assert backend.calls[0].json == {
+        "query": "Who wrote programs for it?",
+        "record": False,  # the tool is read-only: it never records
+        "graph": PROC_NAME,
+        "guidance": "raw",
+        "max_steps": 8,
+    }
+    bare = _structured(await server.call_tool("synapse_agent_ask", {"query": "q", "graph": None, "guidance": "none"}))
+    assert backend.calls[1].json["graph"] is None and bare["graph"] is None
+    with pytest.raises(ToolError):
+        await server.call_tool("synapse_agent_ask", {"query": "q", "max_steps": 21})
+    with pytest.raises(ToolError, match="HTTP 404: Procedural graph 'nope' not found."):
+        await server.call_tool("synapse_agent_ask", {"query": "q", "graph": "nope"})
+
+
+async def test_unknown_procedure_is_a_readable_tool_error(backend: FakeBackend):
+    server = make_server(backend)
+    with pytest.raises(ToolError, match="HTTP 404: Procedural graph 'nope' not found."):
+        await server.call_tool("synapse_procedure_guidance", {"query": "q", "graph": "nope"})
+
+
+async def test_follow_procedure_prompt(backend: FakeBackend):
+    server = make_server(backend)
+    prompts = {p.name: p for p in await server.list_prompts()}
+    args = {a.name: a.required for a in prompts["follow_procedure"].arguments}
+    assert args == {"task": True, "graph": False}
+
+    text = (await server.get_prompt("follow_procedure", {"task": "Who wrote {programs}?"})).messages[0].content.text
+    assert text.endswith("Task: Who wrote {programs}?")
+    assert 'graph="mcp-host"' in text and "last_action=null" in text
+    assert "e.g. `synapse_retrieve`" in text
+    # The navigator's internal tool names would never localise a host.
+    assert "graphrag-navigator" not in text and "search_entities" not in text
+    assert "synapse_procedure_guidance" in text and "synapse_record_trajectory" in text
+    assert "[{action, observation}]" in text and "honest `score` in [0, 1]" in text
+    custom = (await server.get_prompt("follow_procedure", {"task": "t", "graph": "triage"})).messages[0].content.text
+    assert 'graph="triage"' in custom and "mcp-host" not in custom
+    assert backend.calls == []  # a prompt is text; it calls nothing
+
+
 # ── error policy ─────────────────────────────────────────────────────────────
 async def test_unreachable_backend_is_a_readable_tool_error(backend: FakeBackend):
     backend.unreachable = True
@@ -330,6 +584,17 @@ async def test_end_to_end_client_session(backend: FakeBackend):
 
                 prompt = await session.get_prompt("answer_with_graph", {"question": "Why?"})
                 assert prompt.messages[0].content.text.endswith("Question: Why?")
+
+                guided = await session.call_tool(
+                    "synapse_procedure_guidance",
+                    {"query": "Why?", "graph": PROC_NAME, "last_action": "search_entities"},
+                )
+                assert guided.is_error is False
+                assert guided.structured_content["localization"] == "exact"
+                hosted = await session.call_tool("synapse_procedure_guidance", {"query": "Why?"})
+                assert hosted.structured_content["graph"] == "mcp-host"
+                follow = await session.get_prompt("follow_procedure", {"task": "Why?"})
+                assert follow.messages[0].content.text.endswith("Task: Why?")
             tg.cancel_scope.cancel()
 
 

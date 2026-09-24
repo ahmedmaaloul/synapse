@@ -44,3 +44,7 @@ next-env.d.ts
 paper/
 backend/research/
 backend/benchmarks/public/results_hotpotqa.md
+
+# A procedural-graphs benchmark run describes that run (model, date, spend),
+# not the repository; the harness regenerates it.
+backend/benchmarks/procedural/results_procedural.md

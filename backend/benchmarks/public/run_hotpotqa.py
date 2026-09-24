@@ -1294,10 +1294,12 @@ def cost_lines(ledgers: list[cost.CostLedger], *, questions: int, reused: bool) 
             total += amount
     if priced and ledgers:
         per_question = total / questions if questions else 0.0
+        # Each model's own date: an entry re-verified later than the table says so.
+        checked = sorted({cost.price_checked_on(ledger.model, ledger.prices) for ledger in ledgers})
         lines.append(
             f"  TOTAL: {cost.format_usd(total)} for {questions} questions = "
             f"{cost.format_usd(per_question)} per question (estimated). Prices checked "
-            f"{cost.PRICES_CHECKED_ON}; re-verify at {cost.PRICING_URL}."
+            f"{', '.join(checked)}; re-verify at {cost.PRICING_URL}."
         )
     elif ledgers:
         lines.append(
@@ -1338,7 +1340,8 @@ def threats_lines(report: Report) -> list[str]:
         "paragraph. That is exactly why the strict rule is reported alongside, why C "
         "scores 0.0 under it by construction, and why the channel split is printed.",
         "PRICES ARE HAND-RECORDED. Every USD figure is an estimate from a constant "
-        f"table checked on {cost.PRICES_CHECKED_ON}, not from an invoice.",
+        f"table checked on {cost.PRICES_CHECKED_ON} (an entry re-verified later carries "
+        "its own date, which the cost lines quote), not from an invoice.",
         "SENTENCE MATCHING IS LEXICAL. Supporting-fact recall is whitespace-"
         "normalised substring matching over retrieved prose. It cannot see a paraphrase, "
         "and it credits a sentence that arrived inside a paragraph retrieved for some "
@@ -1753,13 +1756,21 @@ def dry_run_lines(corpus: Corpus, *, model: str, theme: str, max_usd: float) -> 
         lines += [
             f"  Estimated cost: {cost.format_usd(amount)} on {model} "
             f"({cost.format_usd(amount / n)} per question), from prices hand-recorded on "
-            f"{cost.PRICES_CHECKED_ON} — an ESTIMATE, not a quote ({cost.PRICING_URL}).",
+            f"{cost.price_checked_on(model)} — an ESTIMATE, not a quote ({cost.PRICING_URL}).",
         ]
         if amount > max_usd:
             lines.append(
                 f"  ⛔ This exceeds --max-usd ({cost.format_usd(max_usd)}). The real run "
                 "would refuse to start. Lower --questions or raise --max-usd deliberately."
             )
+    from app.services.llm_provider import is_reasoning_model
+
+    if is_reasoning_model(model):
+        lines.append(
+            f"  ⚠️  {model} is a REASONING model: its hidden reasoning tokens are billed as "
+            "output and are NOT in this estimate, so it is LOW. The metered --max-usd check "
+            "during ingestion counts them (the provider's output tokens include them)."
+        )
     lines.append(
         "  Embeddings are not included above: with EMBEDDING_PROVIDER=fastembed they run "
         "locally and cost nothing, which is the configuration this harness recommends."

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Search, Share2 } from "lucide-react";
+import { Maximize2, Search, Share2, Workflow } from "lucide-react";
 import type {
   ForceGraphMethods,
   LinkObject,
@@ -9,7 +9,9 @@ import type {
 } from "react-force-graph-2d";
 import { clearGraph, fetchGraph } from "../lib/api";
 import { colorForType } from "../lib/constants";
-import type { GraphData, GraphLink, GraphNode } from "../lib/types";
+import type { AgentResult, GraphData, GraphLink, GraphNode } from "../lib/types";
+import ProceduralPanel from "./ProceduralPanel";
+import SegmentedToggle, { type SegmentedOption } from "./SegmentedToggle";
 
 type SNode = NodeObject<GraphNode>;
 type SLink = LinkObject<GraphNode, GraphLink>;
@@ -20,6 +22,27 @@ type ForceGraphComponent = (typeof import("react-force-graph-2d"))["default"];
 const CITATION_RING = "#818cf8";
 const COMMUNITY_RING = "#fbbf24";
 const SEARCH_RING = "#fafafa";
+
+/**
+ * What the topology canvas shows: the knowledge graph (*what* the corpus says)
+ * or procedural memory (*how* the Navigator agent should walk it).
+ */
+type TopologyView = "knowledge" | "procedures";
+
+const VIEW_OPTIONS: SegmentedOption<TopologyView>[] = [
+  {
+    value: "knowledge",
+    label: "Knowledge",
+    icon: Share2,
+    title: "Entities and relationships extracted from your documents",
+  },
+  {
+    value: "procedures",
+    label: "Procedures",
+    icon: Workflow,
+    title: "Procedural memory: the strategy the Navigator agent follows",
+  },
+];
 
 interface GraphPanelProps {
   ingesting: boolean;
@@ -33,6 +56,8 @@ interface GraphPanelProps {
   focusTarget: { name: string; nonce: number } | null;
   onNodeSelected: (node: GraphNode | null) => void;
   onClearComplete?: () => void;
+  /** Latest Navigator run, overlaid on the Procedures view. */
+  navigatorRun?: AgentResult | null;
 }
 
 function linkEndId(
@@ -58,6 +83,7 @@ export default function GraphPanel({
   focusTarget,
   onNodeSelected,
   onClearComplete,
+  navigatorRun,
 }: GraphPanelProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [ForceGraph, setForceGraph] = useState<ForceGraphComponent | null>(null);
@@ -65,6 +91,7 @@ export default function GraphPanel({
   const [activeTypes, setActiveTypes] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const [view, setView] = useState<TopologyView>("knowledge");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<FGMethods | undefined>(undefined);
@@ -217,6 +244,19 @@ export default function GraphPanel({
 
   const zoomToFit = () => fgRef.current?.zoomToFit(500, 60);
 
+  // The knowledge layer stays mounted under the Procedures view; `inert`
+  // keeps its covered controls out of the tab order and the a11y tree.
+  const knowledgeHidden = view === "procedures";
+
+  const viewToggle = (
+    <SegmentedToggle
+      label="Topology view"
+      value={view}
+      options={VIEW_OPTIONS}
+      onChange={setView}
+    />
+  );
+
   // ── Canvas rendering ──
   const drawNode = useCallback(
     (node: SNode, ctx: CanvasRenderingContext2D, scale: number) => {
@@ -307,7 +347,10 @@ export default function GraphPanel({
   return (
     <div className="relative flex h-full w-full flex-col bg-[#09090b]">
       {/* Top bar */}
-      <div className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-[#27272a]/50 bg-[#09090b]/80 px-5 py-2.5 backdrop-blur-md">
+      <div
+        inert={knowledgeHidden}
+        className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between border-b border-[#27272a]/50 bg-[#09090b]/80 px-5 py-2.5 backdrop-blur-md"
+      >
         <div className="flex items-center gap-2">
           <Share2 size={14} className="text-[#a1a1aa]" />
           <h2 className="text-[12px] font-semibold uppercase tracking-wider text-[#e4e4e7]">
@@ -355,11 +398,17 @@ export default function GraphPanel({
               {graphData.nodes.length} N / {graphData.links.length} E
             </div>
           )}
+          <div className="h-4 w-px bg-[#27272a]" />
+          {viewToggle}
         </div>
       </div>
 
       {/* Canvas */}
-      <div className="graph-grid relative mt-[41px] w-full flex-1" ref={containerRef}>
+      <div
+        inert={knowledgeHidden}
+        className="graph-grid relative mt-[41px] w-full flex-1"
+        ref={containerRef}
+      >
         {ForceGraph && graphData.nodes.length > 0 && (
           <ForceGraph
             ref={fgRef}
@@ -445,6 +494,15 @@ export default function GraphPanel({
           </div>
         )}
       </div>
+
+      {/* Procedures view. Layered over the knowledge canvas rather than
+          replacing it: this panel stays mounted, so its clear-DB and polling
+          effects keep running and the layout is intact on the way back. */}
+      {view === "procedures" && (
+        <div className="absolute inset-0 z-20">
+          <ProceduralPanel viewToggle={viewToggle} trace={navigatorRun} />
+        </div>
+      )}
     </div>
   );
 }

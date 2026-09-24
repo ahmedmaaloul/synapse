@@ -48,11 +48,12 @@ _DB_BOUND_MODULES = (
     "app.services.entity_resolution",
     "app.services.graph_builder",
     "app.services.graph_schema",
+    "app.services.procedural_store",
 )
 
 
-def _modules_binding_execute_query() -> list[ModuleType]:
-    """Every loaded ``app.*`` module that holds an ``execute_query`` attribute.
+def _modules_binding(attribute: str) -> list[ModuleType]:
+    """Every loaded ``app.*`` module that holds ``attribute`` (a driver function).
 
     ``from x import y`` copies the reference, so patching ``app.neo4j_driver``
     alone leaves every importer still calling the real driver. Sweeping
@@ -67,23 +68,48 @@ def _modules_binding_execute_query() -> list[ModuleType]:
         for name, module in list(sys.modules.items())
         if (name == "app" or name.startswith("app."))
         and isinstance(module, ModuleType)
-        and hasattr(module, "execute_query")
+        and hasattr(module, attribute)
     ]
+
+
+def _modules_binding_execute_query() -> list[ModuleType]:
+    """Every loaded ``app.*`` module that holds an ``execute_query`` attribute."""
+    return _modules_binding("execute_query")
+
+
+class RecordedCalls(list):
+    """``(query, params)`` for every statement run, in execution order.
+
+    A plain list (tests compare it with ``==``) plus ``batches``: one list per
+    ``execute_write_batch`` call, holding that transaction's statements. Batch
+    statements ALSO appear in the flat list, in order, so a handler-driven test
+    reads the same either way; ``batches`` is what lets a test assert that
+    writes which must be atomic really were sent as ONE transaction.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.batches: list[list[tuple[str, dict]]] = []
 
 
 @pytest.fixture
 def fake_neo4j(monkeypatch):
-    """Patch ``execute_query`` everywhere it's imported.
+    """Patch ``execute_query`` AND ``execute_write_batch`` everywhere they're imported.
+
+    Both route every statement through the same ``handler`` and record into the
+    same ``calls`` list; a write batch returns one handler result per statement
+    (the real driver's shape) and is also recorded in ``calls.batches``.
 
     Usage:
         def test_x(fake_neo4j):
             calls = fake_neo4j(lambda q, p: [{"name": "Ada"}] if "MATCH" in q else [])
             ... run code ...
             assert calls  # list of (query, params) actually executed
+            assert len(calls.batches) == 1  # one write transaction
     """
 
     def install(handler: QueryHandler):
-        calls: list[tuple[str, dict]] = []
+        calls = RecordedCalls()
 
         async def fake_execute_query(query: str, parameters: dict | None = None):
             params = parameters or {}
@@ -91,8 +117,24 @@ def fake_neo4j(monkeypatch):
             result = handler(query, params)
             return result if result is not None else []
 
-        for module in _modules_binding_execute_query():
+        async def fake_execute_write_batch(statements: list[tuple[str, dict]]):
+            batch: list[tuple[str, dict]] = []
+            # Registered before running, so a handler that raises mid-batch
+            # still leaves the statements it saw on record.
+            calls.batches.append(batch)
+            results: list[list] = []
+            for query, parameters in statements:
+                params = parameters or {}
+                calls.append((query, params))
+                batch.append((query, params))
+                result = handler(query, params)
+                results.append(result if result is not None else [])
+            return results
+
+        for module in _modules_binding("execute_query"):
             monkeypatch.setattr(module, "execute_query", fake_execute_query)
+        for module in _modules_binding("execute_write_batch"):
+            monkeypatch.setattr(module, "execute_write_batch", fake_execute_write_batch)
 
         return calls
 

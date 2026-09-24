@@ -2,8 +2,9 @@
 
 `synapse-graphrag` is the client side of Synapse: an **MCP server**, a **CLI** and an **async
 Python client**, all thin HTTP wrappers over the backend's REST/SSE API. Nothing in the package
-talks to Neo4j or to an LLM directly — the backend keeps the credentials, the schema and the
-retrieval logic; the package gives every agent host the same eight tools.
+talks to Neo4j or to an LLM directly. The backend keeps the credentials, the schema and the
+retrieval logic, and the package gives every agent host the same twelve tools: eight over the
+knowledge graph, and four over [procedural memory](./procedural-graphs.md).
 
 | | |
 | --- | --- |
@@ -20,6 +21,7 @@ retrieval logic; the package gives every agent host the same eight tools.
 - [Transports: stdio vs streamable HTTP](#transports-stdio-vs-streamable-http)
 - [Docker](#docker)
 - [Tools reference](#tools-reference)
+- [Procedural memory tools](#procedural-memory-tools)
 - [Resource and prompts](#resource-and-prompts)
 - [FinOps: budgeted context, not a second LLM bill](#finops-budgeted-context-not-a-second-llm-bill)
 - [CLI reference](#cli-reference)
@@ -49,8 +51,12 @@ retrieval logic; the package gives every agent host the same eight tools.
    # or: pip install "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag"
    ```
 
-> The demo graph is enough to try every read-only tool. `synapse_ask` and `synapse_ingest_pdf`
-> additionally need the backend to have an LLM key — see [Troubleshooting](#troubleshooting).
+> The demo graph is enough to try every read-only tool, including `synapse_procedures` and
+> `synapse_procedure_guidance` in its default `raw` mode. It holds entities and relations only,
+> no source chunks, so `synapse_retrieve` returns no source excerpts on it (and the Navigator's
+> `read_sources` / `search_passages` return nothing). `synapse_ask`, `synapse_ingest_pdf`,
+> `synapse_agent_ask` and `mode="generative"` guidance additionally need the backend to have an
+> LLM key — see [Troubleshooting](#troubleshooting).
 
 ---
 
@@ -226,11 +232,15 @@ docker run --rm synapse-mcp ls /app/LICENSE /app/NOTICE
 
 ## Tools reference
 
-All eight tools are namespaced `synapse_*`. Read-only tools are annotated `readOnlyHint=true`
-so hosts can call them without a confirmation prompt, and every one of them except `synapse_ask`
-(which bills an LLM call) is also `idempotentHint=true`; `synapse_ingest_pdf` is a
-non-destructive write; `synapse_clear_graph` is marked destructive (and idempotent — clearing
-twice is clearing once).
+All twelve tools are namespaced `synapse_*`. This section covers the eight that work on the
+knowledge graph; the four procedural-memory tools are in the
+[next section](#procedural-memory-tools).
+
+- **Read-only tools** are annotated `readOnlyHint=true`, so hosts can call them without a
+  confirmation prompt. All of them except `synapse_ask` and `synapse_agent_ask`, which bill
+  backend LLM calls, are also `idempotentHint=true`.
+- **`synapse_ingest_pdf` and `synapse_record_trajectory`** are non-destructive writes.
+- **`synapse_clear_graph`** is marked destructive, and idempotent: clearing twice is clearing once.
 
 **Error contract.** Any anticipated failure — backend unreachable, HTTP error, bad path, a job
 that ended without `done` — is raised as the MCP SDK's `ToolError`, which the host receives as
@@ -396,13 +406,134 @@ else fails.
 
 ### `synapse_clear_graph(confirm=False)`
 
-Deletes **every** node and relationship. Refuses — with a normal result, not an error — unless
-called with `confirm=true`. Annotated `destructiveHint=true`, so well-behaved hosts ask the user
-first. A successful clear also empties the server's retrieve cache.
+Deletes the **knowledge graph**: every entity, relationship, community and source chunk.
+Procedural graphs, with their versions, rejections and recorded trajectories, are **kept**,
+because they describe how to navigate any corpus and can take paid evolution rounds to learn. To
+remove one, use `DELETE /api/procedures/{name}` (`SynapseClient.delete_procedure`). There is
+deliberately no MCP tool for that.
+
+The tool refuses — with a normal result, not an error — unless called with `confirm=true`. It is
+annotated `destructiveHint=true`, so well-behaved hosts ask the user first. A successful clear
+also empties the server's retrieve cache.
 
 ```json
 { "cleared": false, "message": "Refused: this deletes the whole knowledge graph and cannot be undone. Call again with confirm=true once the user has agreed." }
 ```
+
+---
+
+## Procedural memory tools
+
+A **procedural graph** is a small directed graph of steps (`ACTION`, `REASONING` and `STATUS`
+nodes, starting at `Start`). Each transition carries a **condition**, **guidance** and
+**pitfalls**. The backend keeps these graphs next to the knowledge graph, versions them, and seeds
+two expert priors. The design follows Lu, Chen, Wu, Arık, *Procedural Graphs*
+([arXiv:2609.09153](https://arxiv.org/abs/2609.09153)). The full reference, including what is the
+paper's and what is Synapse's, is in [docs/procedural-graphs.md](./procedural-graphs.md).
+
+**Which graph.** A step is placed on the graph by matching the last action to a node id, so the
+graph must be written for the tools the agent actually calls:
+
+- **`mcp-host`** (the default of `synapse_procedure_guidance`, `synapse_record_trajectory` and
+  `follow_procedure`) is the strategy for a host answering from Synapse. Its `ACTION` nodes are
+  the real tool names (`synapse_retrieve`, `synapse_find_entities`, `synapse_communities`,
+  `synapse_graph_stats`, `synapse_status`, `synapse_ask`), so your calls localize it by name.
+  The server strips the `mcp__<server>__` prefix Claude Code shows its model, so
+  `mcp__synapse__synapse_retrieve` counts as `synapse_retrieve`.
+- **`graphrag-navigator`** is the backend Navigator's own graph (the default of
+  `synapse_agent_ask`). Its `ACTION` nodes are the Navigator's internal tools (`search_entities`,
+  `neighbors`, …), which a host never calls. Steered by it, a host would match no node and get the
+  full graph at every step.
+
+**The loop** (the [`follow_procedure`](#resource-and-prompts) prompt spells it out for the model):
+
+1. Before the first step, call `synapse_procedure_guidance` with `last_action=null`.
+2. Act, then call it again with `last_action`, `last_observation` and the earlier
+   `recent_steps`.
+3. Treat what comes back as advice. The host's model still chooses the step.
+4. At the end, call `synapse_record_trajectory` with an honest score.
+
+### `synapse_procedures()`
+
+Lists the stored graphs. Read-only, idempotent.
+
+```json
+{
+  "graphs": [
+    { "name": "graphrag-navigator", "version": 1, "score": null, "nodes": 11, "edges": 14,
+      "updated_at": "2026-09-24T09:12:03.512417+00:00",
+      "description": "Expert prior for the GraphRAG Navigator: how to answer a multi-hop question …" },
+    { "name": "mcp-host", "version": 1, "score": null, "nodes": 11, "edges": 18,
+      "updated_at": "2026-09-24T09:12:03.601928+00:00",
+      "description": "Expert prior for an MCP host (Claude, Cursor or any Model Context Protocol client) …" }
+  ]
+}
+```
+
+`score` is the validation score that justified the current version. It is `null` for the seeded
+prior and for hand edits.
+
+### `synapse_procedure_guidance(query, graph="mcp-host", last_action=None, last_observation=None, recent_steps=None, mode="raw")`
+
+Call it **before choosing each next step** of a multi-step task. Read-only, idempotent.
+
+| Argument | Type | Meaning |
+| --- | --- | --- |
+| `query` | `str` | the task or question being worked on |
+| `graph` | `str` | procedural graph name (see `synapse_procedures`); default `mcp-host` |
+| `last_action` | `str \| None` | the step just taken — a tool or node name such as `synapse_retrieve`; arguments are ignored when matching. `null` before the first step. |
+| `last_observation` | `str \| None` | a short summary of what `last_action` returned |
+| `recent_steps` | `list[{action, observation}] \| None` | earlier steps, oldest first. A last entry that repeats `last_action` is merged, not duplicated. |
+| `mode` | `"raw"` \| `"generative"` | `raw`: the subgraph as text, **no LLM call**. `generative`: one backend LLM call (cached) that writes advice. |
+
+**How the step is placed.** The backend localizes the last action to a node: `start` →
+`exact` → `normalized` (case, punctuation and arguments ignored) → `semantic` (embedding
+similarity with the last observation) → `none`, which uses the full graph. It then returns that
+node's outgoing transitions up to two hops.
+
+**The result** has these fields:
+
+- `graph`, `version`
+- `active_node`, `localization`, `localization_score`, `scope` (`local` / `full`)
+- `context`, the serialized subgraph
+- `guidance`, the written advice (`null` in raw mode)
+- `next_actions`, the hop-1 targets
+- `usage`: `context_chars`, `context_tokens_est`, `llm_calls`, `cached`, `input_tokens`,
+  `output_tokens`, `estimated`
+
+The [example response](./procedural-graphs.md#what-the-solver-or-host-reads) shows a real one.
+
+### `synapse_record_trajectory(query, steps, score, graph="mcp-host")`
+
+Records a finished run against the graph's current version: `steps` as `[{action, observation}]`
+and an honest `score` in [0, 1] (1 = fully and verifiably done, 0 = failed). It is stored with
+`source: "mcp"` and returns `{"status": "recorded"}`. This is a non-destructive write that is
+**not** idempotent: calling twice records twice.
+
+> Recorded runs are stored for audit. Today's evolution loop learns only from its own rollouts
+> on the QA pairs you give it; it does not read recorded runs yet.
+
+### `synapse_agent_ask(query, graph="graphrag-navigator", guidance="raw", max_steps=8)`
+
+The backend's **GraphRAG Navigator** answers the question. It is a ReAct agent that walks the
+knowledge graph with deterministic tools (`search_entities`, `neighbors`, `read_sources`,
+`search_passages`, `find_path`, `answer`), steered by the procedural graph. `graph=null` runs it
+without one, and `max_steps` is 1–20.
+
+It returns `answer` and the full step trace. Each step has `thought`, `action`, `args` and
+`observation`, plus `active_node` and `localization`: where the procedural graph placed the agent
+before that step, and how that node was matched. The result
+also carries `stopped`, `parse_failures`, `usage` (`llm_calls`, `guidance_llm_calls`,
+`input_tokens`, `output_tokens`, `estimated`), `graph` and `latency_s`.
+
+**It costs backend LLM calls**: one per step, up to `max_steps`, plus one per step with
+`guidance="generative"`. The tool is read-only but not idempotent. Prefer `synapse_retrieve` when
+the host's own model can answer.
+
+**Why there is no evolve tool.** Offline self-evolution runs for minutes to hours and spends
+hundreds of backend LLM calls. A model should not start that on its own initiative halfway
+through a task. Use `synapse-graphrag evolve`, which prints an upper-bound estimate and asks
+first, or the HTTP API.
 
 ---
 
@@ -420,6 +551,17 @@ first. A successful clear also empties the server's retrieve cache.
   `demonstrated` / `hypothesised` as the entity descriptions are) · mitigations and their
   evaluation status · open questions · *not in the corpus* — with every line cited. See
   [`docs/ai-safety.md`](./ai-safety.md).
+- **Prompt `follow_procedure(task, graph="mcp-host")`** — work through a multi-step task
+  steered by a procedural graph:
+  1. call `synapse_procedure_guidance` with `last_action=null`;
+  2. choose each step yourself, taking a transition whose condition holds and avoiding its
+     pitfalls;
+  3. call the guidance tool again after every step, with the last action and a summary of its
+     observation;
+  4. finish with `synapse_record_trajectory` and an honest score, never rounded up.
+
+  The prompt keeps `mode="raw"` unless the user accepts one backend LLM call per step. See
+  [Procedural memory tools](#procedural-memory-tools).
 
 ---
 
@@ -481,6 +623,26 @@ and never touches the backend. The cache is per process and is emptied by a succ
 wait out the TTL, restart the server, or run with `SYNAPSE_CACHE_TTL=0` to disable caching
 entirely.
 
+### Procedural guidance
+
+The same stance applies to procedural memory.
+
+- **`raw` costs nothing.** `synapse_procedure_guidance` defaults to `raw`: the backend
+  serializes the relevant 2-hop subgraph and makes **no** LLM call. On the default `mcp-host`
+  prior that is 687–7,878 characters per step (≈ 172–1,970 tokens) at its ten non-terminal
+  nodes, or 11,486 characters (≈ 2,872 tokens) for the full-graph fallback. The six tool nodes
+  cost 1,283–2,386 characters and `Start` 3,976; the top of the range is `Plan_Question`, the
+  hub that fans out to all six tools, which a host reaches by reporting it as `last_action`.
+  These are properties of the prior, computed with the real serializer;
+  `usage.context_chars` reports the real figure on every call.
+- **`generative` costs one call per step.** It is the configuration from the Procedural Graphs
+  paper: a backend LLM call per step, cached per exact situation. The paper measured localized
+  generative guidance at +33.4 % (GDPval) and +55.4 % (ALFWorld) total tokens over no graph.
+- **`synapse_agent_ask` costs one call per step.** It spends a backend LLM call per step, up to
+  `max_steps`, where `synapse_ask` spends one.
+
+Details: [docs/procedural-graphs.md → FinOps](./procedural-graphs.md#finops).
+
 ---
 
 ## CLI reference
@@ -499,13 +661,62 @@ message on a connection failure or backend error — never a traceback.
 | `synapse-graphrag stats` | node/edge counts by type |
 | `synapse-graphrag mcp [--transport …] [--host H] [--port P]` | run the MCP server (same as `synapse-mcp`) |
 | `synapse-graphrag install-config --client {claude-code,claude-desktop,cursor,vscode,windsurf} [--url U] [--budget N]` | print the config snippet or command for that client |
+| `synapse-graphrag procedures [list]` | procedural graphs with version, score and size |
+| `synapse-graphrag procedures show NAME [--text]` | nodes and transitions; `--text` prints the graph exactly as an LLM reads it |
+| `synapse-graphrag procedures export NAME [-o FILE]` · `procedures import FILE [--name N]` | round-trip a graph as JSON; an import is validated by the backend and saved as a new version |
+| `synapse-graphrag procedures versions NAME` · `procedures rollback NAME VERSION` | version history (score, note, structural diff); re-save an old version as the newest |
+| `synapse-graphrag procedures guide NAME --query Q [--last-action A] [--observation O] [--mode raw\|generative] [--json]` | step-local guidance; `raw` (default) makes no LLM call |
+| `synapse-graphrag agent QUERY [--graph NAME \| --no-graph] [--guidance none\|raw\|generative] [--max-steps N] [--record] [--json]` | the backend's Navigator agent: step trace on stderr, the answer alone on stdout, usage; exits `1` without an answer |
+| `synapse-graphrag evolve NAME --train FILE --val FILE [--train-split S] [--val-split S] [--rounds N] [--batch-size N] [--mode static\|scratch] [--metric f1\|em] [--guidance raw\|generative] [--max-llm-calls N] [--replace] [--yes]` | offline self-evolution; see below |
 
 ```bash
 synapse-graphrag status
 synapse-graphrag retrieve "Who designed the Analytical Engine?" --k 6 --budget 2000 --json
 synapse-graphrag ingest ./papers/graphrag.pdf --theme "Machine learning"
 synapse-graphrag --url https://synapse.example.com stats
+synapse-graphrag procedures guide graphrag-navigator --query "Who designed the Analytical Engine?" --last-action search_entities
 ```
+
+**What `evolve` checks before it starts:**
+
+- The QA files are JSON arrays or JSONL of `{question, answer}`. `answer` may be a list of
+  acceptable answers.
+- A file that mixes `split` values (train / val / test) is refused until `--train-split` /
+  `--val-split` picks one, so a test split is never trained on by accident.
+- `--mode scratch` on a name that already holds a graph is refused unless `--replace` is given.
+  With it, the stored graph is scored once on the validation set and is overwritten only by a
+  candidate that scores at least as well.
+- A `--max-llm-calls` that cannot pay for the baseline plus one full round is refused, with the
+  smallest cap that can (see below).
+- It prints an upper bound on backend LLM calls before sending anything:
+  (rounds × (batch + val) + val) agent runs × `AGENT_MAX_STEPS` (× 2 with generative guidance),
+  plus one refiner call per round. It also prints the hard cap: `--max-llm-calls`, or else that
+  upper bound itself, which is sent as `max_llm_calls` so the backend enforces the number you
+  agreed to whatever its own `AGENT_MAX_STEPS` or `EVOLUTION_MAX_LLM_CALLS`.
+- It then needs `--yes`, or a `y` typed at an interactive prompt. A piped or closed stdin is never
+  taken as consent.
+
+Ctrl-C stops listening; the job keeps running on the backend until it finishes or reaches its
+budget.
+
+**The cap must pay for one round.** A baseline alone decides nothing, so a `--max-llm-calls`
+below the worst case of the baseline plus one whole round is refused before anything is sent,
+and the error names the minimum: (|val| + batch + |val|) × S + 1, with S = `AGENT_MAX_STEPS` (× 2
+for generative guidance), plus |val| × S for `--replace`. On the repository's demo QA set:
+
+```bash
+# |val| = 9, batch 6, S = 8: (9 + 6 + 9) × 8 + 1 = 193, so 200 runs one round
+synapse-graphrag evolve graphrag-navigator \
+    --train backend/benchmarks/procedural/demo_qa.json --train-split train \
+    --val   backend/benchmarks/procedural/demo_qa.json --val-split val \
+    --rounds 1 --batch-size 6 --max-llm-calls 200
+```
+
+**What a round is worth.** This command runs the paper's mode 3 (expert prior + online
+evolution). In the paper's HotpotQA study that mode ended slightly *below* the unevolved prior
+(76.34 vs 76.61 answer F1) at more tokens per question (10,658 vs 9,046); only evolution from
+scratch (`--mode scratch`) beat the prior. An accepted round is a search step on a small
+validation set, so check it on held-out questions before keeping it.
 
 ---
 
@@ -541,9 +752,17 @@ asyncio.run(main())
 | `ask_stream(query, history=None)` | async iterator of parsed SSE events (`citations`, `paths`, `sources`, `token`, `done`, `error`) |
 | `ingest_pdf(path, theme="Generic", on_progress=None)` | `IngestResult` — the `done` payload plus `job_id`; `on_progress` receives each progress event |
 | `graph()` · `communities(limit=20)` · `rebuild_communities(on_progress=None)` · `clear_graph()` | the backend JSON |
+| `procedures()` · `procedure(name)` · `procedure_text(name)` · `procedure_graph_data(name)` | procedural graphs: the list, one graph's JSON (+ `version`, `score`), its LLM-readable text, its force-graph shape |
+| `put_procedure(name, graph)` · `delete_procedure(name)` | store a graph as a new version (validated; 422 on failure) · delete it with its history |
+| `procedure_guidance(name, query, trajectory=None, mode=None, hops=None, window=None)` | step-local guidance; `trajectory` is `[{action, observation?}]`, oldest first (a Navigator trace can be passed as is) |
+| `record_trajectory(name, query, steps, score, source="client")` | store one scored run (`score` checked to be in [0, 1] before sending) |
+| `procedure_versions(name)` · `rollback_procedure(name, version)` · `procedure_rejections(name, limit=20)` | version history · re-save an old version as the newest · the evolution loop's rejected candidates |
+| `evolve_procedure(name, train, val, *, rounds=None, batch_size=None, mode="static", metric="f1", guidance="raw", max_llm_calls=None, on_progress=None, replace=False)` | start self-evolution and follow its SSE stream to the report (`{job_id, **report}`); **costs backend LLM calls** |
+| `agent_ask(query, graph=..., guidance=None, max_steps=None, record=False)` | the Navigator's result; `graph=...` (default) uses the backend's default graph, `None` runs without one |
 
 HTTP errors raise `SynapseError(status, detail)` carrying the backend's `detail`; an unreachable
-backend raises its subclass `SynapseConnectionError`. A small `run(coro)` helper exists for
+backend raises its subclass `SynapseConnectionError`. For a refused procedural graph (422),
+`exc.payload["diagnostics"]` lists every problem. A small `run(coro)` helper exists for
 synchronous scripts. Exports: `SynapseClient`, `Answer`, `Retrieval`, `IngestResult`,
 `SynapseError`, `__version__`.
 
@@ -557,7 +776,7 @@ All optional; the CLI and the MCP server read the same ones.
 | --- | --- | --- |
 | `SYNAPSE_URL` | `http://localhost:8000` | base URL of the Synapse backend |
 | `SYNAPSE_API_KEY` | *(unset)* | if set, sent as `Authorization: Bearer …` on every request — for an authenticating proxy or gateway in front of the backend (the backend itself ignores it today) |
-| `SYNAPSE_TIMEOUT` | `120` | HTTP timeout in seconds (ingestion and `ask` stream, so keep it generous) |
+| `SYNAPSE_TIMEOUT` | `120` | HTTP timeout in seconds (ingestion and `ask` stream, so keep it generous). `agent` / `synapse_agent_ask` is one non-streamed request of up to `max_steps` LLM calls, so raise it for long runs. An evolution job's event stream has no idle timeout. |
 | `SYNAPSE_MAX_CONTEXT_CHARS` | `6000` | default `max_context_chars` for `synapse_retrieve` and `retrieve --budget`; `0` or negative disables the default budget; positive values below `200` are rejected (the backend's floor) |
 | `SYNAPSE_CACHE_TTL` | `300` | retrieve-cache lifetime in seconds; `0` disables the cache |
 
@@ -580,7 +799,16 @@ All optional; the CLI and the MCP server read the same ones.
   the backend. Either add a key to `.env` and restart, or keep using `synapse_retrieve` and let
   the host model answer — which is the recommended mode anyway. `synapse_status` shows the
   name of the configured `llm_provider` (readiness itself only covers Neo4j).
-- **`synapse_ingest_pdf` fails the same way** — same cause: extraction is an LLM call.
+- **`synapse_ingest_pdf` fails the same way** — same cause: extraction is an LLM call. So do
+  `synapse_agent_ask`, `mode="generative"` guidance and `synapse-graphrag evolve`, which the
+  backend answers with a 503 carrying the provider's message.
+- **``Procedural graph 'mcp-host' not found``** (or `'graphrag-navigator'`). The backend seeds
+  both priors at startup when `PROCEDURAL_ENABLED=true`. If Neo4j was not ready at that moment,
+  the seed was skipped (it is logged). Restart the backend, or import the bundled prior:
+  `synapse-graphrag procedures import backend/app/data/procedural/mcp-host.json` (or
+  `…/graphrag-navigator.json`). Clearing the knowledge graph does *not* remove them.
+- **`evolve` says it refuses to start without consent.** Expected when stdin is not a terminal
+  (CI, pipes). Re-run with `--yes` once you have read the estimate.
 - **`synapse_communities` returns nothing after `make demo`.** Expected: the demo seed writes
   entities and relationships but no communities (their titles and summaries are LLM-written), so
   `mode: "global"` routing has nothing to answer from. Ingest a document, or run
@@ -604,7 +832,8 @@ All optional; the CLI and the MCP server read the same ones.
 ## Security
 
 - **The backend has no authentication.** Anyone who can reach `SYNAPSE_URL` can read the graph,
-  ingest documents and — through `DELETE /api/graph` — wipe it. Keep it on `localhost`, inside a
+  ingest documents, wipe it through `DELETE /api/graph`, rewrite or delete procedural graphs, and
+  start LLM-spending agent runs and evolution jobs. Keep it on `localhost`, inside a
   private network/VPN, or behind an authenticating reverse proxy. The same applies to the MCP
   server's HTTP transport: bind `127.0.0.1` unless a proxy is in front. See
   [DEPLOYMENT.md](../DEPLOYMENT.md#container-images-ghcr) for a proxy example.
@@ -617,4 +846,11 @@ All optional; the CLI and the MCP server read the same ones.
   container with an explicit mount.
 - **Prompt-injected content.** Everything in `context`, `sources` and community summaries came
   from the ingested documents; treat it as data, not instructions, in your own agent code.
+- **Procedural guidance is prompt text too.** A procedural graph's conditions, guidance and
+  pitfalls are handed to agents as advice, and anyone who can reach the backend can replace a
+  graph with `PUT /api/procedures/{name}`. That is one more reason to keep the backend behind
+  authentication. Review imported graphs like code: `procedures show NAME --text` prints exactly
+  what an agent will read.
+- **`synapse_record_trajectory` writes** a record to procedural memory; it never edits a graph.
+  Nothing in the MCP surface can change or evolve a procedural graph.
 - Report vulnerabilities through [SECURITY.md](../SECURITY.md), not a public issue.

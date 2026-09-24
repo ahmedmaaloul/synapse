@@ -6,7 +6,7 @@ Synapse — Graph Router
 
 Serves graph data for the force-graph visualization, exposes the Louvain
 *communities* (the corpus-level "themes" that power global search), and supports
-clearing the DB.
+clearing the knowledge graph (procedural memory is kept — see ``clear_graph``).
 
 Community rebuilds are long-running (Louvain + one LLM summary per community),
 so they run as a background job on the same ``job_bus`` + SSE pattern as
@@ -24,6 +24,7 @@ from fastapi.responses import StreamingResponse
 
 from app.neo4j_driver import execute_query
 from app.services.communities import detect_and_summarize, get_community_summaries
+from app.services.graph_schema import PROCEDURAL_LABELS
 from app.services.jobs import job_bus
 
 logger = logging.getLogger(__name__)
@@ -148,12 +149,29 @@ async def community_rebuild_events(job_id: str):
     )
 
 
+#: Everything EXCEPT procedural memory. Label-exclusion (not a list of the
+#: knowledge labels to delete) keeps the old "clear everything" behaviour for
+#: any knowledge label added later, while a strategy learned over many paid
+#: evolution rounds survives a corpus reset.
+CLEAR_KNOWLEDGE_QUERY = """
+MATCH (n)
+WHERE NOT any(label IN labels(n) WHERE label IN $keep)
+DETACH DELETE n
+"""
+
+
 @router.delete("/graph")
 async def clear_graph():
-    """Delete all nodes and relationships in the database."""
+    """Delete the knowledge graph (Entity, Chunk, Community, …) but keep procedural memory.
+
+    Procedural graphs, their versions, rejections and trajectories
+    (``graph_schema.PROCEDURAL_LABELS``) are not knowledge about the corpus;
+    they are *how* to navigate any corpus, and they cost LLM calls to learn.
+    Delete one explicitly with ``DELETE /api/procedures/{name}``.
+    """
     try:
-        await execute_query("MATCH (n) DETACH DELETE n")
-        return {"status": "success", "message": "Knowledge graph cleared"}
+        await execute_query(CLEAR_KNOWLEDGE_QUERY, {"keep": list(PROCEDURAL_LABELS)})
+        return {"status": "success", "message": "Knowledge graph cleared (procedural memory kept)"}
     except Exception as e:
         logger.error("Error clearing graph: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to clear graph: {e}") from e

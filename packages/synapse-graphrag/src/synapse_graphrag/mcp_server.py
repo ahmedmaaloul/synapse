@@ -17,6 +17,21 @@ Identical retrievals within ``SYNAPSE_CACHE_TTL`` seconds are served from an
 in-process cache (``usage.cached``), because agents re-ask the same question
 several times per task.
 
+Procedural memory follows the same stance. ``synapse_procedure_guidance``
+hands the host the part of a procedural graph around its current step — the
+transitions it can take next, each with a condition, guidance and pitfalls —
+after Lu, Chen, Wu, Arık, "Procedural Graphs: Self-Evolving Execution
+Structures for LLM Agents" (arXiv:2609.09153). In ``raw`` mode that is a
+serialized subgraph, no LLM call; the paper's generative guidance (one extra
+call per step) is opt-in. The default graph, ``mcp-host``, is written for a
+host whose actions are these very tools (``synapse_retrieve``,
+``synapse_find_entities``…), so the host's own calls localise it and it gets
+the few transitions ahead instead of the whole graph; ``graphrag-navigator`` is
+the backend navigator's own graph, whose actions are the navigator's internal
+tools. The host reports how a run went with ``synapse_record_trajectory``;
+evolving a graph from those runs is deliberately NOT a tool (see
+``build_server``).
+
 Error policy — one rule, applied everywhere: an anticipated failure (backend
 unreachable, HTTP error, bad path, unknown job…) is raised as the SDK's
 ``ToolError``. The SDK returns it as ``CallToolResult(is_error=True)`` whose
@@ -34,13 +49,14 @@ import copy
 import json
 import logging
 import os
+import re
 import sys
 import time
 from collections import Counter
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ResourceError, ToolError
@@ -63,12 +79,38 @@ SERVER_NAME = "synapse"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 CACHE_MAX_ENTRIES = 256
+# Procedural graphs the backend seeds on startup (one per bundled expert prior).
+# A graph localises the caller by matching its last action to an ACTION node id,
+# so a host must be steered by a graph whose actions are the tools it calls:
+# mcp-host's ACTION nodes are this server's tool names. graphrag-navigator (the
+# backend's PROCEDURAL_DEFAULT_GRAPH) steers the backend's own navigator agent,
+# whose actions are internal tools no host calls, so it stays synapse_agent_ask's
+# default only.
+DEFAULT_PROCEDURE = "mcp-host"
+NAVIGATOR_PROCEDURE = "graphrag-navigator"
+# Claude Code shows MCP tools to its model as ``mcp__<server>__<tool>``; the
+# model may echo that form back as its last action.
+_HOST_TOOL_PREFIX = re.compile(r"^mcp__\w+?__(?=\w)")
 
 ClientFactory = Callable[[], SynapseClient]
 
 # Module level on purpose: with ``from __future__ import annotations`` the SDK
 # resolves parameter annotations against the function's globals.
 QueryArg = Annotated[str, Field(min_length=1, description="The question or topic to look up.")]
+ProcedureArg = Annotated[
+    str,
+    Field(
+        min_length=1,
+        description=(
+            "Procedural graph name (see synapse_procedures). Default mcp-host, the strategy "
+            "for answering from Synapse with these synapse_* tools."
+        ),
+    ),
+]
+TaskArg = Annotated[
+    str, Field(min_length=1, description="The task or question you are working on.")
+]
+StepsArg = list[dict[str, Any]]
 
 INSTRUCTIONS = """\
 Synapse is a GraphRAG knowledge graph built from the user's documents (entities,
@@ -81,7 +123,16 @@ graph does not contain the answer. Use `synapse_ask` only when the user explicit
 wants Synapse's own generated answer. `synapse_find_entities`, `synapse_communities`
 and `synapse_graph_stats` are cheap ways to discover what the graph knows before
 retrieving. `synapse_ingest_pdf` adds documents; `synapse_clear_graph` deletes
-everything and requires confirm=true."""
+the knowledge graph and requires confirm=true.
+
+Synapse also keeps procedural memory: small graphs of steps whose transitions carry a
+condition, guidance and pitfalls (`synapse_procedures` lists them). In a multi-step
+task, call `synapse_procedure_guidance` before choosing each next step — mode "raw"
+costs no LLM call, and its default graph `mcp-host` is written for these synapse_*
+tools — treat what it returns as advice, and finish with
+`synapse_record_trajectory` and an honest score. The `follow_procedure` prompt walks
+through that loop. `synapse_agent_ask` runs the backend's own navigator agent instead
+(several backend LLM calls)."""
 
 ANSWER_WITH_GRAPH_PROMPT = """\
 Answer the question below using the Synapse knowledge graph.
@@ -118,6 +169,31 @@ and POLICY entities, and every RISK / FAILURE_MODE description starts with "demo
 5. If `usage.truncated` is true, say the brief may be partial.
 
 Topic: {topic}"""
+
+FOLLOW_PROCEDURE_PROMPT = """\
+Carry out the task below step by step, steered by the Synapse procedural graph `{graph}`: a
+small graph of steps (ACTION, REASONING and STATUS nodes) whose transitions carry a condition,
+guidance and pitfalls distilled from scored past runs.
+
+1. Before your first step, call `synapse_procedure_guidance` with graph="{graph}", the task as
+   `query` and last_action=null. It returns the part of the graph around where you are
+   (`context`), the steps it expects next (`next_actions`) and how it placed you
+   (`localization`).
+2. Choose the next step yourself. The guidance is advice, not orders: take a transition whose
+   condition holds, apply its guidance, avoid its pitfalls — and when none fits, do what the
+   task actually needs.
+3. After every step, call `synapse_procedure_guidance` again with `last_action` set to the
+   step you just took (the tool or node name, e.g. `synapse_retrieve`), `last_observation` set
+   to a short summary of its result, and the earlier steps as `recent_steps`
+   ([{{action, observation}}], oldest first). Keep mode="raw" — it costs no LLM call — unless
+   the user has accepted one backend LLM call per step for mode="generative".
+4. When you are done, call `synapse_record_trajectory` with graph="{graph}", the task as
+   `query`, every step as [{{action, observation}}] and an honest `score` in [0, 1]: 1 only if
+   the task is fully and verifiably done, 0 if it failed, in between for partial success.
+   Never round up: recorded runs are kept for audit and for future learning (the evolution
+   loop does not read them yet), and an inflated score would misreport what happened.
+
+Task: {task}"""
 
 
 # ── Retrieval cache ──────────────────────────────────────────────────────────
@@ -216,6 +292,46 @@ def graph_stats(graph: dict[str, Any], top: int = 5) -> dict[str, Any]:
         ),
         "top_entities": top_entities,
     }
+
+
+def _bare_action(action: Any) -> str:
+    """``" mcp__synapse__synapse_retrieve(...)"`` → ``"synapse_retrieve(...)"``; ``None`` → ``""``."""
+    return _HOST_TOOL_PREFIX.sub("", str(action or "").strip())
+
+
+def build_trajectory(
+    recent_steps: list[dict[str, Any]] | None,
+    last_action: str | None,
+    last_observation: str | None = None,
+) -> list[dict[str, str]]:
+    """The guidance endpoint's trajectory from a host's tool arguments.
+
+    ``recent_steps`` come first, oldest first; ``last_action`` (with its
+    ``last_observation``) is the most recent step. Hosts often repeat the last
+    step in both places, so a final recent step with the same action is merged
+    rather than duplicated. An observation without an action has nothing to
+    localise and is dropped. A host-qualified tool name
+    (``mcp__synapse__synapse_retrieve``, as Claude Code shows it to its model)
+    is sent as the bare tool name, the ACTION node id it has to match.
+    """
+    steps: list[dict[str, str]] = []
+    for step in recent_steps or []:
+        entry = {"action": _bare_action(step.get("action"))}
+        if step.get("observation") is not None:
+            entry["observation"] = str(step["observation"])
+        steps.append(entry)
+    action = _bare_action(last_action)
+    if not action:
+        return steps
+    if steps and steps[-1]["action"].strip() == action:
+        if last_observation is not None:
+            steps[-1]["observation"] = last_observation
+        return steps
+    last = {"action": action}
+    if last_observation is not None:
+        last["observation"] = last_observation
+    steps.append(last)
+    return steps
 
 
 # ── Server ───────────────────────────────────────────────────────────────────
@@ -420,7 +536,8 @@ def build_server(
     @server.tool(
         name="synapse_clear_graph",
         description=(
-            "DELETE every node and relationship in the knowledge graph. Irreversible. "
+            "DELETE every node and relationship in the knowledge graph (entities, "
+            "communities, source excerpts; procedural graphs are kept). Irreversible. "
             "Refuses unless confirm=true; ask the user before confirming."
         ),
         annotations=ToolAnnotations(read_only_hint=False, destructive_hint=True, idempotent_hint=True, open_world_hint=False),
@@ -440,6 +557,129 @@ def build_server(
             result = await client.clear_graph()
         cache.clear()
         return {"cleared": True, **result}
+
+    # ── procedural memory ────────────────────────────────────────────────
+    # There is deliberately no evolve tool. Evolution is a long-running job
+    # (minutes to hours) that spends hundreds of backend LLM calls on rollouts
+    # and refinements; a model should not start that on its own initiative
+    # halfway through a task. It stays behind the CLI (`synapse-graphrag
+    # evolve`, which shows the cost estimate and asks for consent) and the API.
+    @server.tool(
+        name="synapse_procedures",
+        description=(
+            "List the procedural graphs Synapse keeps — step-by-step strategies for "
+            "multi-step tasks — with their version, validation score, size and description."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False),
+    )
+    async def synapse_procedures() -> dict[str, Any]:
+        async with _connected(factory) as client:
+            return await client.procedures()
+
+    @server.tool(
+        name="synapse_procedure_guidance",
+        description=(
+            "Call this before choosing your next step in a multi-step task. Returns the part "
+            "of a procedural graph around your current step: the active node, the transitions "
+            "you can take next — each with its condition, guidance and pitfalls to avoid — the "
+            "suggested next_actions, how your last action was located in the graph, and usage. "
+            "mode=raw (default) returns that subgraph as text with NO extra LLM call; "
+            "mode=generative turns it into written advice with one backend LLM call. Pass "
+            "last_action=null on the first step, then your last action and what it returned. "
+            "The default graph, mcp-host, is built on these synapse_* tools, so your calls "
+            "place you in it; graphrag-navigator is the backend navigator's own graph (its "
+            "steps are the navigator's internal tools, which you never call)."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False),
+    )
+    async def synapse_procedure_guidance(
+        query: TaskArg,
+        graph: ProcedureArg = DEFAULT_PROCEDURE,
+        last_action: Annotated[
+            str | None,
+            Field(
+                description=(
+                    "The step you just took — a tool or node name such as 'synapse_retrieve' "
+                    "(arguments are ignored when matching). null before the first step."
+                ),
+            ),
+        ] = None,
+        last_observation: Annotated[
+            str | None,
+            Field(description="A short summary of what last_action returned (optional)."),
+        ] = None,
+        recent_steps: Annotated[
+            StepsArg | None,
+            Field(
+                description=(
+                    "Earlier steps, oldest first, as [{action, observation}]. The last few "
+                    "are used to place you in the graph and to write generative advice."
+                ),
+            ),
+        ] = None,
+        mode: Annotated[
+            Literal["raw", "generative"],
+            Field(description="raw: subgraph as text, no LLM call. generative: one backend LLM call."),
+        ] = "raw",
+    ) -> dict[str, Any]:
+        trajectory = build_trajectory(recent_steps, last_action, last_observation)
+        async with _connected(factory) as client:
+            return await client.procedure_guidance(graph, query, trajectory, mode=mode)
+
+    @server.tool(
+        name="synapse_record_trajectory",
+        description=(
+            "Record how a multi-step task went, for the procedural graph that guided it: the "
+            "task, the steps taken as [{action, observation}], and an honest score in [0, 1] "
+            "(1 = fully and verifiably done, 0 = failed). Recorded runs are kept for audit and "
+            "future learning (evolution does not read them yet); never inflate the score. Adds "
+            "a record; changes nothing else."
+        ),
+        annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=False, open_world_hint=False),
+    )
+    async def synapse_record_trajectory(
+        query: TaskArg,
+        steps: Annotated[
+            StepsArg,
+            Field(min_length=1, description="The steps taken, oldest first, as [{action, observation}]."),
+        ],
+        score: Annotated[
+            float, Field(ge=0.0, le=1.0, description="Honest outcome score in [0, 1].")
+        ],
+        graph: ProcedureArg = DEFAULT_PROCEDURE,
+    ) -> dict[str, Any]:
+        async with _connected(factory) as client:
+            return await client.record_trajectory(graph, query, steps, score, source="mcp")
+
+    @server.tool(
+        name="synapse_agent_ask",
+        description=(
+            "Have the backend's GraphRAG Navigator answer a question: a ReAct agent that walks "
+            "the knowledge graph with deterministic tools (search_entities, neighbors, "
+            "read_sources, search_passages, find_path), steered by its own procedural graph "
+            "(graphrag-navigator by default). Returns the answer, the full step trace and token "
+            "usage. COSTS BACKEND LLM CALLS — one per "
+            "step, up to max_steps, plus one per step with generative guidance. Prefer "
+            "synapse_retrieve when you can answer yourself."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=False, open_world_hint=False),
+    )
+    async def synapse_agent_ask(
+        query: QueryArg,
+        graph: Annotated[
+            str | None,
+            Field(description="Procedural graph steering the agent; null runs it without one."),
+        ] = NAVIGATOR_PROCEDURE,
+        guidance: Annotated[
+            Literal["none", "raw", "generative"],
+            Field(description="How the graph reaches the agent: none, raw (no extra call) or generative."),
+        ] = "raw",
+        max_steps: Annotated[int, Field(ge=1, le=20, description="Step limit (1-20).")] = 8,
+    ) -> dict[str, Any]:
+        async with _connected(factory) as client:
+            return await client.agent_ask(
+                query, graph=graph, guidance=guidance, max_steps=max_steps
+            )
 
     @server.resource(
         "synapse://about",
@@ -475,6 +715,18 @@ def build_server(
     )
     def safety_brief(topic: str) -> str:
         return SAFETY_BRIEF_PROMPT.format(topic=topic)
+
+    @server.prompt(
+        name="follow_procedure",
+        title="Follow a procedural graph",
+        description=(
+            "Work through a multi-step task with procedural guidance: ask "
+            "synapse_procedure_guidance before each step, act, and record the run with an "
+            "honest score at the end."
+        ),
+    )
+    def follow_procedure(task: str, graph: str = DEFAULT_PROCEDURE) -> str:
+        return FOLLOW_PROCEDURE_PROMPT.format(task=task, graph=graph or DEFAULT_PROCEDURE)
 
     return server
 

@@ -1,4 +1,4 @@
-import type { IngestStage, Theme } from "./types";
+import type { IngestStage, LocalizationMethod, Theme } from "./types";
 
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -92,4 +92,80 @@ export const INGEST_STAGE_PCT: Record<IngestStage, number> = {
   // Source chunks are persisted after the edges are written; the trailing
   // cross-document resolving_entities event is absorbed by the monotonic clamp.
   storing_chunks: 98,
+};
+
+// ── Procedural memory ─────────────────────────────────
+
+/** Seeded by the backend on startup (`procedural_default_graph`). */
+export const DEFAULT_PROCEDURE = "graphrag-navigator";
+
+/**
+ * Guidance scope: the active node plus its *outgoing* transitions up to this
+ * many hops (the paper's N_h with h = 2, and the backend's `procedural_hops`
+ * default). Used to preview what the navigator sees from a given node.
+ */
+export const GUIDANCE_HOPS = 2;
+
+// Node type → color. Tools read as the brand accent, reasoning as teal, and
+// status markers stay neutral so Start / End are told apart by their rings.
+export const PROC_TYPE_COLORS: Record<string, string> = {
+  ACTION: "#818cf8", // Indigo 400
+  REASONING: "#2dd4bf", // Teal 400
+  STATUS: "#a1a1aa", // Zinc 400
+};
+
+export const PROC_START_COLOR = "#34d399"; // Emerald 400
+export const PROC_TERMINAL_COLOR = "#fafafa"; // Zinc 50
+/** Visited-by-the-last-navigator-run badges. */
+export const PROC_TRACE_COLOR = "#fbbf24"; // Amber 400
+
+export function colorForProcType(type: string): string {
+  return PROC_TYPE_COLORS[type?.toUpperCase()] || FALLBACK_COLOR;
+}
+
+// Relation → label color; the lines themselves stay neutral.
+export const PROC_RELATION_COLORS: Record<string, string> = {
+  LEADS_TO: "#71717a", // Zinc 500
+  TRIGGERS: "#f59e0b", // Amber 500
+  PROVIDES_INPUT_FOR: "#38bdf8", // Sky 400
+  CONVERGES_TO: "#a78bfa", // Violet 400
+};
+
+export function colorForRelation(relation: string): string {
+  return PROC_RELATION_COLORS[relation?.toUpperCase()] || FALLBACK_COLOR;
+}
+
+/**
+ * The localization cascade, in the order the backend tries it. "none" means
+ * nothing matched and the guidance fell back to the whole graph.
+ */
+export const LOCALIZATION_INFO: Record<
+  LocalizationMethod,
+  { label: string; hint: string; className: string }
+> = {
+  start: {
+    label: "start",
+    hint: "Empty trajectory: placed on the Start node",
+    className: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300/90",
+  },
+  exact: {
+    label: "exact",
+    hint: "The last action matched a node id exactly",
+    className: "border-indigo-500/30 bg-indigo-500/10 text-indigo-300/90",
+  },
+  normalized: {
+    label: "normalized",
+    hint: "Matched once case, punctuation and arguments were stripped",
+    className: "border-sky-400/30 bg-sky-400/10 text-sky-300/90",
+  },
+  semantic: {
+    label: "semantic",
+    hint: "Matched by embedding similarity to the node descriptions",
+    className: "border-violet-400/30 bg-violet-400/10 text-violet-300/90",
+  },
+  none: {
+    label: "full graph",
+    hint: "No node matched: guidance used the whole graph",
+    className: "border-[#3f3f46] bg-[#27272a]/60 text-[#a1a1aa]",
+  },
 };

@@ -10,11 +10,26 @@ context, ingest a PDF with live progress, list themes, print graph stats —
 plus ``mcp`` (runs the MCP server) and ``install-config`` (prints the exact
 snippet each MCP host needs).
 
+Procedural memory has its own commands: ``procedures`` (list / show / export /
+import / versions / rollback / guide), ``agent`` (the backend's GraphRAG
+Navigator, with its step trace) and ``evolve`` (offline self-evolution of a
+procedural graph, after Lu et al., arXiv:2609.09153). ``evolve`` is the one
+command here that can spend hundreds of backend LLM calls, so it prints an
+upper-bound estimate first and refuses to start without ``--yes`` or a "y" typed
+at an interactive prompt — never on a piped or closed stdin. Before asking, it
+also refuses a ``--max-llm-calls`` too small for the baseline plus one full
+round (naming the smallest one that runs a round, computed as the backend does)
+and a ``--mode scratch`` run that would overwrite a stored graph without
+``--replace``. ``agent`` and ``evolve`` wait ``max(SYNAPSE_TIMEOUT, 600)``
+seconds: giving up sooner would not stop the backend, which keeps working and
+spending until the run ends.
+
 Failure contract: a backend error or an unreachable backend prints ONE line
 to stderr and exits 1. Users never see a traceback for a server that is
 simply not running. Machine-readable output (``retrieve --json``,
-``install-config``) goes to stdout alone; commentary goes to stderr so the
-output can be piped into a file or ``jq``.
+``install-config``, ``--json`` flags, ``procedures export``) goes to stdout
+alone; commentary goes to stderr so the output can be piped into a file or
+``jq``.
 """
 
 from __future__ import annotations
@@ -24,6 +39,7 @@ import json
 import sys
 from collections.abc import Callable
 from contextlib import aclosing
+from pathlib import Path
 from typing import Any
 
 from synapse_graphrag import __version__
@@ -31,8 +47,10 @@ from synapse_graphrag.client import (
     DEFAULT_MAX_CONTEXT_CHARS,
     SynapseClient,
     SynapseError,
+    env_long_timeout,
     env_max_context_chars,
     env_url,
+    qa_items,
     run,
 )
 
@@ -51,6 +69,19 @@ CONFIG_LOCATIONS = {
     "windsurf": "~/.codeium/windsurf/mcp_config.json",
 }
 
+# The backend's defaults (AGENT_MAX_STEPS, EVOLUTION_DEFAULT_ROUNDS,
+# EVOLUTION_DEFAULT_BATCH_SIZE). ``evolve`` always sends rounds and batch size
+# explicitly, and sends the estimate the user consented to as max_llm_calls
+# unless --max-llm-calls names another cap. The backend cannot then spend more
+# than was agreed, even if its own AGENT_MAX_STEPS or EVOLUTION_MAX_LLM_CALLS
+# is larger than assumed here: it stops cleanly (stopped: budget) instead.
+AGENT_MAX_STEPS = 8
+EVOLVE_ROUNDS = 3
+EVOLVE_BATCH_SIZE = 10
+# The backend's bound on a request's max_llm_calls.
+MAX_LLM_CALLS_LIMIT = 100_000
+OBSERVATION_PREVIEW_CHARS = 240
+
 
 def _err(message: str) -> None:
     print(f"error: {message}", file=sys.stderr)
@@ -58,6 +89,49 @@ def _err(message: str) -> None:
 
 def _note(message: str) -> None:
     print(message, file=sys.stderr)
+
+
+def _int_range(low: int, high: int | None = None) -> Callable[[str], int]:
+    """argparse ``type=`` for an integer in ``[low, high]`` (``high=None``: unbounded)."""
+
+    def parse(raw: str) -> int:
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise argparse.ArgumentTypeError(f"expected an integer, got {raw!r}") from exc
+        if value < low or (high is not None and value > high):
+            bounds = f"{low}-{high}" if high is not None else f">= {low}"
+            raise argparse.ArgumentTypeError(f"must be {bounds}, got {value}")
+        return value
+
+    return parse
+
+
+def _flat(text: Any) -> str:
+    return " ".join(str(text).split())
+
+
+def _preview(text: Any, limit: int) -> str:
+    flat = _flat(text)
+    return flat if len(flat) <= limit else flat[: limit - 1].rstrip() + "…"
+
+
+def _score(value: Any) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):.3f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _long_client(args: argparse.Namespace, make_client: ClientFactory) -> SynapseClient:
+    """A client for requests that make the backend run an agent (``agent``, ``evolve``).
+
+    Its timeout is ``max(SYNAPSE_TIMEOUT, 600)``: timing out would not stop
+    the run, only lose its result after the backend has paid for it.
+    """
+    return make_client(base_url=args.url, timeout=env_long_timeout())
 
 
 # ── Commands ─────────────────────────────────────────────────────────────────
@@ -254,6 +328,669 @@ def cmd_install_config(args: argparse.Namespace, make_client: ClientFactory) -> 
     return 0
 
 
+# ── Procedural memory ────────────────────────────────────────────────────────
+def _count(value: Any) -> int:
+    if isinstance(value, list | dict):
+        return len(value)
+    if isinstance(value, int | float):
+        return int(value)
+    return 0
+
+
+def _diff_summary(diff: Any) -> str:
+    """``+1 node, +2 edges, ~1 edge`` from a version's ``graph_diff``.
+
+    An empty or missing diff (the first version has nothing to compare with)
+    prints nothing; a diff whose lists are all empty is a text-only change.
+    """
+    if not isinstance(diff, dict) or not diff:
+        return ""
+    parts = []
+    for key, sign, noun in (
+        ("added_nodes", "+", "node"),
+        ("removed_nodes", "-", "node"),
+        ("changed_nodes", "~", "node"),
+        ("added_edges", "+", "edge"),
+        ("removed_edges", "-", "edge"),
+        ("changed_edges", "~", "edge"),
+    ):
+        n = _count(diff.get(key))
+        if n:
+            parts.append(f"{sign}{n} {noun}{'' if n == 1 else 's'}")
+    return ", ".join(parts) if parts else "no structural change"
+
+
+def _localization_method(value: Any) -> str:
+    """The localization method, whether the backend sent a string or an object."""
+    if isinstance(value, dict):
+        return str(value.get("method") or "")
+    return str(value) if value else ""
+
+
+def _format_action(action: Any, args: Any) -> str:
+    name = str(action or "?")
+    if isinstance(args, dict):
+        inner = ", ".join(f"{k}={json.dumps(v, ensure_ascii=False)}" for k, v in args.items())
+    elif isinstance(args, list):
+        inner = ", ".join(json.dumps(v, ensure_ascii=False) for v in args)
+    elif args is None or args == "":
+        inner = ""
+    else:
+        inner = json.dumps(args, ensure_ascii=False)
+    return f"{name}({inner})"
+
+
+def _print_procedure(graph: dict[str, Any]) -> None:
+    """Human-readable view of a graph; ``--text`` shows what an LLM reads instead."""
+    name = graph.get("name") or "?"
+    print(
+        f"{name}  v{graph.get('version', '?')} · score {_score(graph.get('score'))} · "
+        f"cycle policy {graph.get('cycle_policy') or 'forbid'}"
+    )
+    if graph.get("description"):
+        print(f"  {_flat(graph['description'])}")
+    tools = graph.get("tools") or []
+    if tools:
+        print(f"Tools: {', '.join(str(t) for t in tools)}")
+    nodes = graph.get("nodes") or []
+    print(f"Nodes ({len(nodes)}):")
+    for node in nodes:
+        detail = f" — {_flat(node['description'])}" if node.get("description") else ""
+        print(f"  [{node.get('id')}] {node.get('type', '?')}{detail}")
+    edges = graph.get("edges") or []
+    print(f"Transitions ({len(edges)}):")
+    for edge in edges:
+        condition = f"  if {_flat(edge['condition'])}" if edge.get("condition") else ""
+        print(
+            f"  [{edge.get('source')}] —{edge.get('relation', 'LEADS_TO')}→ "
+            f"[{edge.get('target')}]{condition}"
+        )
+        if edge.get("guidance"):
+            print(f"      guidance: {_flat(edge['guidance'])}")
+        if edge.get("pitfalls"):
+            print(f"      pitfalls: {_flat(edge['pitfalls'])}")
+
+
+def _read_json_file(path: str) -> Any:
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SynapseError(None, f"Cannot read {path}: {exc.strerror or exc}") from exc
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise SynapseError(None, f"{path} is not valid JSON: {exc}") from exc
+
+
+def cmd_procedures(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    action = args.proc_command or "list"
+    handler = {
+        "list": _procedures_list,
+        "show": _procedures_show,
+        "export": _procedures_export,
+        "import": _procedures_import,
+        "versions": _procedures_versions,
+        "rollback": _procedures_rollback,
+        "guide": _procedures_guide,
+    }[action]
+    return handler(args, make_client)
+
+
+def _procedures_list(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.procedures()
+
+    graphs = run(go()).get("graphs") or []
+    if not graphs:
+        print(
+            "No procedural graphs yet — the backend seeds its bundled priors "
+            "(graphrag-navigator and mcp-host) at startup when PROCEDURAL_ENABLED is true "
+            "(the default)."
+        )
+        return 0
+    for graph in graphs:
+        print(
+            f"• {graph.get('name')}  v{graph.get('version', '?')} · score "
+            f"{_score(graph.get('score'))} · {graph.get('nodes', '?')} nodes, "
+            f"{graph.get('edges', '?')} edges · updated {graph.get('updated_at') or '—'}"
+        )
+        if graph.get("description"):
+            print(f"    {_preview(graph['description'], 160)}")
+    return 0
+
+
+def _procedures_show(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    async def go() -> Any:
+        async with make_client(base_url=args.url) as client:
+            if args.text:
+                return await client.procedure_text(args.name)
+            return await client.procedure(args.name)
+
+    result = run(go())
+    if args.text:
+        print(result)
+    else:
+        _print_procedure(result)
+    return 0
+
+
+def _procedures_export(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.procedure(args.name)
+
+    graph = run(go())
+    text = json.dumps(graph, indent=2, ensure_ascii=False) + "\n"
+    if args.output:
+        try:
+            Path(args.output).write_text(text, encoding="utf-8")
+        except OSError as exc:
+            raise SynapseError(None, f"Cannot write {args.output}: {exc.strerror or exc}") from exc
+        _note(f"Exported {args.name} v{graph.get('version', '?')} → {args.output}")
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
+def _procedures_import(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    graph = _read_json_file(args.file)
+    if not isinstance(graph, dict):
+        raise SynapseError(None, f"{args.file} must hold one JSON object (a procedural graph).")
+    # ``version`` and ``score`` are assigned by the backend; an ``export`` carries
+    # them for provenance, so a round trip must not send them back.
+    graph = {k: v for k, v in graph.items() if k not in ("version", "score")}
+    name = args.name or graph.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise SynapseError(None, f'{args.file} has no "name"; pass --name.')
+    graph["name"] = name
+
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.put_procedure(name, graph)
+
+    result = run(go())
+    print(f"Imported {result.get('name') or name} as v{result.get('version', '?')}")
+    return 0
+
+
+def _procedures_versions(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.procedure_versions(args.name)
+
+    versions = run(go()).get("versions") or []
+    if not versions:
+        print(f"No versions recorded for {args.name}.")
+        return 0
+    for version in versions:
+        status = "accepted" if version.get("accepted", True) else "rejected"
+        note = f" · {version['note']}" if version.get("note") else ""
+        diff = _diff_summary(version.get("diff"))
+        label = f"v{version.get('version', '?')}"
+        print(
+            f"{label:<5}score {_score(version.get('score'))} · {status} · "
+            f"{version.get('created_at') or '—'}{note}" + (f" ({diff})" if diff else "")
+        )
+    return 0
+
+
+def _procedures_rollback(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.rollback_procedure(args.name, args.version)
+
+    result = run(go())
+    print(
+        f"Rolled {args.name} back to v{args.version} — saved as v{result.get('version', '?')} "
+        "(history is kept)"
+    )
+    return 0
+
+
+def _procedures_guide(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    if args.observation is not None and not args.last_action:
+        raise SynapseError(None, "--observation describes a step: pass --last-action too.")
+    trajectory: list[dict[str, str]] = []
+    if args.last_action:
+        step = {"action": args.last_action}
+        if args.observation is not None:
+            step["observation"] = args.observation
+        trajectory.append(step)
+
+    async def go() -> dict[str, Any]:
+        async with make_client(base_url=args.url) as client:
+            return await client.procedure_guidance(
+                args.name, args.query, trajectory, mode=args.mode
+            )
+
+    result = run(go())
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0
+    usage = result.get("usage") or {}
+    context = str(result.get("context") or "")
+    header = (
+        f"{result.get('graph', args.name)} v{result.get('version', '?')} · node "
+        f"{result.get('active_node') or '—'} ({_localization_method(result.get('localization')) or '?'})"
+        f" · scope {result.get('scope', '?')} · {usage.get('context_chars', len(context))} chars "
+        f"(~{usage.get('context_tokens_est', '?')} tokens) · {usage.get('llm_calls', 0)} LLM calls"
+    )
+    if usage.get("cached"):
+        header += " · cached"
+    _note(header)
+    if context:
+        print(context, flush=True)
+    if result.get("guidance"):
+        print(("\n" if context else "") + "Guidance:\n" + str(result["guidance"]), flush=True)
+    next_actions = result.get("next_actions") or []
+    if next_actions:
+        _note(f"\nNext: {', '.join(str(a) for a in next_actions)}")
+    return 0
+
+
+def _usage_line(result: dict[str, Any]) -> str:
+    usage = result.get("usage") or {}
+    parts = [
+        f"{usage.get('llm_calls', '?')} LLM calls ({usage.get('guidance_llm_calls', 0)} for guidance)",
+        f"{usage.get('input_tokens', '?')} in / {usage.get('output_tokens', '?')} out tokens"
+        + (" (estimated)" if usage.get("estimated") else ""),
+    ]
+    if result.get("parse_failures"):
+        parts.append(f"{result['parse_failures']} parse failures")
+    if isinstance(result.get("latency_s"), int | float):
+        parts.append(f"{result['latency_s']:.1f}s")
+    return "Usage: " + " · ".join(parts)
+
+
+def cmd_agent(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    # ``...`` = let the backend use its PROCEDURAL_DEFAULT_GRAPH; None = no graph.
+    graph: Any = None if args.no_graph else (args.graph or ...)
+
+    async def go() -> dict[str, Any]:
+        async with _long_client(args, make_client) as client:
+            return await client.agent_ask(
+                args.query,
+                graph=graph,
+                guidance=args.guidance,
+                max_steps=args.max_steps,
+                record=args.record,
+            )
+
+    result = run(go())
+    answer = result.get("answer")
+    if args.json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        return 0 if answer is not None else 1
+
+    steps = result.get("steps") or []
+    used = result.get("graph")
+    if isinstance(used, dict) and used.get("name"):
+        _note(f"Navigator · procedural graph {used['name']} v{used.get('version', '?')}")
+    else:
+        _note("Navigator · no procedural graph")
+    for index, step in enumerate(steps, 1):
+        method = _localization_method(step.get("localization"))
+        _note(f"\nStep {index}" + (f"  [PG: {method}]" if method else ""))
+        if step.get("thought"):
+            _note(f"  Thought: {_flat(step['thought'])}")
+        _note(f"  Action: {_format_action(step.get('action'), step.get('args'))}")
+        if step.get("observation"):
+            _note(f"  Observation: {_preview(step['observation'], OBSERVATION_PREVIEW_CHARS)}")
+    if answer is not None:
+        _note("\nAnswer:")
+        print(answer, flush=True)
+    else:
+        _note(
+            f"\nNo answer: the navigator stopped ({result.get('stopped', '?')}) "
+            f"after {len(steps)} steps."
+        )
+    _note(_usage_line(result))
+    if args.record:
+        if result.get("recorded"):
+            _note("Trajectory recorded (unscored).")
+        else:
+            _note(
+                "Trajectory not recorded: the run used no procedural graph, or the backend "
+                "could not store it."
+            )
+    return 0 if answer is not None else 1
+
+
+def _load_qa(path: str, split: str | None, flag: str) -> list[dict[str, Any]]:
+    """A JSON array or JSONL file of ``{question, answer}`` items, optionally one split."""
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SynapseError(None, f"Cannot read {path}: {exc.strerror or exc}") from exc
+    items: list[Any]
+    if raw.lstrip().startswith("["):
+        try:
+            items = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise SynapseError(None, f"{path} is not valid JSON: {exc}") from exc
+    else:
+        items = []
+        for number, line in enumerate(raw.splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                items.append(json.loads(line))
+            except json.JSONDecodeError as exc:
+                raise SynapseError(None, f"{path}:{number} is not valid JSON: {exc.msg}") from exc
+    splits = sorted(
+        {str(i["split"]) for i in items if isinstance(i, dict) and i.get("split") is not None}
+    )
+    if split is not None:
+        items = [i for i in items if isinstance(i, dict) and str(i.get("split")) == split]
+        if not items:
+            found = ", ".join(splits) or "none"
+            raise SynapseError(None, f"{path} has no items in split {split!r} (splits: {found}).")
+    elif len(splits) > 1:
+        # A file with train / val / test mixed would silently train on the test set.
+        raise SynapseError(
+            None, f"{path} mixes splits ({', '.join(splits)}); choose one with {flag}."
+        )
+    return qa_items(items, path if split is None else f"{path} ({split})")
+
+
+def _per_rollout(guidance: str, max_steps: int) -> int:
+    """A rollout's worst case: ``max_steps`` solver calls, doubled with generative
+    guidance (the backend's guidance cache can only lower this)."""
+    return max(1, max_steps) * (2 if guidance == "generative" else 1)
+
+
+def evolution_estimate(
+    rounds: int,
+    batch_size: int,
+    val_size: int,
+    guidance: str,
+    max_steps: int = AGENT_MAX_STEPS,
+    *,
+    stored_eval: bool = False,
+) -> dict[str, int]:
+    """Upper bound on the backend LLM calls of one evolution run.
+
+    Baseline: one rollout per validation question, and as many again when
+    ``--mode scratch --replace`` scores the stored graph it may overwrite
+    (``stored_eval``). Each round: ``batch_size`` training rollouts, one
+    refiner call, and — unless the candidate is rejected structurally — one
+    rollout per validation question. A rollout is at most ``max_steps`` solver
+    calls, doubled when every step also asks for generative guidance.
+    """
+    rollouts = rounds * (batch_size + val_size) + val_size * (2 if stored_eval else 1)
+    per_rollout = _per_rollout(guidance, max_steps)
+    return {
+        "rollouts": rollouts,
+        "per_rollout": per_rollout,
+        "refiner_calls": rounds,
+        "llm_calls": rollouts * per_rollout + rounds,
+    }
+
+
+def evolution_minimum(
+    batch_size: int,
+    train_size: int,
+    val_size: int,
+    guidance: str,
+    max_steps: int = AGENT_MAX_STEPS,
+    *,
+    stored_eval: bool = False,
+) -> int:
+    """The smallest ``--max-llm-calls`` the backend accepts: baseline + ONE full round.
+
+    Mirrors ``minimum_llm_calls`` in the backend's ``procedural_evolution``
+    (the backend refuses a smaller cap with a 422 before spending anything):
+    the worst case of the baseline (plus the stored graph's evaluation with
+    ``stored_eval``), round 1's batch — capped by the training set, as the
+    backend strides it — and its validation, in rollouts, plus one refiner call.
+    """
+    batch = max(1, min(batch_size, train_size))
+    rollouts = val_size * (2 if stored_eval else 1) + batch + val_size
+    return rollouts * _per_rollout(guidance, max_steps) + 1
+
+
+def _stdin_is_interactive() -> bool:
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
+def _confirm(prompt: str) -> bool:
+    print(prompt, end="", file=sys.stderr, flush=True)
+    try:
+        reply = sys.stdin.readline()
+    except (OSError, ValueError):
+        return False
+    return reply.strip().lower() in ("y", "yes")
+
+
+def _scalar(value: Any) -> str:
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    if isinstance(value, list):
+        return str(len(value))
+    return _preview(value, 120)
+
+
+def _stored_procedure(
+    args: argparse.Namespace, make_client: ClientFactory
+) -> dict[str, Any] | None:
+    """The graph stored under ``args.name``, or ``None`` (a read: nothing is spent)."""
+
+    async def go() -> dict[str, Any] | None:
+        async with _long_client(args, make_client) as client:
+            try:
+                return await client.procedure(args.name)
+            except SynapseError as exc:
+                if exc.status == 404:
+                    return None
+                raise
+
+    return run(go())
+
+
+def cmd_evolve(args: argparse.Namespace, make_client: ClientFactory) -> int:
+    train = _load_qa(args.train, args.train_split, "--train-split")
+    val = _load_qa(args.val, args.val_split, "--val-split")
+    overlap = {i["question"].casefold() for i in train} & {i["question"].casefold() for i in val}
+    if args.replace and args.mode != "scratch":
+        raise SynapseError(
+            None,
+            "--replace only applies to --mode scratch (static mode builds on the stored graph).",
+        )
+
+    # Scratch mode must not overwrite a stored graph by accident, and replacing
+    # one costs its evaluation: find out which case this is before any estimate.
+    existing = _stored_procedure(args, make_client) if args.mode == "scratch" else None
+    if existing is not None and not args.replace:
+        raise SynapseError(
+            None,
+            f"procedural graph {args.name!r} already exists (v{existing.get('version', '?')}, "
+            f"score {_score(existing.get('score'))}); --mode scratch would replace it. Re-run "
+            "with --replace to score it once on the validation set and overwrite it only with "
+            "a candidate at least as good, or choose another NAME.",
+        )
+    stored_eval = existing is not None
+
+    # Refuse, before asking for consent, a cap that cannot run one full round:
+    # the backend would refuse it too (422), and a baseline alone decides nothing.
+    minimum = evolution_minimum(
+        args.batch_size, len(train), len(val), args.guidance, stored_eval=stored_eval
+    )
+    if minimum > MAX_LLM_CALLS_LIMIT:
+        raise SynapseError(
+            None,
+            f"one round of this run needs up to {minimum} LLM calls, above the backend's limit "
+            f"of {MAX_LLM_CALLS_LIMIT}; use fewer validation questions or a smaller --batch-size.",
+        )
+    if args.max_llm_calls is not None and args.max_llm_calls < minimum:
+        stored_part = f" + {len(val)} stored graph" if stored_eval else ""
+        raise SynapseError(
+            None,
+            f"--max-llm-calls {args.max_llm_calls} cannot pay for the baseline and one full "
+            f"round, whose worst case is ({len(val)} baseline{stored_part} + "
+            f"{min(args.batch_size, len(train))} train + {len(val)} val) agent runs × "
+            f"{_per_rollout(args.guidance, AGENT_MAX_STEPS)} calls + 1 refinement; the smallest "
+            f"--max-llm-calls that runs one round is {minimum} "
+            f"(assuming AGENT_MAX_STEPS={AGENT_MAX_STEPS}).",
+        )
+
+    estimate = evolution_estimate(
+        args.rounds, args.batch_size, len(val), args.guidance, stored_eval=stored_eval
+    )
+    _note(
+        f"Evolving {args.name!r} (mode {args.mode}, metric {args.metric}, guidance "
+        f"{args.guidance}) on {len(train)} train / {len(val)} validation questions."
+    )
+    stored_runs = f" + {len(val)} stored graph" if stored_eval else ""
+    _note(
+        f"This spends backend LLM calls. Upper bound ≈ {estimate['rollouts']} agent runs "
+        f"({args.rounds} rounds × ({args.batch_size} train + {len(val)} val) + {len(val)} "
+        f"baseline{stored_runs}) × {estimate['per_rollout']} calls + "
+        f"{estimate['refiner_calls']} refinements = {estimate['llm_calls']} calls "
+        f"(assuming AGENT_MAX_STEPS={AGENT_MAX_STEPS})."
+    )
+    if args.max_llm_calls is not None:
+        max_llm_calls = args.max_llm_calls
+        _note(f"Hard cap: the backend stops cleanly at {max_llm_calls} calls (--max-llm-calls).")
+    else:
+        # The consented bound IS the cap: sent explicitly, never left to backend defaults.
+        # It always covers ``minimum`` (one round is part of the bound).
+        max_llm_calls = min(estimate["llm_calls"], MAX_LLM_CALLS_LIMIT)
+        _note(
+            f"Hard cap: the backend stops cleanly at {max_llm_calls} calls, the bound above "
+            "(set another with --max-llm-calls)."
+        )
+    _note(
+        f"A candidate is kept iff its validation score does not drop; with {len(val)} "
+        f"validation questions the score moves in steps of {1 / len(val):.3f}, so the "
+        "accept/reject trail is a search trace, not a significance test."
+    )
+    if overlap:
+        _note(
+            f"warning: {len(overlap)} validation question(s) also appear in train — the "
+            "acceptance gate would reward memorising them."
+        )
+    if existing is not None:
+        _note(
+            f"mode scratch --replace: starts from an empty Start→End skeleton; the stored "
+            f"v{existing.get('version', '?')} (score {_score(existing.get('score'))}) is scored "
+            "once on the validation set first, and only a candidate scoring at least as well "
+            "overwrites it."
+        )
+    elif args.mode == "scratch":
+        _note(
+            f"mode scratch: starts from an empty Start→End skeleton; nothing is saved as "
+            f"{args.name!r} unless a candidate is accepted."
+        )
+
+    if not args.yes:
+        if not _stdin_is_interactive():
+            raise SynapseError(
+                None,
+                "refusing to start a paid evolution run without consent: re-run with --yes, "
+                "or from an interactive terminal.",
+            )
+        if not _confirm("Start it? [y/N] "):
+            _note("Cancelled; nothing was sent to the backend.")
+            return 1
+
+    started: dict[str, str] = {}
+
+    def on_progress(event: dict[str, Any]) -> None:
+        if event.get("type") == "accepted":
+            started["job_id"] = str(event.get("job_id") or "")
+            _note(
+                f"Evolution job {started['job_id']} started "
+                "(Ctrl-C stops listening, not the job)."
+            )
+            return
+        stage = event.get("stage") or event.get("type")
+        where = f"round {event['round']} " if event.get("round") not in (None, "") else ""
+        extras = " ".join(
+            f"{key}={_scalar(value)}"
+            for key, value in event.items()
+            if key not in ("type", "stage", "round") and not isinstance(value, dict)
+        )
+        _note(f"[evolve] {where}{stage}" + (f" {extras}" if extras else ""))
+
+    async def go() -> dict[str, Any]:
+        async with _long_client(args, make_client) as client:
+            return await client.evolve_procedure(
+                args.name,
+                train,
+                val,
+                rounds=args.rounds,
+                batch_size=args.batch_size,
+                mode=args.mode,
+                metric=args.metric,
+                guidance=args.guidance,
+                max_llm_calls=max_llm_calls,
+                on_progress=on_progress,
+                replace=args.replace,
+            )
+
+    try:
+        report = run(go())
+    except KeyboardInterrupt:
+        job = started.get("job_id")
+        if job:
+            _note(
+                f"interrupted: job {job} keeps running on the backend until it finishes or "
+                "reaches its LLM-call budget."
+            )
+        else:
+            _note("interrupted")
+        return 130
+
+    _print_evolution_report(report)
+    return 0
+
+
+def _print_evolution_report(report: dict[str, Any]) -> None:
+    print(
+        f"Evolved {report.get('graph', '?')} ({report.get('mode', '?')}): "
+        f"{report.get('rounds_run', '?')} rounds run, stopped: {report.get('stopped', '?')} · "
+        f"{report.get('llm_calls', '?')} LLM calls"
+    )
+    version = report.get("final_version")
+    # Null when nothing was saved: a scratch run that accepted no candidate.
+    saved = f"v{version}" if version is not None else "nothing saved"
+    print(
+        f"  baseline {_score(report.get('baseline_score'))} → final "
+        f"{_score(report.get('final_score'))} ({saved})"
+    )
+    if report.get("stored_score") is not None:
+        # scratch --replace: the graph that was stored scored this on validation,
+        # and no candidate below it could overwrite it.
+        print(
+            f"  stored v{report.get('stored_version', '?')} scored "
+            f"{_score(report['stored_score'])}: the score a candidate had to reach to replace it"
+        )
+    for entry in report.get("rounds") or []:
+        verdict = "accepted" if entry.get("accepted") else "rejected"
+        line = (
+            f"  round {entry.get('round', '?')}: train {_score(entry.get('train_mean'))} · "
+            f"candidate {_score(entry.get('candidate_score'))} · {verdict}"
+        )
+        if entry.get("reason"):
+            line += f" — {_flat(entry['reason'])}"
+        diagnostics = entry.get("diagnostics") or []
+        if diagnostics:
+            line += f" ({'; '.join(_preview(d, 120) for d in diagnostics[:3])})"
+        if entry.get("accepted") and entry.get("diff"):
+            line += f" [{_diff_summary(entry['diff'])}]"
+        print(line)
+    if report.get("effect_floor") is not None:
+        print(
+            f"Effect floor: {_score(report['effect_floor'])} (one validation question); "
+            "smaller differences are noise, and accept/reject on a small validation set is a "
+            "search trace, not significance."
+        )
+
+
 # ── Parser ───────────────────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -318,7 +1055,116 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--budget", type=int, default=None, help="SYNAPSE_MAX_CONTEXT_CHARS to embed.")
     p.set_defaults(func=cmd_install_config)
 
+    _add_procedure_parsers(sub)
     return parser
+
+
+def _add_procedure_parsers(sub: Any) -> None:
+    p = sub.add_parser(
+        "procedures",
+        help="Procedural graphs: list, show, export, import, versions, rollback, guide.",
+        description="Procedural memory: step-by-step strategies the backend keeps next to the "
+        "knowledge graph. Without an action, lists them.",
+    )
+    p.set_defaults(func=cmd_procedures, proc_command=None)
+    actions = p.add_subparsers(dest="proc_command", metavar="ACTION")
+
+    actions.add_parser("list", help="Every procedural graph with its version and score.")
+    a = actions.add_parser("show", help="Nodes and transitions of one graph.")
+    a.add_argument("name", metavar="NAME")
+    a.add_argument(
+        "--text", action="store_true", help="Print the graph exactly as an LLM reads it."
+    )
+    a = actions.add_parser("export", help="Write a graph as JSON (stdout, or -o FILE).")
+    a.add_argument("name", metavar="NAME")
+    a.add_argument("-o", "--output", metavar="FILE", default=None)
+    a = actions.add_parser(
+        "import", help="Store a graph JSON file as a new version (the backend validates it)."
+    )
+    a.add_argument("file", metavar="FILE")
+    a.add_argument("--name", default=None, help="Graph name (default: the file's \"name\").")
+    a = actions.add_parser("versions", help="Version history with scores and diffs.")
+    a.add_argument("name", metavar="NAME")
+    a = actions.add_parser("rollback", help="Re-save an old version as the newest one.")
+    a.add_argument("name", metavar="NAME")
+    a.add_argument("version", metavar="VERSION", type=_int_range(1))
+    a = actions.add_parser(
+        "guide", help="Step-local guidance: the subgraph around your last action."
+    )
+    a.add_argument("name", metavar="NAME")
+    a.add_argument("--query", required=True, help="The task or question being worked on.")
+    a.add_argument("--last-action", default=None, help="The step just taken (omit at the start).")
+    a.add_argument("--observation", default=None, help="What the last action returned.")
+    a.add_argument(
+        "--mode",
+        choices=("raw", "generative"),
+        default="raw",
+        help="raw (default): the subgraph as text, no LLM call; generative: one backend LLM call.",
+    )
+    a.add_argument("--json", action="store_true", help="Emit the full JSON payload.")
+
+    p = sub.add_parser(
+        "agent",
+        help="Ask the backend's GraphRAG Navigator agent; prints its step trace (backend LLM).",
+        description="Ask the backend's GraphRAG Navigator: it answers by walking the knowledge "
+        "graph, one backend LLM call per step (two with generative guidance), and prints its "
+        "step trace. The request waits up to max($SYNAPSE_TIMEOUT, 600) seconds. If the client "
+        "disconnects or times out, the backend keeps working (and spending) until the run ends.",
+    )
+    p.add_argument("query")
+    which = p.add_mutually_exclusive_group()
+    which.add_argument(
+        "--graph", default=None, metavar="NAME", help="Procedural graph (default: the backend's)."
+    )
+    which.add_argument("--no-graph", action="store_true", help="Run without a procedural graph.")
+    p.add_argument("--guidance", choices=("none", "raw", "generative"), default=None)
+    p.add_argument("--max-steps", type=_int_range(1, 20), default=None, metavar="N")
+    p.add_argument(
+        "--record", action="store_true", help="Store the trajectory (unscored) on the backend."
+    )
+    p.add_argument("--json", action="store_true", help="Emit the full JSON result.")
+    p.set_defaults(func=cmd_agent)
+
+    p = sub.add_parser(
+        "evolve",
+        help="Self-evolve a procedural graph from QA pairs (costs backend LLM calls; asks first).",
+        description="Self-evolve a procedural graph from QA pairs (Algorithm 1 of "
+        "arXiv:2609.09153). It costs backend LLM calls: an upper bound is printed and nothing "
+        "starts without --yes or an interactive y. Requests wait up to max($SYNAPSE_TIMEOUT, "
+        "600) seconds and the progress stream has no idle timeout. If the client disconnects "
+        "(Ctrl-C included), the backend keeps working (and spending, up to the cap) until the "
+        "run ends.",
+    )
+    p.add_argument("name", metavar="NAME")
+    p.add_argument("--train", required=True, metavar="FILE", help="JSON array or JSONL of {question, answer}.")
+    p.add_argument("--val", required=True, metavar="FILE", help="Validation set, same format.")
+    p.add_argument("--train-split", default=None, metavar="SPLIT", help="Keep only items whose \"split\" is SPLIT.")
+    p.add_argument("--val-split", default=None, metavar="SPLIT", help="Same, for --val.")
+    p.add_argument("--rounds", type=_int_range(1, 20), default=EVOLVE_ROUNDS, metavar="N")
+    p.add_argument("--batch-size", type=_int_range(1, 100), default=EVOLVE_BATCH_SIZE, metavar="N")
+    p.add_argument("--mode", choices=("static", "scratch"), default="static")
+    p.add_argument("--metric", choices=("f1", "em"), default="f1")
+    p.add_argument("--guidance", choices=("raw", "generative"), default="raw")
+    p.add_argument(
+        "--max-llm-calls",
+        # Bounded like the backend's own field: a larger cap would be refused with a 422
+        # after consent was asked for a cap that could never be sent.
+        type=_int_range(1, MAX_LLM_CALLS_LIMIT),
+        default=None,
+        metavar="N",
+        help=f"Hard cap on backend LLM calls, 1-{MAX_LLM_CALLS_LIMIT} (the backend's limit; "
+        "default: the printed upper bound). It must pay for the baseline plus one full round; "
+        "a smaller cap is refused with the minimum.",
+    )
+    p.add_argument(
+        "--replace",
+        action="store_true",
+        help="With --mode scratch on a NAME that already holds a graph: score that graph once on "
+        "the validation set (counted in the budget) and overwrite it only with a candidate that "
+        "scores at least as well. Without it, such a run is refused.",
+    )
+    p.add_argument("-y", "--yes", action="store_true", help="Start without the confirmation prompt.")
+    p.set_defaults(func=cmd_evolve)
 
 
 def main(argv: list[str] | None = None, *, client_factory: ClientFactory | None = None) -> int:

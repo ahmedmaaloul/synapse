@@ -27,14 +27,23 @@ WHAT IT COUNTS
     it was estimated and every report line says so. A cost report that quietly
     mixes a measurement with a guess is worse than no cost report.
 
+    Reasoning models (gpt-5, o-series) think in hidden tokens that are billed
+    as OUTPUT. LangChain's ``output_tokens`` already includes them
+    (langchain-openai copies the API's ``completion_tokens``, which counts
+    them; ``output_token_details["reasoning"]`` is a breakdown of that total),
+    so they are priced and capped like any other completion token, and
+    :attr:`Usage.reasoning_tokens` records the breakdown for the report.
+
 WHAT IT CANNOT DO
     Prices are a hard-coded table (:data:`PRICES_USD_PER_1M_TOKENS`), recorded on
-    :data:`PRICES_CHECKED_ON`. **They are not fetched, they are not live, and
-    they go stale.** Every USD figure this module produces is therefore an
-    ESTIMATE, is labelled as one, and must be checked against the invoice before
-    anybody quotes it. Re-verify the table at :data:`PRICING_URL` and move the
-    date when you do. A model with no entry in the table is not guessed at: its
-    tokens are still reported and its cost comes back as ``None``.
+    :data:`PRICES_CHECKED_ON` unless an entry carries its own, later
+    ``checked_on`` (see :func:`price_checked_on`). **They are not fetched, they
+    are not live, and they go stale.** Every USD figure this module produces is
+    therefore an ESTIMATE, is labelled as one — with the date of the price it
+    actually used — and must be checked against the invoice before anybody
+    quotes it. Re-verify the table at :data:`PRICING_URL` and move the date when
+    you do. A model with no entry in the table is not guessed at: its tokens are
+    still reported and its cost comes back as ``None``.
 
 USAGE
 
@@ -55,7 +64,7 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 # ── Prices ───────────────────────────────────────────────────────────────────
 #: USD per 1,000,000 tokens, per model.
@@ -65,17 +74,26 @@ from dataclasses import dataclass, replace
 #: stale — providers change prices, and a pinned model name can be re-priced
 #: without being renamed. Re-verify at :data:`PRICING_URL`, update the numbers
 #: *and* the date, in one edit. Everything downstream calls its output an
-#: estimate precisely because of this table.
+#: estimate precisely because of this table. An entry verified on a different
+#: day than the rest carries its own ``checked_on``, and reports quote that date
+#: for it (:func:`price_checked_on`): re-verifying two models must not make the
+#: other rows look fresher than they are.
 PRICES_CHECKED_ON = "2026-07-21"
 PRICING_URL = "https://openai.com/api/pricing/"
 
 
 @dataclass(frozen=True)
 class Price:
-    """Per-1M-token prices for one model. ``output`` is 0.0 for embeddings."""
+    """Per-1M-token prices for one model. ``output`` is 0.0 for embeddings.
+
+    ``checked_on`` is the ISO date this entry was verified when it differs from
+    the table-wide :data:`PRICES_CHECKED_ON` (``None`` = that date). It is
+    provenance, not price, so two equal amounts compare equal whatever it says.
+    """
 
     input_usd_per_1m: float
     output_usd_per_1m: float
+    checked_on: str | None = field(default=None, compare=False)
 
 
 PRICES_USD_PER_1M_TOKENS: dict[str, Price] = {
@@ -85,6 +103,11 @@ PRICES_USD_PER_1M_TOKENS: dict[str, Price] = {
     "gpt-4.1": Price(2.00, 8.00),
     "gpt-4.1-mini": Price(0.40, 1.60),
     "gpt-4.1-nano": Price(0.10, 0.40),
+    # gpt-5 family: verified against developers.openai.com/api/docs/pricing on
+    # 2026-09-24 (the rest of the table is still dated PRICES_CHECKED_ON). These
+    # are reasoning models: hidden reasoning tokens are billed as OUTPUT.
+    "gpt-5-nano": Price(0.05, 0.40, checked_on="2026-09-24"),
+    "gpt-5-mini": Price(0.25, 2.00, checked_on="2026-09-24"),
     # Embedding models — priced on input only.
     "text-embedding-3-small": Price(0.02, 0.0),
     "text-embedding-3-large": Price(0.13, 0.0),
@@ -115,6 +138,20 @@ def resolve_price(model: str, prices: dict[str, Price] | None = None) -> Price |
     return table[max(candidates, key=len)]
 
 
+def price_checked_on(model: str, prices: dict[str, Price] | None = None) -> str:
+    """The date the price :func:`resolve_price` picks for ``model`` was recorded.
+
+    The entry's own ``checked_on`` when it has one, else the table-wide
+    :data:`PRICES_CHECKED_ON` — which is also what an unpriced model gets, as
+    the date of the table it is missing from. Every report that prints a USD
+    figure quotes THIS date, so a gpt-5-nano run does not claim a July check.
+    """
+    price = resolve_price(model, prices)
+    if price is not None and price.checked_on:
+        return price.checked_on
+    return PRICES_CHECKED_ON
+
+
 def tokens_from_chars(chars: int) -> int:
     """``ceil(chars / CHARS_PER_TOKEN)``, never negative.
 
@@ -138,12 +175,19 @@ class Usage:
     ``estimated_calls`` is the number of those calls whose tokens the provider
     did **not** report, so they were derived from character counts. It is
     carried, never dropped: ``measured + estimated`` is still an estimate.
+
+    ``reasoning_tokens`` is the part of ``completion_tokens`` a reasoning model
+    spent thinking, as the provider reported it. It is a BREAKDOWN, already
+    inside ``completion_tokens`` (and so already priced): it exists so a run
+    can show — and a dry-run allowance can be calibrated against — what the
+    hidden reasoning actually cost.
     """
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
     calls: int = 0
     estimated_calls: int = 0
+    reasoning_tokens: int = 0
 
     @property
     def total_tokens(self) -> int:
@@ -162,6 +206,7 @@ class Usage:
             completion_tokens=self.completion_tokens + other.completion_tokens,
             calls=self.calls + other.calls,
             estimated_calls=self.estimated_calls + other.estimated_calls,
+            reasoning_tokens=self.reasoning_tokens + other.reasoning_tokens,
         )
 
     def scaled(self, factor: int) -> Usage:
@@ -172,6 +217,7 @@ class Usage:
             completion_tokens=self.completion_tokens * n,
             calls=self.calls * n,
             estimated_calls=self.estimated_calls * n,
+            reasoning_tokens=self.reasoning_tokens * n,
         )
 
 
@@ -199,6 +245,30 @@ def _response_text(response: object) -> str:
     return str(content or "")
 
 
+def _reasoning(details: object, key: str) -> int:
+    """The reasoning-token count in a provider's output-details block, or 0."""
+    return _int(details.get(key)) if isinstance(details, dict) else 0
+
+
+def _measured(prompt: int, completion: int, reasoning: int) -> Usage:
+    """One measured call. ``reasoning`` is a breakdown of ``completion``.
+
+    That is LangChain's contract, and langchain-openai's implementation
+    (``output_tokens`` = the API's ``completion_tokens``, which count the
+    reasoning; ``output_token_details["reasoning"]`` = its
+    ``completion_tokens_details.reasoning_tokens``). A breakdown LARGER than
+    the total cannot be part of it, so that one inconsistent shape is read as
+    reported beside the output and added — never double counted otherwise,
+    and never allowed to under-report the bill.
+    """
+    reasoning = max(0, reasoning)
+    if reasoning > completion:
+        completion += reasoning
+    return Usage(
+        prompt_tokens=prompt, completion_tokens=completion, calls=1, reasoning_tokens=reasoning
+    )
+
+
 def usage_from_response(response: object, *, prompt_text: str = "") -> Usage:
     """Tokens for one model call, measured if the provider said so, else estimated.
 
@@ -214,13 +284,18 @@ def usage_from_response(response: object, *, prompt_text: str = "") -> Usage:
     A metadata block that reports zero for both counts is treated as absent:
     some providers attach the key and fill it with nothing, and silently
     recording 0 tokens would under-report the bill.
+
+    Reasoning models' hidden tokens are already inside the output count and
+    are recorded as :attr:`Usage.reasoning_tokens` (see :func:`_measured`).
     """
     metadata = getattr(response, "usage_metadata", None)
     if isinstance(metadata, dict):
         prompt = _int(metadata.get("input_tokens"))
         completion = _int(metadata.get("output_tokens"))
         if prompt or completion:
-            return Usage(prompt_tokens=prompt, completion_tokens=completion, calls=1)
+            return _measured(
+                prompt, completion, _reasoning(metadata.get("output_token_details"), "reasoning")
+            )
 
     raw = getattr(response, "response_metadata", None)
     if isinstance(raw, dict):
@@ -229,7 +304,10 @@ def usage_from_response(response: object, *, prompt_text: str = "") -> Usage:
             prompt = _int(block.get("prompt_tokens", block.get("input_tokens")))
             completion = _int(block.get("completion_tokens", block.get("output_tokens")))
             if prompt or completion:
-                return Usage(prompt_tokens=prompt, completion_tokens=completion, calls=1)
+                details = block.get("completion_tokens_details") or block.get(
+                    "output_tokens_details"
+                )
+                return _measured(prompt, completion, _reasoning(details, "reasoning_tokens"))
 
     return Usage(
         prompt_tokens=estimate_tokens(prompt_text),
@@ -353,7 +431,9 @@ class CostLedger:
             "usd": self.usd(),
             "priced": self.price is not None,
             "elapsed_s": self.elapsed,
-            "prices_checked_on": PRICES_CHECKED_ON,
+            "reasoning_tokens": self.usage.reasoning_tokens,
+            # The date of the price actually used for THIS model.
+            "prices_checked_on": price_checked_on(self.model, self.prices),
         }
 
     def lines(self) -> list[str]:
@@ -364,6 +444,8 @@ class CostLedger:
             f"{u.prompt_tokens:,} prompt + {u.completion_tokens:,} completion = "
             f"{u.total_tokens:,} tokens"
         )
+        if u.reasoning_tokens:
+            head += f" (of which {u.reasoning_tokens:,} hidden reasoning, billed as output)"
         if self.elapsed:
             head += f" · {self.elapsed:,.1f}s"
         lines = [head]
@@ -380,8 +462,8 @@ class CostLedger:
                 f"  Cost: {format_usd(amount)} ESTIMATED at {self.model} "
                 f"${price.input_usd_per_1m:.2f}/1M in + "
                 f"${price.output_usd_per_1m:.2f}/1M out, prices hand-recorded on "
-                f"{PRICES_CHECKED_ON} and NOT fetched live — verify against the "
-                f"invoice before quoting ({PRICING_URL})."
+                f"{price_checked_on(self.model, self.prices)} and NOT fetched live — "
+                f"verify against the invoice before quoting ({PRICING_URL})."
             )
         if u.estimated_calls:
             lines.append(

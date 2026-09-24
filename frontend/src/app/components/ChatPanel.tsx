@@ -4,31 +4,44 @@ import { useEffect, useRef, useState } from "react";
 import pkg from "../../../package.json";
 import {
   ChevronRight,
+  Compass,
   FileText,
   Globe2,
   Layers,
+  Loader2,
+  MessageSquare,
   Send,
   Sparkles,
   Target,
+  TriangleAlert,
   User,
+  Waypoints,
+  Workflow,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { streamChat } from "../lib/api";
-import { colorForType } from "../lib/constants";
+import { agentAsk, ApiError, streamChat } from "../lib/api";
+import { colorForType, LOCALIZATION_INFO } from "../lib/constants";
 import type {
+  AgentResult,
+  AgentStep,
   ChatMessage,
+  ChatMode,
   Citation,
   IngestResult,
+  LocalizationMethod,
   ReasoningPath,
   RetrievalMode,
   Source,
 } from "../lib/types";
+import SegmentedToggle, { type SegmentedOption } from "./SegmentedToggle";
 
 interface ChatPanelProps {
   ingestResult: IngestResult | null;
   onCitations: (names: string[]) => void;
   onFocusCitation: (name: string) => void;
+  /** Fires after every successful Navigator run (for the Procedures overlay). */
+  onNavigatorRun?: (result: AgentResult) => void;
 }
 
 let idCounter = 0;
@@ -42,6 +55,28 @@ const SUGGESTIONS = [
 
 /** Paths shown before the "show all" fold. */
 const PATH_PREVIEW = 3;
+
+const MODE_OPTIONS: SegmentedOption<ChatMode>[] = [
+  {
+    value: "chat",
+    label: "Chat",
+    icon: MessageSquare,
+    title: "One retrieval, one streamed answer",
+  },
+  {
+    value: "navigator",
+    label: "Navigator",
+    icon: Compass,
+    title:
+      "An agent walks the knowledge graph step by step, steered by the procedural graph",
+  },
+];
+
+/**
+ * Navigator tools whose arguments name knowledge-graph entities. After a run,
+ * those entities are highlighted in the topology, like chat citations.
+ */
+const ENTITY_TOOLS = new Set(["neighbors", "read_sources", "find_path"]);
 
 /**
  * Which retrieval path the backend router picked, inferred from the citations
@@ -212,10 +247,281 @@ function SourceTrail({ sources }: { sources: Source[] }) {
   );
 }
 
+// ── Navigator mode ─────────────────────────────────────
+
+/** `tool(arg="value", …)` — the action exactly as the agent issued it. */
+function formatAction(step: AgentStep): string {
+  const args = step.args as unknown;
+  let inner = "";
+  if (typeof args === "string") inner = JSON.stringify(args);
+  else if (Array.isArray(args)) inner = args.map((a) => JSON.stringify(a)).join(", ");
+  else if (args && typeof args === "object") {
+    inner = Object.entries(args)
+      .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+      .join(", ");
+  }
+  return `${step.action}(${inner})`;
+}
+
+/** Entity names the run touched, for highlighting in the knowledge graph. */
+function visitedEntities(result: AgentResult): string[] {
+  const names = new Set<string>();
+  for (const step of result.steps) {
+    if (!step.action || !ENTITY_TOOLS.has(step.action)) continue;
+    const args = step.args;
+    if (!args || typeof args !== "object") continue;
+    for (const value of Object.values(args)) {
+      if (typeof value === "string" && value.trim()) names.add(value.trim());
+    }
+  }
+  return Array.from(names);
+}
+
+/** Turn a failed run into something a person can act on. */
+function describeNavigatorError(err: unknown): { message: string; detail?: string } {
+  if (err instanceof ApiError) {
+    const detail = err.detail || undefined;
+    if (err.status === 503) {
+      return {
+        message:
+          "The Navigator needs an LLM to reason with, and the backend has no provider configured. Add an LLM key to the backend and try again.",
+        detail,
+      };
+    }
+    if (err.status === 404) {
+      return {
+        message:
+          "The Navigator isn't available: this backend has no navigator endpoint or no procedural graph to follow.",
+        detail,
+      };
+    }
+    return { message: "The Navigator run failed.", detail: detail ?? err.message };
+  }
+  return { message: "Connection refused. Is the backend running?" };
+}
+
+/** "PG: exact" — how this step was placed on the procedural graph. */
+function LocalizationChip({ step }: { step: AgentStep }) {
+  if (step.guidance_error) {
+    return (
+      <span
+        title={`Guidance failed for this step; the agent continued without it.\n${step.guidance_error}`}
+        className="inline-flex shrink-0 items-center gap-1 rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider text-rose-300/90"
+      >
+        <Workflow size={9} strokeWidth={2.5} />
+        PG: failed
+      </span>
+    );
+  }
+  const raw = step.localization;
+  if (!raw) return null;
+  const loc = typeof raw === "string" ? { method: raw } : raw;
+  const info = LOCALIZATION_INFO[loc.method as LocalizationMethod];
+  const node = loc.node_id ?? step.active_node;
+  const hint = [
+    info?.hint ?? `Localization: ${loc.method}`,
+    node ? `Active node: ${node}` : "",
+    loc.score != null ? `Similarity: ${loc.score.toFixed(2)}` : "",
+    step.guidance_context_chars
+      ? `${step.guidance_context_chars.toLocaleString()} chars of guidance in the prompt`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    <span
+      title={hint}
+      className={`inline-flex shrink-0 items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[9px] font-medium uppercase tracking-wider ${
+        info?.className ?? "border-[#3f3f46] bg-[#27272a]/60 text-[#a1a1aa]"
+      }`}
+    >
+      <Workflow size={9} strokeWidth={2.5} />
+      PG: {info?.label ?? loc.method}
+    </span>
+  );
+}
+
+/** Collapsed by default: tool output is long, and the thought says what mattered. */
+function ObservationFold({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!text) return null;
+  return (
+    <div className="mt-1.5">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+        className="flex items-center gap-1 text-[10px] font-medium uppercase tracking-wider text-[#52525b] transition-colors hover:text-[#a1a1aa]"
+      >
+        <ChevronRight
+          size={9}
+          className={`shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
+        />
+        Observation
+        <span className="font-mono normal-case tracking-normal text-[#3f3f46]">
+          {text.length.toLocaleString()} chars
+        </span>
+      </button>
+      {expanded && (
+        <pre className="mt-1 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded border border-[#27272a] bg-[#09090b] px-2 py-1.5 font-mono text-[10.5px] leading-relaxed text-[#a1a1aa]">
+          {text}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+const STOP_LABEL: Record<string, { label: string; className: string }> = {
+  max_steps: {
+    label: "Step limit reached",
+    className: "border-amber-400/30 bg-amber-400/10 text-amber-300/90",
+  },
+  error: {
+    label: "Stopped on error",
+    className: "border-rose-500/30 bg-rose-500/10 text-rose-300/90",
+  },
+};
+
+/** A Navigator run: numbered steps, then the answer and what it cost. */
+function NavigatorRun({ result }: { result: AgentResult }) {
+  const { usage } = result;
+  const stop = result.stopped !== "answer" ? STOP_LABEL[result.stopped] : undefined;
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="overflow-hidden rounded-md border border-[#27272a] bg-[#18181b]/60">
+        <div className="flex items-center gap-1.5 border-b border-[#27272a] px-2.5 py-2">
+          <Waypoints size={9} className="shrink-0 text-indigo-400/70" />
+          <span className="text-[10px] font-medium uppercase tracking-wider text-[#52525b]">
+            Navigator trace · {result.steps.length}{" "}
+            {result.steps.length === 1 ? "step" : "steps"}
+          </span>
+          <span
+            className="ml-auto truncate font-mono text-[10px] text-[#52525b]"
+            title="The procedural graph that steered this run"
+          >
+            {result.graph
+              ? `${result.graph.name} v${result.graph.version}`
+              : "no procedural graph"}
+          </span>
+        </div>
+        {result.steps.length > 0 ? (
+          <ol className="flex flex-col divide-y divide-[#27272a]/60">
+            {result.steps.map((step, i) => (
+              <li key={i} className="flex gap-2.5 px-2.5 py-2">
+                <span className="mt-px w-4 shrink-0 text-right font-mono text-[10px] text-[#52525b]">
+                  {i + 1}
+                </span>
+                <div className="min-w-0 flex-1">
+                  {step.thought && (
+                    <p className="text-[12px] leading-relaxed text-[#a1a1aa]">
+                      <span className="mr-1.5 text-[10px] font-medium uppercase tracking-wider text-[#52525b]">
+                        Thought
+                      </span>
+                      {step.thought}
+                    </p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                    {step.action ? (
+                      <code className="max-w-full break-all rounded border border-[#27272a] bg-[#09090b] px-1.5 py-0.5 font-mono text-[11px] text-indigo-300/90">
+                        {formatAction(step)}
+                      </code>
+                    ) : (
+                      <>
+                        <span className="rounded border border-rose-500/30 bg-rose-500/10 px-1.5 py-0.5 font-mono text-[10px] text-rose-300/90">
+                          unparseable
+                        </span>
+                        {step.raw_action && (
+                          <code
+                            title="What the model wrote instead of a valid action"
+                            className="max-w-full break-all font-mono text-[11px] text-[#71717a] line-through decoration-rose-500/40"
+                          >
+                            {step.raw_action}
+                          </code>
+                        )}
+                      </>
+                    )}
+                    <LocalizationChip step={step} />
+                  </div>
+                  <ObservationFold text={step.observation} />
+                </div>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="px-2.5 py-2 text-[11px] text-[#52525b]">No steps were taken.</p>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-1 flex items-center gap-1.5">
+          <span className="text-[10px] font-medium uppercase tracking-wider text-[#52525b]">
+            Answer
+          </span>
+          {stop && (
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${stop.className}`}
+            >
+              {stop.label}
+            </span>
+          )}
+        </div>
+        <div className="prose-chat leading-relaxed text-[#d4d4d8]">
+          {result.answer ? (
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{result.answer}</ReactMarkdown>
+          ) : (
+            <span className="text-[#71717a]">
+              No answer: the Navigator stopped before calling{" "}
+              <code>answer</code>.
+            </span>
+          )}
+        </div>
+        {result.stopped === "error" && result.error && (
+          <p className="mt-1 break-words font-mono text-[10px] leading-relaxed text-rose-300/60">
+            {result.error}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-[10px] text-[#52525b]">
+        <span>
+          {usage.llm_calls} LLM {usage.llm_calls === 1 ? "call" : "calls"}
+        </span>
+        <span className="text-[#3f3f46]">·</span>
+        <span title="Extra LLM calls spent turning the procedural graph into prose (0 in raw mode)">
+          {usage.guidance_llm_calls} guidance
+        </span>
+        <span className="text-[#3f3f46]">·</span>
+        <span
+          title={
+            usage.estimated
+              ? "The provider reported no token usage; counts are estimated at 4 characters per token"
+              : "Token counts reported by the provider"
+          }
+        >
+          {usage.input_tokens.toLocaleString()} in / {usage.output_tokens.toLocaleString()}{" "}
+          out tokens{usage.estimated ? " (est.)" : ""}
+        </span>
+        <span className="text-[#3f3f46]">·</span>
+        <span>{result.latency_s.toFixed(1)}s</span>
+        {result.parse_failures > 0 && (
+          <>
+            <span className="text-[#3f3f46]">·</span>
+            <span className="text-amber-400/70">
+              {result.parse_failures} parse{" "}
+              {result.parse_failures === 1 ? "failure" : "failures"}
+            </span>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ChatPanel({
   ingestResult,
   onCitations,
   onFocusCitation,
+  onNavigatorRun,
 }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
@@ -226,6 +532,7 @@ export default function ChatPanel({
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [mode, setMode] = useState<ChatMode>("chat");
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -247,12 +554,58 @@ export default function ChatPanel({
     ]);
   }, [ingestResult]);
 
+  const patchMessage = (id: string, fn: (m: ChatMessage) => ChatMessage) =>
+    setMessages((prev) => prev.map((m) => (m.id === id ? fn(m) : m)));
+
+  /**
+   * One Navigator run. Default procedural graph, raw guidance (the serialized
+   * subgraph goes straight into the agent's prompt: no extra LLM call).
+   */
+  const navigate = async (query: string) => {
+    const assistantId = nextId();
+    setMessages((prev) => [
+      ...prev,
+      { id: nextId(), role: "user", content: query, mode: "navigator" },
+      { id: assistantId, role: "assistant", content: "", mode: "navigator" },
+    ]);
+    setInput("");
+    setIsLoading(true);
+
+    try {
+      const result = await agentAsk(query, { guidance: "raw" });
+      patchMessage(assistantId, (m) => ({
+        ...m,
+        content: result.answer ?? "",
+        agent: result,
+      }));
+      const visited = visitedEntities(result);
+      if (visited.length > 0) onCitations(visited);
+      onNavigatorRun?.(result);
+    } catch (err) {
+      console.error("Navigator error:", err);
+      patchMessage(assistantId, (m) => ({
+        ...m,
+        agentError: describeNavigatorError(err),
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const send = async (text?: string) => {
     const query = (text ?? input).trim();
     if (!query || isLoading) return;
+    if (mode === "navigator") return navigate(query);
 
+    // Navigator turns stay out of the chat history: the agent is stateless,
+    // and its answers rest on tool observations this retrieval never saw.
     const history = messages
-      .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
+      .filter(
+        (m) =>
+          (m.role === "user" || m.role === "assistant") &&
+          m.content &&
+          m.mode !== "navigator",
+      )
       .map((m) => ({ role: m.role, content: m.content }));
 
     const userMsg: ChatMessage = { id: nextId(), role: "user", content: query };
@@ -306,6 +659,8 @@ export default function ChatPanel({
 
   const showSuggestions =
     messages.filter((m) => m.role === "user").length === 0 && !isLoading;
+  const showNavigatorIntro =
+    mode === "navigator" && !messages.some((m) => m.mode === "navigator");
 
   return (
     <div className="relative flex h-full w-full flex-col bg-[#09090b] pt-2">
@@ -317,10 +672,22 @@ export default function ChatPanel({
 
       <div className="flex items-center justify-between border-b border-[#27272a] px-5 py-2.5">
         <h3 className="flex items-center gap-2 text-[12px] font-semibold uppercase tracking-wider text-[#e4e4e7]">
-          <Sparkles size={13} className="text-indigo-400" />
-          GraphRAG Chat
+          {mode === "navigator" ? (
+            <Compass size={13} className="text-indigo-400" />
+          ) : (
+            <Sparkles size={13} className="text-indigo-400" />
+          )}
+          {mode === "navigator" ? "GraphRAG Navigator" : "GraphRAG Chat"}
         </h3>
-        <div className="font-mono text-[11px] text-[#71717a]">v{pkg.version}</div>
+        <div className="flex items-center gap-3">
+          <SegmentedToggle
+            label="Chat mode"
+            value={mode}
+            options={MODE_OPTIONS}
+            onChange={setMode}
+          />
+          <div className="font-mono text-[11px] text-[#71717a]">v{pkg.version}</div>
+        </div>
       </div>
 
       {/* Messages */}
@@ -341,6 +708,8 @@ export default function ChatPanel({
                   <div className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded border border-[#27272a] bg-[#18181b]">
                     {msg.role === "user" ? (
                       <User size={12} className="text-[#a1a1aa]" />
+                    ) : msg.mode === "navigator" ? (
+                      <Compass size={12} className="text-indigo-400" />
                     ) : (
                       <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
                     )}
@@ -351,6 +720,32 @@ export default function ChatPanel({
                       <div className="whitespace-pre-wrap font-medium leading-relaxed text-[#fafafa]">
                         {msg.content}
                       </div>
+                    ) : msg.mode === "navigator" ? (
+                      msg.agent ? (
+                        <NavigatorRun result={msg.agent} />
+                      ) : msg.agentError ? (
+                        <div className="flex items-start gap-2 rounded-md border border-rose-500/20 bg-rose-500/[0.06] px-2.5 py-2">
+                          <TriangleAlert
+                            size={12}
+                            className="mt-0.5 shrink-0 text-rose-400/80"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-[12px] leading-snug text-rose-100/90">
+                              {msg.agentError.message}
+                            </p>
+                            {msg.agentError.detail && (
+                              <p className="mt-1 break-words font-mono text-[10px] leading-relaxed text-rose-200/50">
+                                {msg.agentError.detail}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 py-0.5 text-[12px] text-[#71717a]">
+                          <Loader2 size={12} className="animate-spin text-indigo-400" />
+                          Navigating the graph: thought, action, observation…
+                        </div>
+                      )
                     ) : (
                       <div className="prose-chat leading-relaxed text-[#d4d4d8]">
                         {msg.content ? (
@@ -432,6 +827,19 @@ export default function ChatPanel({
             </div>
           ))}
 
+          {showNavigatorIntro && (
+            <div className="msg-enter mt-3 flex items-start gap-2.5 rounded-md border border-dashed border-[#27272a] px-3 py-2.5 text-[12px] leading-relaxed text-[#71717a]">
+              <Compass size={13} className="mt-0.5 shrink-0 text-indigo-400/70" />
+              <span>
+                The Navigator is an agent that answers by <em>walking</em> the
+                knowledge graph: search, neighbors, sources, paths, one tool call
+                per step. Before each step it is shown the procedural graph around
+                its last action (raw guidance, no extra LLM call). Every thought,
+                action and observation is shown with the answer.
+              </span>
+            </div>
+          )}
+
           {showSuggestions && (
             <div className="mt-3 flex flex-wrap gap-2">
               {SUGGESTIONS.map((s) => (
@@ -458,7 +866,11 @@ export default function ChatPanel({
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && send()}
-              placeholder="Query the knowledge graph…"
+              placeholder={
+                mode === "navigator"
+                  ? "Ask the Navigator: it walks the graph step by step…"
+                  : "Query the knowledge graph…"
+              }
               disabled={isLoading}
               aria-label="Chat message"
               className="w-full rounded-md border-0 bg-transparent py-2.5 pl-3 pr-10 text-[13px] font-medium text-[#fafafa] outline-none placeholder:text-[#71717a] focus:ring-0"

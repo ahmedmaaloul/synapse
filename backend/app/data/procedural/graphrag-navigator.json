@@ -1,0 +1,184 @@
+{
+  "name": "graphrag-navigator",
+  "description": "Expert prior for the GraphRAG Navigator: how to answer a multi-hop question by walking Synapse's knowledge graph with deterministic tools. Hand-designed as the starting point (G0) that offline self-evolution refines from scored QA rollouts. Structure after Lu, Chen, Wu, Arık, 'Procedural Graphs: Self-Evolving Execution Structures for LLM Agents', arXiv:2609.09153.",
+  "cycle_policy": "forbid",
+  "tools": [
+    "search_entities",
+    "neighbors",
+    "read_sources",
+    "search_passages",
+    "find_path",
+    "answer"
+  ],
+  "nodes": [
+    {
+      "id": "Start",
+      "type": "STATUS",
+      "description": "A question has been received and no tool has been called yet."
+    },
+    {
+      "id": "Decompose_Question",
+      "type": "REASONING",
+      "description": "Split the question into hops: the entity it names, the bridge entity or attribute that links it to the answer, and the expected answer type."
+    },
+    {
+      "id": "search_entities",
+      "type": "ACTION",
+      "description": "Search the knowledge graph for entities matching a name or keyword; returns names, types and short descriptions."
+    },
+    {
+      "id": "neighbors",
+      "type": "ACTION",
+      "description": "List an entity's direct relations (one hop) in the knowledge graph."
+    },
+    {
+      "id": "read_sources",
+      "type": "ACTION",
+      "description": "Read the source passages an entity was extracted from."
+    },
+    {
+      "id": "search_passages",
+      "type": "ACTION",
+      "description": "Semantic search over the source passages, for when entity search misses or a specific phrase, date or number is needed."
+    },
+    {
+      "id": "Extract_Bridge",
+      "type": "REASONING",
+      "description": "Name the bridge entity or fact the evidence states and decide what the next hop must look up."
+    },
+    {
+      "id": "find_path",
+      "type": "ACTION",
+      "description": "Find reasoning paths (chains of relations) connecting two entities in the knowledge graph."
+    },
+    {
+      "id": "Verify_Answer",
+      "type": "REASONING",
+      "description": "Check that every hop of the question is supported by an observation and that the candidate answer has the expected type."
+    },
+    {
+      "id": "answer",
+      "type": "ACTION",
+      "description": "Submit the final short answer (a name, date, number, or yes/no)."
+    },
+    {
+      "id": "End",
+      "type": "STATUS",
+      "description": "The answer has been submitted; the episode is over."
+    }
+  ],
+  "edges": [
+    {
+      "source": "Start",
+      "target": "Decompose_Question",
+      "relation": "LEADS_TO",
+      "condition": null,
+      "guidance": "Before calling any tool, work out what the question asks for: the entity it names, the missing bridge entity or attribute that connects that entity to the answer, and the expected answer type (a name, a date, a number, or yes/no).",
+      "pitfalls": "Do not answer from prior knowledge; every answer must be grounded in an observation from the knowledge graph."
+    },
+    {
+      "source": "Decompose_Question",
+      "target": "search_entities",
+      "relation": "LEADS_TO",
+      "condition": "When the question names at least one specific entity (a person, work, organisation, place or event)",
+      "guidance": "Call search_entities with the most specific name in the question, not the whole question. For a comparison question, look up the first of the two entities first.",
+      "pitfalls": "Do not paste the full question into search_entities; long queries dilute the match. Do not search for the answer you expect to find."
+    },
+    {
+      "source": "Decompose_Question",
+      "target": "search_passages",
+      "relation": "LEADS_TO",
+      "condition": "When the question describes its subject only indirectly (no usable name) or hinges on a specific phrase, date or number",
+      "guidance": "Call search_passages with the distinctive descriptive words of the question to find the passage that names the subject, then continue from the entity that passage names.",
+      "pitfalls": "Do not keep rephrasing the same passage search; once a passage names a candidate entity, switch to the entity tools."
+    },
+    {
+      "source": "search_entities",
+      "target": "neighbors",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": "When a returned entity clearly matches the name in the question and the question asks about something connected to it",
+      "guidance": "Call neighbors on the exact entity name returned by search_entities to list its relations; the bridge entity of a multi-hop question is usually the other end of one of these relations.",
+      "pitfalls": "Use the entity name exactly as search_entities returned it; a paraphrased name finds nothing. Do not answer from the entity name alone: read its relations or its sources."
+    },
+    {
+      "source": "search_entities",
+      "target": "read_sources",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": "When the matching entity's description is too short to state the needed fact or to name the bridge",
+      "guidance": "Call read_sources on the matched entity to read the passages it was extracted from; dates, roles and exact titles often survive only in the source text.",
+      "pitfalls": "Do not answer from the entity name alone: read its description or its sources. Do not read the sources of an entity that did not match the question."
+    },
+    {
+      "source": "search_entities",
+      "target": "search_passages",
+      "relation": "TRIGGERS",
+      "condition": "When no returned entity matches the question's entity, or several candidates are equally plausible",
+      "guidance": "Fall back to search_passages with the entity name plus one distinctive keyword from the question to find the passage that disambiguates it.",
+      "pitfalls": "Do not pick an arbitrary candidate when the match is ambiguous; a wrong first hop makes every later step wrong."
+    },
+    {
+      "source": "neighbors",
+      "target": "Extract_Bridge",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": null,
+      "guidance": "From the listed relations, pick the one whose type matches what the question asks about (for example the director of a film or the birthplace of a person) and take its other endpoint as the bridge entity.",
+      "pitfalls": "Do not stop at the first hop when the question asks about a property of the bridge entity; the answer is usually one more hop away."
+    },
+    {
+      "source": "read_sources",
+      "target": "Extract_Bridge",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": null,
+      "guidance": "Find the sentence in the sources that states the needed fact and extract the bridge entity or attribute from it exactly as written.",
+      "pitfalls": "Do not mix facts from passages about different entities that share a similar name."
+    },
+    {
+      "source": "search_passages",
+      "target": "Extract_Bridge",
+      "relation": "PROVIDES_INPUT_FOR",
+      "condition": null,
+      "guidance": "Identify the entity or fact in the returned passages that answers the current hop; if it is an entity, it becomes the subject of the next hop.",
+      "pitfalls": "A passage that merely mentions the question's keywords is not evidence; it must state the relation the question asks about."
+    },
+    {
+      "source": "Extract_Bridge",
+      "target": "find_path",
+      "relation": "TRIGGERS",
+      "condition": "When the question compares two entities or asks how two named entities are connected",
+      "guidance": "Call find_path with the two entity names to see the chain of relations linking them; for a comparison question this confirms that both entities are the ones the question means before their attributes are compared.",
+      "pitfalls": "Do not read 'no path' as a negative answer; it only means the graph lacks a connecting chain. Look up each entity's attribute separately instead."
+    },
+    {
+      "source": "Extract_Bridge",
+      "target": "Verify_Answer",
+      "relation": "LEADS_TO",
+      "condition": "When the observations name the bridge entity and state the attribute the question asks for",
+      "guidance": "Move to verification once every hop has evidence in the observations; if a hop is still missing, extract the bridge entity from the first entity's relations and look that entity up (search_entities, neighbors or read_sources) before searching anything else.",
+      "pitfalls": "Do not verify against a bridge entity you guessed; each hop must be supported by an observation."
+    },
+    {
+      "source": "find_path",
+      "target": "Verify_Answer",
+      "relation": "CONVERGES_TO",
+      "condition": null,
+      "guidance": "Read the returned path hop by hop and check that each relation matches the question's wording; the endpoint, or an attribute of it, is the candidate answer.",
+      "pitfalls": "Paths through generic hub entities (a country, a year, a broad field) are rarely the intended link; prefer the shortest path whose relations match the question."
+    },
+    {
+      "source": "Verify_Answer",
+      "target": "answer",
+      "relation": "LEADS_TO",
+      "condition": "When one short answer is supported by the observations and matches the expected answer type",
+      "guidance": "Call answer with the shortest exact form: just the name, date, number, or yes/no, written as the evidence writes it.",
+      "pitfalls": "Do not answer with a full sentence or add hedging; extra words lower exact match. If the evidence does not support an answer, go back to the tools instead of guessing."
+    },
+    {
+      "source": "answer",
+      "target": "End",
+      "relation": "LEADS_TO",
+      "condition": null,
+      "guidance": "The episode ends once the answer is submitted.",
+      "pitfalls": "Do not call more tools after answering."
+    }
+  ]
+}

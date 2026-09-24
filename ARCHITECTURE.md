@@ -12,20 +12,23 @@ flowchart TB
     subgraph Client [Next.js 16 · React 19]
         UP[FileUpload] -->|multipart| API
         UP -.->|SSE progress| API
-        CH[ChatPanel] -->|POST /chat| API
+        CH[ChatPanel] -->|POST /chat · POST /agent/ask| API
         API -.->|SSE tokens + citations| CH
-        GP[GraphPanel] -->|GET /graph-data| API
+        GP[GraphPanel] -->|GET /graph-data · /procedures/…/graph-data| API
     end
 
     subgraph Agents [MCP hosts · CLI · SDK]
-        MCP[synapse-graphrag] -->|POST /retrieve · budgeted JSON| API
+        MCP[synapse-graphrag] -->|POST /retrieve · budgeted JSON<br/>POST /procedures/…/guidance| API
     end
 
     subgraph Engine [FastAPI]
         API[/REST + SSE/] --> GB[graph_builder]
         API --> CE[chat_engine]
+        API --> NAV["graph_agent · procedural_guidance<br/>procedural_evolution"]
+        NAV --> CE
         GB --> LP[llm_provider]
         CE --> LP
+        NAV --> LP
         LP --> EXT{{"10 chat providers · 9 embedding providers<br/>Gemini · Claude · OpenAI · Azure · Vertex<br/>Bedrock · Groq · Mistral · Ollama · OpenAI-compatible"}}
     end
 
@@ -33,11 +36,13 @@ flowchart TB
         NODES[(Entity nodes<br/>+ embeddings)]
         VIDX[[vector index]]
         FIDX[[full-text index]]
+        PROC[(Procedural graphs<br/>versions · rejections · trajectories)]
     end
 
     GB --> NODES
     CE --> VIDX
     CE --> FIDX
+    NAV --> PROC
 ```
 
 ## The provider layer
@@ -171,6 +176,10 @@ erDiagram
   `:RELATED_TO` fallback so the system degrades gracefully without APOC.
 - Embeddings are stored via `db.create.setNodeVectorProperty` and **never shipped
   to the browser** (stripped in the graph endpoint).
+- Procedural memory shares the database but not the labels (`:Procedure`,
+  `:ProcedureGraph`, `:ProcedureVersion`, …). `/api/graph-data` is scoped to
+  `:Entity` and never renders it, and `DELETE /api/graph` keeps it — see
+  [Procedural memory](#procedural-memory).
 
 ## Clients: MCP server, CLI and SDK
 
@@ -199,9 +208,10 @@ installs in seconds with `uvx`. It also keeps the wire contract honest: the
 UI, the CLI and the MCP tools all consume the same endpoints, so a change that
 breaks one breaks the tests of all three.
 
-The MCP surface is deliberately small — eight tools, one resource and two
-prompts (`answer_with_graph`, `safety_brief`) — and the tool the server's
-instructions steer the model towards is
+The MCP surface is deliberately small — twelve tools (eight over the knowledge
+graph, four over procedural memory), one resource and three prompts
+(`answer_with_graph`, `safety_brief`, `follow_procedure`) — and the tool the
+server's instructions steer the model towards is
 `synapse_retrieve`, which returns context rather than an answer. The host
 already has a model; the `synapse_ask` tool exists for hosts that want the
 backend's provider to generate, and its description says plainly that it is a
@@ -233,6 +243,73 @@ a TTL cache keyed by `(query, k, budget)` on top, and adds `usage.cached` so a
 repeated question is visibly free. Nothing in the budget is model-specific;
 that is the point — the engine does not know which model will read the context.
 
+## Procedural memory
+
+The entity graph is *semantic* memory: what the corpus says. Retrieval tells an
+agent nothing about *how* to use it: which lookup comes first, when a bridge
+entity has been found, when to commit to an answer. Synapse stores that as
+**procedural memory**, an implementation of *Procedural Graphs* (Lu, Chen, Wu,
+Arık, [arXiv:2609.09153](https://arxiv.org/abs/2609.09153)).
+
+A procedural graph is a small directed graph of `ACTION`, `REASONING` and
+`STATUS` nodes whose transitions carry a `condition`, `guidance` and `pitfalls`.
+Full reference: [docs/procedural-graphs.md](./docs/procedural-graphs.md).
+
+Five modules, layered so that everything below the API is testable without a
+database or a model:
+
+| Module | Role | I/O |
+| --- | --- | --- |
+| `procedural_graph` | the data structure, the refiner's edit semantics (PrepareCandidate), validation, the local / full serializers, diffs | none: pure |
+| `procedural_store` | persistence: live graph, versions, rollback, rejections, trajectories; seeds the bundled prior at startup | Neo4j |
+| `procedural_guidance` | `guide()`: localize the last action, cut the 2-hop scope, return it raw or have an LLM write guidance | embeddings (optional), LLM (generative mode only) |
+| `graph_agent` | the **GraphRAG Navigator**: a ReAct agent whose six tools are deterministic reads of the knowledge graph | LLM, Neo4j |
+| `procedural_evolution` | the paper's Algorithm 1: rollouts → refiner → PrepareCandidate → validation gate | LLM, Neo4j |
+
+**One Navigator step.** The procedural graph is loaded once per run and frozen
+while it is used:
+
+```mermaid
+sequenceDiagram
+    participant A as graph_agent
+    participant G as procedural_guidance
+    participant L as LLM (solver)
+    participant T as tools
+    participant N as Neo4j
+
+    A->>G: guide(last action + observation)
+    G->>G: localize: start → exact → normalized → semantic → none
+    G-->>A: 2-hop subgraph (raw) · or LLM-written guidance (generative)
+    A->>L: prompt + "Procedural Graph Guidance:" + trajectory
+    L-->>A: Thought + one Action
+    A->>T: search_entities · neighbors · read_sources · search_passages · find_path
+    T->>N: Cypher / vector search (no LLM)
+    N-->>A: observation (truncated to AGENT_OBSERVATION_MAX_CHARS)
+    Note over A: repeat until answer(…) or AGENT_MAX_STEPS
+```
+
+**Storage.** The graphs live in the same Neo4j under their own labels:
+
+- `:ProcedureGraph` holds the name, version and score.
+- `:Procedure` nodes joined by `:TRANSITION` form the live graph.
+- `:ProcedureVersion` holds immutable snapshots.
+- `:ProcedureRejection` and `:ProcedureTrajectory` are audit rows.
+
+A save validates first, then replaces the live graph, bumps the version and
+writes the snapshot in **one** write transaction (`execute_write_batch`). A
+crash therefore cannot leave a half-replaced graph. Two racing saves cannot both
+claim the same version either: the version is computed inside the transaction,
+and `ProcedureVersion.uid` is unique. Rollback re-saves an old snapshot as a
+*new* version, so history is append-only.
+
+**Evolution** is long-running and spends real LLM calls. It therefore runs on
+the same `job_bus` + SSE pattern as ingestion (`POST /api/procedures/{name}/evolve`,
+then `…/evolve/{job_id}/events`). It is hard-capped by `max_llm_calls`, which
+covers rollouts, guidance and the refiner, and stops cleanly, never in the
+middle of a save. Only one run per graph is allowed in a process. An accepted
+candidate becomes a new version; a rejected one becomes a `ProcedureRejection`
+row and part of the refiner's next prompt.
+
 ## Design decisions
 
 | Decision | Why |
@@ -244,6 +321,10 @@ that is the point — the engine does not know which model will read the context
 | **SSE over WebSockets** | Streaming is one-directional (server→client). SSE is simpler, proxy-friendly, and needs no extra client library. |
 | **Retrieval-only endpoint + context budget** | `POST /api/retrieve` returns budgeted context with `usage` and no generation, so an MCP host or agent that already has an LLM pays for one generation, not two. The budget is enforced server-side and reported, never silently applied — see [Context budget](#context-budget). |
 | **Clients are thin HTTP wrappers** | The MCP server, CLI and SDK never import the engine: secrets, schema and provider SDKs stay in one deployable, and the package installs with `uvx` in seconds — see [Clients](#clients-mcp-server-cli-and-sdk). |
+| **Procedural memory in the same Neo4j** | Facts and the strategy for navigating them are inspected, backed up and restored together, with no second datastore. Separate labels keep the two apart: `/api/graph-data` stays `:Entity`-only, and `DELETE /api/graph` excludes `PROCEDURAL_LABELS`, so a corpus reset does not erase a strategy that took paid evolution rounds to learn. |
+| **Raw procedural guidance by default** | The paper has a guidance LLM rewrite the local subgraph at every step, and measures the extra tokens. By default Synapse hands the serialized subgraph to the solver or MCP host as-is: **zero** extra LLM calls, the same retrieve-don't-generate stance as `/api/retrieve`. It is a hypothesis, and the procedural benchmark harness exists to test it against the paper's generative mode. |
+| **Localization cascade** | Exact-name matching falls back to the full graph whenever a model writes `Search_Entities(query=…)`. The paper's ablation finds the full graph both worse and costlier. `normalized` and `semantic` matching keep more steps local, and an embedding failure only skips the semantic step. |
+| **Evolution is a budgeted job, not an MCP tool** | It can spend hundreds of LLM calls over minutes to hours. A model should not start that on its own initiative halfway through a task, so it lives behind the API and a CLI command that prints an upper-bound estimate and asks for consent. |
 | **In-memory job bus** | Single-replica-appropriate and dependency-free. The interface is deliberately small so swapping in Redis pub/sub for horizontal scaling is mechanical. |
 | **Best-effort degradation** | No vector index yet? Fall back to full-text. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
 | **Diffed graph polling** | The client only re-heats the force simulation when the node/link set actually changes, avoiding constant jitter. |
@@ -274,7 +355,17 @@ that is the point — the engine does not know which model will read the context
 - **Entity resolution is conservative by design.** A merge needs *two* agreeing
   signals and identical entity types, because a wrong merge silently corrupts the
   graph while a missed merge only leaves a duplicate.
-- **Job state is per-process.** Fine for one backend replica; see the bus note above.
+- **Procedural localization is by action name.** Several procedure steps that
+  share one tool cannot be told apart. The Navigator's actions are always tool
+  names, so it is localized on `Start` or an `ACTION` node, and `REASONING`
+  nodes reach it only through the 2-hop horizon.
+- **The evolution gate is as coarse as its validation set.** Accepting a
+  candidate compares two means over |val| questions, so the gate resolves only
+  1/|val|. Rounds are a search trail, not significance. The report says so
+  (`effect_floor`), and so does the paper.
+- **Job state is per-process.** Fine for one backend replica; see the bus note above. The
+  same holds for the generative-guidance cache, the node-embedding cache and the
+  one-evolution-per-graph lock.
 
 ## Scaling notes
 

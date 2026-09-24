@@ -6,9 +6,16 @@ Synapse — async Python client
 
 One implementation of the backend's wire format, shared by the MCP server and
 the CLI: the JSON endpoints, the Server-Sent-Events streams behind ``/api/chat``
-and the ingestion / community-rebuild jobs, and ``POST /api/retrieve`` — the
-retrieval-only endpoint that returns *budgeted* GraphRAG context so a host that
-already has an LLM can write the answer itself.
+and the ingestion / community-rebuild / evolution jobs, and ``POST /api/retrieve``
+— the retrieval-only endpoint that returns *budgeted* GraphRAG context so a host
+that already has an LLM can write the answer itself.
+
+Procedural memory (``/api/procedures``, ``/api/agent/ask``) sits next to it: a
+procedural graph is *how* to work through a multi-step task (steps, and
+transitions carrying a condition, guidance and pitfalls), after Lu, Chen, Wu,
+Arık, "Procedural Graphs: Self-Evolving Execution Structures for LLM Agents"
+(arXiv:2609.09153). The client reads, edits, versions and evolves those graphs
+and asks for step-local guidance; it never runs an agent itself.
 
 Why a client over HTTP rather than importing the engine: the backend needs
 Neo4j, an embedding model and an LLM provider; a host only needs ``httpx``.
@@ -33,11 +40,13 @@ import asyncio
 import inspect
 import json
 import os
-from collections.abc import AsyncIterator, Callable, Coroutine
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable
 from contextlib import aclosing
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import EllipsisType
 from typing import Any, TypeVar
+from urllib.parse import quote
 
 import httpx
 
@@ -48,6 +57,11 @@ DEFAULT_MAX_CONTEXT_CHARS = 6000
 MIN_CONTEXT_CHARS = 200
 DEFAULT_CACHE_TTL = 300.0
 CONNECT_TIMEOUT = 10.0
+# Floor on the timeout of requests that make the backend run an agent (the
+# navigator's ``agent_ask``, an evolution job): several LLM calls in a row can
+# outlast SYNAPSE_TIMEOUT's default, and a client that gives up does not stop
+# the backend, which keeps working and spending. See ``env_long_timeout``.
+LONG_RUNNING_TIMEOUT = 600.0
 
 # Sync or async callable receiving one event dict; see ``SynapseClient.ingest_pdf``.
 ProgressCallback = Callable[[dict[str, Any]], Any]
@@ -58,13 +72,17 @@ class SynapseError(Exception):
     """The backend answered with an error, or something else went wrong.
 
     ``status`` is the HTTP status (``None`` for transport-level failures) and
-    ``detail`` the backend's ``detail`` field when it sent JSON, else the body.
+    ``detail`` the backend's ``detail`` field when it sent JSON, else the body,
+    rendered as one readable line. ``payload`` keeps that ``detail`` as sent —
+    e.g. ``{"message": …, "diagnostics": [...]}`` for a procedural graph the
+    backend refused — so callers can act on its structure; ``None`` otherwise.
     """
 
-    def __init__(self, status: int | None, detail: str) -> None:
+    def __init__(self, status: int | None, detail: str, payload: Any = None) -> None:
         super().__init__(detail)
         self.status = status
         self.detail = detail
+        self.payload = payload
 
     def __str__(self) -> str:
         if self.status is None:
@@ -99,6 +117,15 @@ def env_api_key() -> str | None:
 
 def env_timeout() -> float:
     return float(_env_number("SYNAPSE_TIMEOUT", DEFAULT_TIMEOUT))
+
+
+def env_long_timeout() -> float:
+    """``max(SYNAPSE_TIMEOUT, LONG_RUNNING_TIMEOUT)``: the timeout for agent runs.
+
+    A timeout there only abandons the answer: the backend finishes the run and
+    pays for it anyway, so waiting longer is the cheaper failure.
+    """
+    return max(env_timeout(), LONG_RUNNING_TIMEOUT)
 
 
 def env_max_context_chars() -> int | None:
@@ -275,9 +302,17 @@ async def _notify(callback: ProgressCallback | None, event: dict[str, Any]) -> N
 
 
 def _format_detail(payload: Any) -> str:
-    """Render FastAPI's ``detail`` — a string, or a list of validation errors."""
+    """Render FastAPI's ``detail`` — a string, a list of validation errors, or a
+    ``{"message", "diagnostics"}`` object (an invalid procedural graph)."""
     if isinstance(payload, str):
         return payload
+    if isinstance(payload, dict) and "message" in payload:
+        message = str(payload.get("message") or "")
+        raw = payload.get("diagnostics")
+        diagnostics = [str(d) for d in raw] if isinstance(raw, list) else []
+        if not diagnostics:
+            return message
+        return f"{message}: {'; '.join(diagnostics)}" if message else "; ".join(diagnostics)
     if isinstance(payload, list):
         parts = []
         for err in payload:
@@ -367,13 +402,15 @@ class SynapseClient:
         if response.status_code < 400:
             return
         detail: str = response.text
+        raw_detail: Any = None
         try:
             payload = response.json()
         except ValueError:
             payload = None
         if isinstance(payload, dict) and "detail" in payload:
-            detail = _format_detail(payload["detail"])
-        raise SynapseError(response.status_code, detail or response.reason_phrase)
+            raw_detail = payload["detail"]
+            detail = _format_detail(raw_detail)
+        raise SynapseError(response.status_code, detail or response.reason_phrase, raw_detail)
 
     async def _request(self, method: str, path: str, **kwargs: Any) -> Any:
         try:
@@ -412,10 +449,19 @@ class SynapseClient:
             raise SynapseError(None, str(exc)) from exc
 
     async def _follow_job(
-        self, events_path: str, on_progress: ProgressCallback | None
+        self,
+        events_path: str,
+        on_progress: ProgressCallback | None,
+        *,
+        timeout: httpx.Timeout | None = None,
     ) -> dict[str, Any]:
-        """Consume a job's SSE stream until ``done``; forward the rest to ``on_progress``."""
-        async with aclosing(self._stream("GET", events_path)) as events:
+        """Consume a job's SSE stream until ``done``; forward the rest to ``on_progress``.
+
+        ``timeout`` overrides the client's for this stream only (its read
+        timeout is the longest silence tolerated between two events).
+        """
+        extra: dict[str, Any] = {"timeout": timeout} if timeout is not None else {}
+        async with aclosing(self._stream("GET", events_path, **extra)) as events:
             async for event in events:
                 kind = event.get("type")
                 if kind == "done":
@@ -562,8 +608,289 @@ class SynapseClient:
         return {"job_id": job_id, **done}
 
     async def clear_graph(self) -> dict[str, Any]:
-        """``DELETE /api/graph`` — remove every node and relationship. Irreversible."""
+        """``DELETE /api/graph`` — remove the knowledge graph (entities, relationships,
+        communities, source excerpts). Irreversible. Backends with procedural memory
+        keep their procedural graphs; :meth:`delete_procedure` removes one."""
         return _as_dict(await self._request("DELETE", "/api/graph"))
+
+    # ── procedural memory ────────────────────────────────────────────────
+    async def procedures(self) -> dict[str, Any]:
+        """``GET /api/procedures`` — ``{"graphs": [{name, version, score, nodes, edges,
+        updated_at, description}]}``."""
+        return _as_dict(await self._request("GET", "/api/procedures"))
+
+    async def procedure(self, name: str) -> dict[str, Any]:
+        """``GET /api/procedures/{name}`` — the graph JSON (``name``, ``description``,
+        ``cycle_policy``, ``tools``, ``nodes``, ``edges``) plus ``version`` and ``score``."""
+        return _as_dict(await self._request("GET", _procedure_path(name)))
+
+    async def procedure_text(self, name: str) -> str:
+        """``GET /api/procedures/{name}?format=text`` — the whole graph serialized the way
+        an LLM reads it (every node, then every transition with its condition,
+        guidance and pitfalls)."""
+        payload = _as_dict(
+            await self._request("GET", _procedure_path(name), params={"format": "text"})
+        )
+        return str(payload.get("text") or "")
+
+    async def procedure_graph_data(self, name: str) -> dict[str, Any]:
+        """``GET /api/procedures/{name}/graph-data`` — ``{"nodes", "links", "version",
+        "score"}`` in the force-graph shape the UI draws."""
+        return _as_dict(await self._request("GET", _procedure_path(name, "/graph-data")))
+
+    async def put_procedure(self, name: str, graph: dict[str, Any]) -> dict[str, Any]:
+        """``PUT /api/procedures/{name}`` — store ``graph`` as a new version.
+
+        The backend validates it first (a ``Start`` node, a terminal, every node
+        able to reach a terminal, no cycle unless ``cycle_policy`` allows it…);
+        a refusal raises :class:`SynapseError` with status 422, the diagnostics
+        joined in ``detail`` and listed in ``payload["diagnostics"]``. The body's
+        ``name`` must match ``name`` or be absent. Returns ``{"name", "version"}``.
+        """
+        if not isinstance(graph, dict):
+            raise SynapseError(None, "A procedural graph must be a JSON object.")
+        return _as_dict(await self._request("PUT", _procedure_path(name), json=graph))
+
+    async def delete_procedure(self, name: str) -> dict[str, Any]:
+        """``DELETE /api/procedures/{name}`` — the graph with its versions, rejections and
+        recorded trajectories. Irreversible."""
+        return _as_dict(await self._request("DELETE", _procedure_path(name)))
+
+    async def procedure_guidance(
+        self,
+        name: str,
+        query: str,
+        trajectory: Iterable[dict[str, Any]] | None = None,
+        mode: str | None = None,
+        hops: int | None = None,
+        window: int | None = None,
+    ) -> dict[str, Any]:
+        """``POST /api/procedures/{name}/guidance`` — step-local procedural guidance.
+
+        ``trajectory`` is the steps taken so far, oldest first, each
+        ``{"action": str, "observation"?: str}`` (other keys — an agent step's
+        ``thought`` or ``args`` — are dropped, so a navigator trace can be passed
+        as is). The backend localises the last action to a node and returns
+        ``{graph, version, active_node, localization, scope, context, guidance,
+        next_actions, usage}``. ``mode``: ``"raw"`` (the subgraph as text, no LLM
+        call), ``"generative"`` (one backend LLM call, cached) or ``"none"``;
+        omitted, the backend's default applies.
+        """
+        body: dict[str, Any] = {"query": query, "trajectory": _trajectory_steps(trajectory)}
+        if mode is not None:
+            body["mode"] = mode
+        if hops is not None:
+            body["hops"] = hops
+        if window is not None:
+            body["window"] = window
+        return _as_dict(
+            await self._request("POST", _procedure_path(name, "/guidance"), json=body)
+        )
+
+    async def record_trajectory(
+        self,
+        name: str,
+        query: str,
+        steps: Iterable[dict[str, Any]],
+        score: float,
+        source: str = "client",
+    ) -> dict[str, Any]:
+        """``POST /api/procedures/{name}/trajectories`` — store one scored run.
+
+        ``score`` is in ``[0, 1]`` (checked here, before any request) and
+        ``source`` says who recorded it. Recorded runs are kept for audit and
+        future learning; the evolution loop does not read them yet (it learns
+        from its own rollouts). An honest score matters more than a high one.
+        """
+        try:
+            value = float(score)
+        except (TypeError, ValueError) as exc:
+            raise SynapseError(None, f"score must be a number in [0, 1], got {score!r}") from exc
+        if not 0.0 <= value <= 1.0:
+            raise SynapseError(None, f"score must be in [0, 1], got {value:g}")
+        body = {
+            "query": query,
+            "steps": [dict(step) for step in steps],
+            "score": value,
+            "source": source,
+        }
+        return _as_dict(
+            await self._request("POST", _procedure_path(name, "/trajectories"), json=body)
+        )
+
+    async def procedure_versions(self, name: str) -> dict[str, Any]:
+        """``GET /api/procedures/{name}/versions`` — ``{"versions": [{version, score,
+        accepted, created_at, note, diff}]}``."""
+        return _as_dict(await self._request("GET", _procedure_path(name, "/versions")))
+
+    async def rollback_procedure(self, name: str, version: int) -> dict[str, Any]:
+        """``POST /api/procedures/{name}/rollback`` — re-save ``version`` as a NEW version
+        (history is never rewritten). Returns ``{"name", "version"}``."""
+        return _as_dict(
+            await self._request(
+                "POST", _procedure_path(name, "/rollback"), json={"version": int(version)}
+            )
+        )
+
+    async def procedure_rejections(self, name: str, limit: int = 20) -> dict[str, Any]:
+        """``GET /api/procedures/{name}/rejections`` — the evolution loop's rejection
+        memory, newest first: ``{"rejections": [...]}``."""
+        return _as_dict(
+            await self._request(
+                "GET", _procedure_path(name, "/rejections"), params={"limit": limit}
+            )
+        )
+
+    async def evolve_procedure(
+        self,
+        name: str,
+        train: Iterable[dict[str, Any]],
+        val: Iterable[dict[str, Any]],
+        *,
+        rounds: int | None = None,
+        batch_size: int | None = None,
+        mode: str = "static",
+        metric: str = "f1",
+        guidance: str = "raw",
+        max_llm_calls: int | None = None,
+        on_progress: ProgressCallback | None = None,
+        replace: bool = False,
+    ) -> dict[str, Any]:
+        """``POST /api/procedures/{name}/evolve`` and follow the job to its report.
+
+        Offline self-evolution (Algorithm 1 of the paper): roll the navigator
+        agent out on ``train`` batches, have an LLM propose graph edits, keep a
+        candidate only if its ``val`` score does not drop. It COSTS BACKEND LLM
+        CALLS — every rollout step, every generative guidance call and every
+        refinement; ``max_llm_calls`` caps them (omitted: the backend's budget).
+        A cap too small for the baseline plus one full round is refused before
+        anything is spent: status 422, the smallest sufficient cap in
+        ``payload["minimum_max_llm_calls"]``.
+
+        ``mode="scratch"`` on a name that already holds a graph is refused
+        (status 409) unless ``replace=True``: the stored graph is then scored
+        once on ``val`` (it counts in the budget) and only a candidate scoring
+        at least as well can overwrite it. ``replace`` is sent only when true.
+
+        ``train`` / ``val`` are ``{"question", "answer"}`` items (other keys are
+        dropped). ``on_progress`` receives a client-side ``accepted`` event with
+        the ``job_id``, then every backend ``progress`` event. Returns the report
+        (``baseline_score``, ``final_score``, ``final_version``, ``rounds``,
+        ``stopped``, ``llm_calls``, ``effect_floor``…) with the ``job_id``.
+
+        The event stream has no idle timeout: a rollout batch or a refinement can
+        be minutes apart. Stopping to listen does not stop the job — the backend
+        runs it to completion or to its budget.
+        """
+        body: dict[str, Any] = {
+            "train": qa_items(train, "train"),
+            "val": qa_items(val, "val"),
+            "mode": mode,
+            "metric": metric,
+            "guidance": guidance,
+        }
+        if rounds is not None:
+            body["rounds"] = rounds
+        if batch_size is not None:
+            body["batch_size"] = batch_size
+        if max_llm_calls is not None:
+            body["max_llm_calls"] = max_llm_calls
+        if replace:
+            body["replace"] = True
+        accepted = _as_dict(
+            await self._request("POST", _procedure_path(name, "/evolve"), json=body)
+        )
+        job_id = str(accepted.get("job_id") or "")
+        if not job_id:
+            raise SynapseError(None, f"Evolution accepted without a job_id: {accepted}")
+        await _notify(on_progress, {"type": "accepted", **accepted})
+        done = await self._follow_job(
+            f"/api/procedures/evolve/{quote(job_id, safe='')}/events",
+            on_progress,
+            timeout=httpx.Timeout(None, connect=min(CONNECT_TIMEOUT, self.timeout)),
+        )
+        return {"job_id": job_id, **done}
+
+    # ── navigator agent ──────────────────────────────────────────────────
+    async def agent_ask(
+        self,
+        query: str,
+        graph: str | None | EllipsisType = ...,
+        guidance: str | None = None,
+        max_steps: int | None = None,
+        record: bool = False,
+    ) -> dict[str, Any]:
+        """``POST /api/agent/ask`` — the backend's GraphRAG Navigator answers by walking
+        the knowledge graph with deterministic tools, one LLM call per step.
+
+        ``graph``: ``...`` (default) lets the backend use its default procedural
+        graph, ``None`` runs without one, a name picks one. ``guidance``:
+        ``"none"`` / ``"raw"`` / ``"generative"`` (omitted: the backend default).
+        ``record=True`` stores the trajectory, unscored, when a procedural graph
+        was used. Returns the agent result: ``answer``, ``steps`` [{thought,
+        action, args, observation, guidance_context_chars, localization}],
+        ``stopped``, ``parse_failures``, ``usage``, ``graph``, ``latency_s`` and
+        ``recorded``. Not streamed: the request waits for the whole run, so give
+        the client a long timeout (the CLI uses :func:`env_long_timeout`). A
+        client that times out or disconnects does not stop the run; the backend
+        keeps working, and spending, until it ends.
+        """
+        body: dict[str, Any] = {"query": query, "record": bool(record)}
+        if graph is not ...:
+            body["graph"] = graph
+        if guidance is not None:
+            body["guidance"] = guidance
+        if max_steps is not None:
+            body["max_steps"] = max_steps
+        return _as_dict(await self._request("POST", "/api/agent/ask", json=body))
+
+
+def _procedure_path(name: str, suffix: str = "") -> str:
+    """``/api/procedures/{name}{suffix}`` with ``name`` percent-encoded as ONE segment."""
+    if not isinstance(name, str) or not name.strip():
+        raise SynapseError(None, "A procedural graph name is required.")
+    return f"/api/procedures/{quote(name, safe='')}{suffix}"
+
+
+def _trajectory_steps(steps: Iterable[dict[str, Any]] | None) -> list[dict[str, str]]:
+    """Reduce steps to the guidance endpoint's ``{"action", "observation"?}`` shape."""
+    reduced: list[dict[str, str]] = []
+    for step in steps or []:
+        if not isinstance(step, dict):
+            raise SynapseError(None, f"Each trajectory step must be an object, got {step!r}")
+        entry = {"action": str(step.get("action") or "")}
+        observation = step.get("observation")
+        if observation is not None:
+            entry["observation"] = str(observation)
+        reduced.append(entry)
+    return reduced
+
+
+def qa_items(items: Iterable[dict[str, Any]], label: str) -> list[dict[str, Any]]:
+    """Validate ``{"question", "answer"}`` items before anything is sent (or spent).
+
+    ``answer`` is one gold answer or a list of acceptable ones (the backend
+    scores against the best match); every other key is dropped.
+    """
+    reduced: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, dict):
+            raise SynapseError(None, f"{label}[{index}] must be an object, got {item!r}")
+        question = str(item.get("question") or "").strip()
+        raw = item.get("answer")
+        answer: str | list[str]
+        if isinstance(raw, list):
+            answer = [str(a).strip() for a in raw if a is not None and str(a).strip()]
+        else:
+            answer = "" if raw is None else str(raw).strip()
+        if not question or not answer:
+            raise SynapseError(
+                None, f"{label}[{index}] needs a non-empty 'question' and 'answer'"
+            )
+        reduced.append({"question": question, "answer": answer})
+    if not reduced:
+        raise SynapseError(None, f"{label} must hold at least one {{question, answer}} item")
+    return reduced
 
 
 T = TypeVar("T")

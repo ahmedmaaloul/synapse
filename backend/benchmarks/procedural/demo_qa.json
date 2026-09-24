@@ -1,0 +1,380 @@
+[
+  {
+    "id": "demo-01",
+    "split": "train",
+    "type": "single",
+    "hops": 1,
+    "question": "In what year did Ada Lovelace publish the first algorithm intended for a machine?",
+    "answer": "1843",
+    "evidence": {"descriptions": [["Ada Lovelace", "in 1843"]]}
+  },
+  {
+    "id": "demo-02",
+    "split": "train",
+    "type": "single",
+    "hops": 1,
+    "question": "Who invented the Perceptron?",
+    "answer": "Frank Rosenblatt",
+    "evidence": {"relations": [["Frank Rosenblatt", "INVENTED", "Perceptron"]]}
+  },
+  {
+    "id": "demo-03",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Who designed the machine that Ada Lovelace wrote a program for?",
+    "answer": "Charles Babbage",
+    "evidence": {
+      "relations": [
+        ["Ada Lovelace", "WROTE_PROGRAM_FOR", "Analytical Engine"],
+        ["Charles Babbage", "DESIGNED", "Analytical Engine"]
+      ]
+    }
+  },
+  {
+    "id": "demo-04",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Which computer scientist organized the workshop that Claude Shannon participated in?",
+    "answer": "John McCarthy",
+    "evidence": {
+      "relations": [
+        ["Claude Shannon", "PARTICIPATED_IN", "Dartmouth Workshop"],
+        ["John McCarthy", "ORGANIZED", "Dartmouth Workshop"]
+      ]
+    }
+  },
+  {
+    "id": "demo-05",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Which organization created the deep learning framework that implements the Transformer?",
+    "answer": "Meta AI",
+    "evidence": {
+      "relations": [
+        ["PyTorch", "IMPLEMENTS", "Transformer"],
+        ["Meta AI", "CREATED", "PyTorch"]
+      ]
+    }
+  },
+  {
+    "id": "demo-06",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Who popularized the algorithm that helped end the AI Winter?",
+    "answer": "Geoffrey Hinton",
+    "evidence": {
+      "relations": [
+        ["Backpropagation", "HELPED_END", "AI Winter"],
+        ["Geoffrey Hinton", "POPULARIZED", "Backpropagation"]
+      ]
+    }
+  },
+  {
+    "id": "demo-07",
+    "split": "train",
+    "type": "comparison",
+    "hops": 2,
+    "question": "Which was introduced first, the Turing Test or the Perceptron?",
+    "answer": "Turing Test",
+    "evidence": {
+      "descriptions": [
+        ["Turing Test", "1950"],
+        ["Perceptron", "1958"]
+      ]
+    },
+    "compare": {"entities": ["Turing Test", "Perceptron"], "ask": "earlier"}
+  },
+  {
+    "id": "demo-08",
+    "split": "train",
+    "type": "comparison",
+    "hops": 2,
+    "question": "Was Anthropic founded before GPT-3 was released?",
+    "answer": "no",
+    "evidence": {
+      "descriptions": [
+        ["Anthropic", "founded in 2021"],
+        ["GPT-3", "in 2020"]
+      ]
+    },
+    "compare": {"entities": ["Anthropic", "GPT-3"], "ask": "first_before_second"}
+  },
+  {
+    "id": "demo-09",
+    "split": "train",
+    "type": "single",
+    "hops": 1,
+    "question": "Which company created GPT-3?",
+    "answer": "OpenAI",
+    "evidence": {"relations": [["OpenAI", "CREATED", "GPT-3"]]}
+  },
+  {
+    "id": "demo-10",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "At which university did the designer of the Analytical Engine work?",
+    "answer": "University of Cambridge",
+    "evidence": {
+      "relations": [
+        ["Charles Babbage", "DESIGNED", "Analytical Engine"],
+        ["Charles Babbage", "WORKED_AT", "University of Cambridge"]
+      ]
+    }
+  },
+  {
+    "id": "demo-11",
+    "split": "train",
+    "type": "bridge",
+    "hops": 2,
+    "question": "In what year did the Go-playing system built by Google DeepMind defeat Lee Sedol?",
+    "answer": "2016",
+    "evidence": {
+      "relations": [["Google DeepMind", "CREATED", "AlphaGo"]],
+      "descriptions": [["AlphaGo", "in 2016"]]
+    }
+  },
+  {
+    "id": "demo-12",
+    "split": "train",
+    "type": "single",
+    "hops": 1,
+    "question": "In what year was Anthropic founded?",
+    "answer": "2021",
+    "evidence": {"descriptions": [["Anthropic", "founded in 2021"]]}
+  },
+  {
+    "id": "demo-13",
+    "split": "val",
+    "type": "single",
+    "hops": 1,
+    "question": "In what year was the Dartmouth Workshop held?",
+    "answer": "1956",
+    "evidence": {"descriptions": [["Dartmouth Workshop", "1956 summer project"]]}
+  },
+  {
+    "id": "demo-14",
+    "split": "val",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Who created the dataset that AlexNet was trained on?",
+    "answer": "Fei-Fei Li",
+    "evidence": {
+      "relations": [
+        ["AlexNet", "TRAINED_ON", "ImageNet"],
+        ["Fei-Fei Li", "CREATED", "ImageNet"]
+      ]
+    }
+  },
+  {
+    "id": "demo-15",
+    "split": "val",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Who invented the model of computation that the Analytical Engine preceded?",
+    "answer": "Alan Turing",
+    "evidence": {
+      "relations": [
+        ["Analytical Engine", "PRECEDED", "Turing Machine"],
+        ["Alan Turing", "INVENTED", "Turing Machine"]
+      ]
+    }
+  },
+  {
+    "id": "demo-16",
+    "split": "val",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Which lab merged with the Google research team that published Attention Is All You Need?",
+    "answer": ["Google DeepMind", "DeepMind"],
+    "evidence": {
+      "relations": [
+        ["Google Brain", "PUBLISHED", "Attention Is All You Need"],
+        ["Google DeepMind", "MERGED_WITH", "Google Brain"]
+      ]
+    }
+  },
+  {
+    "id": "demo-17",
+    "split": "val",
+    "type": "comparison",
+    "hops": 2,
+    "question": "Which came later, AlexNet or AlphaGo?",
+    "answer": "AlphaGo",
+    "evidence": {
+      "descriptions": [
+        ["AlexNet", "2012"],
+        ["AlphaGo", "in 2016"]
+      ]
+    },
+    "compare": {"entities": ["AlexNet", "AlphaGo"], "ask": "later"}
+  },
+  {
+    "id": "demo-18",
+    "split": "val",
+    "type": "single",
+    "hops": 1,
+    "question": "Who founded information theory?",
+    "answer": "Claude Shannon",
+    "evidence": {"relations": [["Claude Shannon", "FOUNDED", "Information Theory"]]}
+  },
+  {
+    "id": "demo-19",
+    "split": "val",
+    "type": "bridge",
+    "hops": 2,
+    "question": "In what year was the computer that John von Neumann consulted on built?",
+    "answer": "1945",
+    "evidence": {
+      "relations": [["John von Neumann", "CONSULTED_ON", "ENIAC"]],
+      "descriptions": [["ENIAC", "1945"]]
+    }
+  },
+  {
+    "id": "demo-20",
+    "split": "val",
+    "type": "comparison",
+    "hops": 2,
+    "question": "Did the Dartmouth Workshop take place before the Perceptron was introduced?",
+    "answer": "yes",
+    "evidence": {
+      "descriptions": [
+        ["Dartmouth Workshop", "1956"],
+        ["Perceptron", "1958"]
+      ]
+    },
+    "compare": {"entities": ["Dartmouth Workshop", "Perceptron"], "ask": "first_before_second"}
+  },
+  {
+    "id": "demo-21",
+    "split": "val",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Which type of neural network did the researcher mentored by Geoffrey Hinton invent?",
+    "answer": ["Convolutional Neural Network", "CNN"],
+    "evidence": {
+      "relations": [
+        ["Geoffrey Hinton", "MENTORED", "Yann LeCun"],
+        ["Yann LeCun", "INVENTED", "Convolutional Neural Network"]
+      ]
+    }
+  },
+  {
+    "id": "demo-22",
+    "split": "test",
+    "type": "bridge",
+    "hops": 2,
+    "question": "In what year was the paper that introduced the Transformer published?",
+    "answer": "2017",
+    "evidence": {
+      "relations": [["Attention Is All You Need", "INTRODUCED", "Transformer"]],
+      "descriptions": [["Attention Is All You Need", "2017 paper"]]
+    }
+  },
+  {
+    "id": "demo-23",
+    "split": "test",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Who co-founded the lab that created AlphaGo?",
+    "answer": "Demis Hassabis",
+    "evidence": {
+      "relations": [
+        ["Google DeepMind", "CREATED", "AlphaGo"],
+        ["Demis Hassabis", "CO_FOUNDED", "Google DeepMind"]
+      ]
+    }
+  },
+  {
+    "id": "demo-24",
+    "split": "test",
+    "type": "bridge",
+    "hops": 2,
+    "question": "Which researcher co-founded the company that Anthropic spun out of?",
+    "answer": "Ilya Sutskever",
+    "evidence": {
+      "relations": [
+        ["Anthropic", "SPUN_OUT_OF", "OpenAI"],
+        ["Ilya Sutskever", "CO_FOUNDED", "OpenAI"]
+      ]
+    }
+  },
+  {
+    "id": "demo-25",
+    "split": "test",
+    "type": "bridge",
+    "hops": 2,
+    "question": "At which site did the inventor of the Turing Machine help break the Enigma cipher?",
+    "answer": "Bletchley Park",
+    "evidence": {
+      "relations": [
+        ["Alan Turing", "INVENTED", "Turing Machine"],
+        ["Alan Turing", "WORKED_AT", "Bletchley Park"]
+      ]
+    }
+  },
+  {
+    "id": "demo-26",
+    "split": "test",
+    "type": "comparison",
+    "hops": 2,
+    "question": "Which came first, ENIAC or the Analytical Engine?",
+    "answer": "Analytical Engine",
+    "evidence": {
+      "descriptions": [
+        ["ENIAC", "1945"],
+        ["Analytical Engine", "from 1837"]
+      ]
+    },
+    "compare": {"entities": ["ENIAC", "Analytical Engine"], "ask": "earlier"}
+  },
+  {
+    "id": "demo-27",
+    "split": "test",
+    "type": "single",
+    "hops": 1,
+    "question": "In which graph database is the knowledge graph stored?",
+    "answer": "Neo4j",
+    "evidence": {"relations": [["Knowledge Graph", "STORED_IN", "Neo4j"]]}
+  },
+  {
+    "id": "demo-28",
+    "split": "test",
+    "type": "bridge",
+    "hops": 3,
+    "question": "Which company manufactures the hardware that the model created by OpenAI was trained on?",
+    "answer": "NVIDIA",
+    "evidence": {
+      "relations": [
+        ["OpenAI", "CREATED", "GPT-3"],
+        ["GPT-3", "TRAINED_ON", "GPU"],
+        ["NVIDIA", "MANUFACTURES", "GPU"]
+      ]
+    }
+  },
+  {
+    "id": "demo-29",
+    "split": "test",
+    "type": "bridge",
+    "hops": 2,
+    "question": "In what year was the network that Ilya Sutskever co-created released?",
+    "answer": "2012",
+    "evidence": {
+      "relations": [["Ilya Sutskever", "CO_CREATED", "AlexNet"]],
+      "descriptions": [["AlexNet", "2012"]]
+    }
+  },
+  {
+    "id": "demo-30",
+    "split": "test",
+    "type": "single",
+    "hops": 1,
+    "question": "Which company develops the Claude model family?",
+    "answer": "Anthropic",
+    "evidence": {"descriptions": [["Anthropic", "developer of the Claude model family"]]}
+  }
+]

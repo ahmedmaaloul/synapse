@@ -25,8 +25,9 @@ logger = logging.getLogger("synapse")
 
 from app.config import get_settings  # noqa: E402
 from app.neo4j_driver import close_driver, get_driver, verify_connectivity  # noqa: E402
-from app.routers import chat, graph, upload  # noqa: E402
+from app.routers import chat, graph, procedures, upload  # noqa: E402
 from app.services.graph_schema import ensure_schema  # noqa: E402
+from app.services.procedural_store import ensure_default_graphs  # noqa: E402
 
 
 @asynccontextmanager
@@ -37,6 +38,8 @@ async def lifespan(app: FastAPI):
     await get_driver()
     logger.info("✅ Neo4j driver initialized")
     await ensure_schema()
+    if settings.procedural_enabled:
+        await ensure_default_graphs()  # best-effort: seeds absent priors, never raises
     yield
     await close_driver()
     logger.info("🛑 Neo4j driver closed")
@@ -81,6 +84,7 @@ async def add_timing_header(request: Request, call_next):
 app.include_router(upload.router, prefix="/api", tags=["Upload"])
 app.include_router(graph.router, prefix="/api", tags=["Graph"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(procedures.router, prefix="/api", tags=["Procedures"])
 
 
 @app.get("/health", tags=["Health"])

@@ -43,6 +43,9 @@ EmbeddingProvider = Literal[
     "bedrock",
     "cohere",
 ]
+# How procedural-graph guidance reaches the agent: not at all, as the raw
+# serialized subgraph (zero extra LLM calls), or rewritten by a guidance LLM.
+GuidanceMode = Literal["none", "raw", "generative"]
 
 
 class Settings(BaseSettings):
@@ -81,6 +84,15 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_chat_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"  # 1536 dims
+    # Reasoning effort sent to OpenAI REASONING models — a model id matching
+    # ^(gpt-5|o[1-9]), e.g. gpt-5-nano, o3-mini — on the openai, azure_openai
+    # (matched on the deployment name) and openai_compatible providers. Those
+    # models reject a non-default temperature, so none is sent to them, and
+    # they bill hidden reasoning tokens as output: "minimal" keeps that bill
+    # lowest. One of minimal | low | medium | high, passed through as-is (the
+    # API validates it); "minimal" exists only on the gpt-5 family, so o-series
+    # models get "low" instead. Ignored for every other model.
+    openai_reasoning_effort: str = "minimal"
 
     # Azure OpenAI (cloud). Portal → your resource → "Keys and Endpoint".
     # NOTE: Azure addresses *deployments*, not model names — set the deployment
@@ -189,6 +201,54 @@ class Settings(BaseSettings):
     query_routing_enabled: bool = True
     # Max reasoning paths surfaced alongside an answer.
     max_reasoning_paths: int = 6
+
+    # ── GraphRAG brain: procedural memory ────────────────
+    # Procedural Graphs (Lu et al., arXiv:2609.09153): a small directed graph of
+    # actions / reasoning steps / statuses whose edges carry condition, guidance
+    # and pitfalls. The entity graph is *what* the corpus says; this is *how*
+    # to navigate it. Stored in the same Neo4j under separate labels.
+    procedural_enabled: bool = True
+    # Graph used when a caller does not name one (seeded from the expert prior
+    # at startup if absent).
+    procedural_default_graph: str = "graphrag-navigator"
+    # Directed hops shown around the agent's current node (the paper uses 2).
+    procedural_hops: int = 2
+    # Recent trajectory steps handed to the guidance LLM (the paper's w = 3).
+    procedural_window: int = 3
+    # "raw" (default) = serialized local subgraph, ZERO extra LLM calls;
+    # "generative" = the paper's guidance LLM (one extra call per step, cached);
+    # "none" = no procedural guidance.
+    procedural_guidance_mode: GuidanceMode = "raw"
+    # Cosine floor for the embedding-based localization fallback (last action +
+    # observation vs node descriptions) when no node name matches. Calibrated
+    # for the default fastembed BAAI/bge-small-en-v1.5, whose cosines are
+    # compressed high: against the bundled prior, 44 unrelated strings ("x",
+    # "ls -la", "SELECT * FROM users", "done") peaked at 0.68, while 53
+    # paraphrased tool calls scored 0.52-0.87 and every one at or above 0.72
+    # landed on the right node. Below the floor the full graph is used, which
+    # is the paper's behaviour. Re-measure when you change EMBEDDING_PROVIDER.
+    procedural_semantic_threshold: float = 0.72
+    # In-process LRU of generated guidance (generative mode only).
+    procedural_guidance_cache_size: int = 256
+
+    # ── GraphRAG Navigator agent ─────────────────────────
+    # A ReAct agent that answers by walking the knowledge graph with
+    # deterministic tools; every step is one LLM call, so these bound its cost.
+    agent_max_steps: int = 8
+    # Tool observations are truncated to this many characters before they
+    # re-enter the prompt (cost guard; a full source passage can be long).
+    agent_observation_max_chars: int = 1500
+    agent_temperature: float = 0.0
+
+    # ── Procedural graph self-evolution (offline) ────────
+    # Training traces shown to the refiner are tail-truncated to this many
+    # characters (the paper's Tail_Lmax: the END of the traces is kept).
+    evolution_trajectory_max_chars: int = 24000
+    # Hard budget across rollouts + guidance + refiner calls for one run; the
+    # loop stops cleanly (never mid-save) when it would be exceeded.
+    evolution_max_llm_calls: int = 400
+    evolution_default_rounds: int = 3
+    evolution_default_batch_size: int = 10
 
     model_config = SettingsConfigDict(
         # The canonical .env lives at the REPO ROOT (docker compose reads it too),

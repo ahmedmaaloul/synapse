@@ -59,6 +59,7 @@ from benchmarks.public.run_hotpotqa import (
     build_corpus,
     channel_split,
     chat_model_name,
+    cost_lines,
     credit_paragraphs,
     dry_run_lines,
     effect_floor,
@@ -609,6 +610,20 @@ class TestCostLedger:
         assert ledger.usd() is None
         assert "no price on file" in "\n".join(ledger.lines())
 
+    def test_the_total_quotes_the_price_date_of_every_model_it_sums(self):
+        ledgers = []
+        for model in ("gpt-5-nano", "gpt-4o-mini"):
+            ledger = cost.CostLedger(model, label=model)
+            ledger.record(cost.Usage(prompt_tokens=1000, calls=1))
+            ledgers.append(ledger)
+        (total,) = [line for line in cost_lines(ledgers, questions=2, reused=False)
+                    if "TOTAL" in line]
+        dates = sorted({cost.price_checked_on("gpt-5-nano"), cost.PRICES_CHECKED_ON})
+        assert f"Prices checked {', '.join(dates)};" in total
+        (alone,) = [line for line in cost_lines(ledgers[:1], questions=1, reused=False)
+                    if "TOTAL" in line]
+        assert f"Prices checked {cost.price_checked_on('gpt-5-nano')};" in alone
+
     def test_estimated_calls_are_disclosed_in_the_report(self):
         ledger = cost.CostLedger("gpt-4o-mini")
         ledger.record(cost.Usage(prompt_tokens=10, calls=1, estimated_calls=1))
@@ -792,6 +807,26 @@ class TestDryRun:
         )
         assert f"{len(corpus.paragraphs)} extraction calls" in text
         assert "ESTIMATE" in text
+
+    def test_a_model_re_verified_later_quotes_its_own_price_date(self, corpus):
+        # gpt-5-nano is dated on its own; quoting the table-wide date would
+        # claim the very check its own date exists to supersede.
+        own = cost.price_checked_on("gpt-5-nano")
+        assert own != cost.PRICES_CHECKED_ON
+        text = "\n".join(
+            dry_run_lines(corpus, model="gpt-5-nano", theme=DEFAULT_THEME, max_usd=5.0)
+        )
+        assert f"hand-recorded on {own}" in text
+        assert f"hand-recorded on {cost.PRICES_CHECKED_ON}" not in text
+
+    def test_a_reasoning_model_is_told_its_estimate_leaves_out_reasoning(self, corpus):
+        def warned(model):
+            lines = dry_run_lines(corpus, model=model, theme=DEFAULT_THEME, max_usd=5.0)
+            return any("REASONING model" in line and "NOT in this estimate" in line
+                       for line in lines)
+
+        assert warned("gpt-5-nano")
+        assert not warned("gpt-4o-mini")
 
 
 class TestRefusals:
