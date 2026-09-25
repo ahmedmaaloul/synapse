@@ -298,7 +298,7 @@ class TestDryRunReasoningAllowance:
         )
         assert "REASONING model" in text
         assert "512-token reasoning allowance" in text
-        assert "ASSUMPTION" in text and "calibrated on the pilot run" in text
+        assert "ASSUMPTION" in text and "calibrated on a measured run" in text
         assert "Effort sent: 'minimal'" in text
         assert "probably LOW" not in text
         assert f"(incl. {plan.calls * 512:,} ASSUMED reasoning tokens)" in text

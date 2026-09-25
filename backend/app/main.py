@@ -25,7 +25,7 @@ logger = logging.getLogger("synapse")
 
 from app.config import get_settings  # noqa: E402
 from app.neo4j_driver import close_driver, get_driver, verify_connectivity  # noqa: E402
-from app.routers import chat, graph, procedures, upload  # noqa: E402
+from app.routers import chat, graph, lab, procedures, upload  # noqa: E402
 from app.services.graph_schema import ensure_schema  # noqa: E402
 from app.services.procedural_store import ensure_default_graphs  # noqa: E402
 
@@ -85,6 +85,7 @@ app.include_router(upload.router, prefix="/api", tags=["Upload"])
 app.include_router(graph.router, prefix="/api", tags=["Graph"])
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(procedures.router, prefix="/api", tags=["Procedures"])
+app.include_router(lab.router, prefix="/api", tags=["Lab"])
 
 
 @app.get("/health", tags=["Health"])

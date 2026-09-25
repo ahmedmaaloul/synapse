@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Search, Share2, Workflow } from "lucide-react";
+import { FlaskConical, Maximize2, Search, Share2, Workflow } from "lucide-react";
 import type {
   ForceGraphMethods,
   LinkObject,
@@ -10,6 +10,7 @@ import type {
 import { clearGraph, fetchGraph } from "../lib/api";
 import { colorForType } from "../lib/constants";
 import type { AgentResult, GraphData, GraphLink, GraphNode } from "../lib/types";
+import LabPanel from "./LabPanel";
 import ProceduralPanel from "./ProceduralPanel";
 import SegmentedToggle, { type SegmentedOption } from "./SegmentedToggle";
 
@@ -24,10 +25,11 @@ const COMMUNITY_RING = "#fbbf24";
 const SEARCH_RING = "#fafafa";
 
 /**
- * What the topology canvas shows: the knowledge graph (*what* the corpus says)
- * or procedural memory (*how* the Navigator agent should walk it).
+ * What the topology canvas shows: the knowledge graph (*what* the corpus says),
+ * procedural memory (*how* the Navigator agent should walk it), or the Lab
+ * (which retrieval approach answers best for what it costs).
  */
-type TopologyView = "knowledge" | "procedures";
+type TopologyView = "knowledge" | "procedures" | "lab";
 
 const VIEW_OPTIONS: SegmentedOption<TopologyView>[] = [
   {
@@ -41,6 +43,12 @@ const VIEW_OPTIONS: SegmentedOption<TopologyView>[] = [
     label: "Procedures",
     icon: Workflow,
     title: "Procedural memory: the strategy the Navigator agent follows",
+  },
+  {
+    value: "lab",
+    label: "Lab",
+    icon: FlaskConical,
+    title: "Compare retrieval approaches on your own questions: quality, tokens and $",
   },
 ];
 
@@ -58,6 +66,9 @@ interface GraphPanelProps {
   onClearComplete?: () => void;
   /** Latest Navigator run, overlaid on the Procedures view. */
   navigatorRun?: AgentResult | null;
+  /** The Lab view has taken the chat panel's height too. */
+  labExpanded?: boolean;
+  onLabExpandedChange?: (expanded: boolean) => void;
 }
 
 function linkEndId(
@@ -84,6 +95,8 @@ export default function GraphPanel({
   onNodeSelected,
   onClearComplete,
   navigatorRun,
+  labExpanded = false,
+  onLabExpandedChange,
 }: GraphPanelProps) {
   const [graphData, setGraphData] = useState<GraphData>({ nodes: [], links: [] });
   const [ForceGraph, setForceGraph] = useState<ForceGraphComponent | null>(null);
@@ -92,6 +105,9 @@ export default function GraphPanel({
   const [search, setSearch] = useState("");
   const [hoverId, setHoverId] = useState<string | null>(null);
   const [view, setView] = useState<TopologyView>("knowledge");
+  // The Lab mounts on first visit and then stays mounted (hidden), so its
+  // configuration, estimate and a run's live progress survive a view switch.
+  const [labVisited, setLabVisited] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const fgRef = useRef<FGMethods | undefined>(undefined);
@@ -244,16 +260,23 @@ export default function GraphPanel({
 
   const zoomToFit = () => fgRef.current?.zoomToFit(500, 60);
 
-  // The knowledge layer stays mounted under the Procedures view; `inert`
+  // The knowledge layer stays mounted under the other views; `inert`
   // keeps its covered controls out of the tab order and the a11y tree.
-  const knowledgeHidden = view === "procedures";
+  const knowledgeHidden = view !== "knowledge";
+
+  const changeView = (next: TopologyView) => {
+    setView(next);
+    if (next === "lab") setLabVisited(true);
+    // Only the Lab can take the chat's height; leaving it gives the chat back.
+    else if (labExpanded) onLabExpandedChange?.(false);
+  };
 
   const viewToggle = (
     <SegmentedToggle
       label="Topology view"
       value={view}
       options={VIEW_OPTIONS}
-      onChange={setView}
+      onChange={changeView}
     />
   );
 
@@ -501,6 +524,19 @@ export default function GraphPanel({
       {view === "procedures" && (
         <div className="absolute inset-0 z-20">
           <ProceduralPanel viewToggle={viewToggle} trace={navigatorRun} />
+        </div>
+      )}
+
+      {/* Lab view. Kept mounted once opened (display:none while hidden, which
+          also takes it out of the tab order): a run it is following keeps
+          streaming progress while the user looks at the graph. */}
+      {labVisited && (
+        <div className={view === "lab" ? "absolute inset-0 z-20" : "hidden"}>
+          <LabPanel
+            viewToggle={viewToggle}
+            expanded={labExpanded}
+            onExpandedChange={onLabExpandedChange}
+          />
         </div>
       )}
     </div>

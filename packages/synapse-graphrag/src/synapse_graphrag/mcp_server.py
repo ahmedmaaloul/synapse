@@ -32,6 +32,11 @@ tools. The host reports how a run went with ``synapse_record_trajectory``;
 evolving a graph from those runs is deliberately NOT a tool (see
 ``build_server``).
 
+The Synapse Lab is exposed read-only: ``synapse_lab_runs`` lists the Lab's
+comparisons and reads one run's report. Starting or resuming a run can spend
+reader-model money, so it is not a tool; it stays with the CLI, the API and the
+UI, where the estimate is shown and consent is asked.
+
 Error policy — one rule, applied everywhere: an anticipated failure (backend
 unreachable, HTTP error, bad path, unknown job…) is raised as the SDK's
 ``ToolError``. The SDK returns it as ``CallToolResult(is_error=True)`` whose
@@ -132,7 +137,10 @@ costs no LLM call, and its default graph `mcp-host` is written for these synapse
 tools — treat what it returns as advice, and finish with
 `synapse_record_trajectory` and an honest score. The `follow_procedure` prompt walks
 through that loop. `synapse_agent_ask` runs the backend's own navigator agent instead
-(several backend LLM calls)."""
+(several backend LLM calls).
+
+`synapse_lab_runs` reads Synapse Lab results (retrieval approaches compared on quality
+AND cost, next to evidence floors). It is read-only: runs are started by the user."""
 
 ANSWER_WITH_GRAPH_PROMPT = """\
 Answer the question below using the Synapse knowledge graph.
@@ -332,6 +340,49 @@ def build_trajectory(
         last["observation"] = last_observation
     steps.append(last)
     return steps
+
+
+LAB_RUN_FIELDS = (
+    "run_id", "status", "active", "mode", "dataset", "n", "arms", "budgets", "reader_model",
+    "created_at",
+)
+
+
+def _lab_run_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """One run of the listing, without server-side paths."""
+    return {key: entry.get(key) for key in LAB_RUN_FIELDS if key in entry}
+
+
+def _lab_run_report(detail: dict[str, Any]) -> dict[str, Any]:
+    """A run as a host should read it: status, spend and the markdown report.
+
+    The report already holds the leaderboard as a table (arm × budget, floors
+    marked); the full per-question rows stay behind the API. Hosts pay per
+    token, so the payload is kept short.
+    """
+    manifest = detail.get("manifest") or {}
+    cfg = manifest.get("config") or {}
+    dataset = manifest.get("dataset") or {}
+    board = detail.get("leaderboard") or {}
+    frontier = (board.get("frontiers") or {}).get("f1_vs_usd") or []
+    actual = ((manifest.get("actual") or {}).get("reader") or {}).get("usd")
+    return {
+        "run_id": detail.get("run_id"),
+        "status": detail.get("status"),
+        "active": bool(detail.get("active")),
+        "mode": cfg.get("mode"),
+        "dataset": {k: dataset.get(k) for k in ("name", "split", "n")},
+        "reader_model": cfg.get("reader_model") if cfg.get("mode") != "retrieve" else None,
+        "spent_usd": actual,
+        "cap_usd": manifest.get("budget_cap_usd"),
+        "effect_floor_points": board.get("effect_floor_points"),
+        "pareto_frontier_f1_vs_usd": [
+            f"{p.get('arm')}@{'default' if p.get('budget') is None else p.get('budget')}"
+            for p in frontier
+        ],
+        "report": detail.get("report"),
+        "scored": bool(board),
+    }
 
 
 # ── Server ───────────────────────────────────────────────────────────────────
@@ -680,6 +731,38 @@ def build_server(
             return await client.agent_ask(
                 query, graph=graph, guidance=guidance, max_steps=max_steps
             )
+
+    # ── Synapse Lab ──────────────────────────────────────────────────────
+    # Read-only on purpose. A Lab run can spend reader-model money (realtime
+    # or batch), so starting or resuming one stays behind the CLI (`synapse-
+    # graphrag lab run`, which prints the estimate and asks for consent), the
+    # API and the UI. A host may READ the comparisons: they are what tells it
+    # which retrieval approach pays off on this corpus.
+    @server.tool(
+        name="synapse_lab_runs",
+        description=(
+            "Read Synapse Lab results: comparisons of retrieval approaches (BM25, dense, "
+            "Synapse's graph arms, PPR…) on the user's own questions, scored on answer quality "
+            "AND cost next to evidence floors (closed-book, vocabulary, random context). "
+            "Without run_id: the list of runs (id, status, mode, dataset, arms, budgets). With "
+            "run_id: that run's status and its report — the leaderboard as a markdown table, "
+            "cost per 100 correct answers, gains above the floors and the Pareto frontier. "
+            "Read-only: it never starts, resumes or pays for a run."
+        ),
+        annotations=ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False),
+    )
+    async def synapse_lab_runs(
+        run_id: Annotated[
+            str | None,
+            Field(description="A run id from the listing; omit it to list the runs."),
+        ] = None,
+    ) -> dict[str, Any]:
+        async with _connected(factory) as client:
+            if not run_id:
+                listing = await client.lab_runs()
+                return {"runs": [_lab_run_entry(r) for r in listing.get("runs") or []]}
+            detail = await client.lab_show(run_id, limit=0)
+        return _lab_run_report(detail)
 
     @server.resource(
         "synapse://about",

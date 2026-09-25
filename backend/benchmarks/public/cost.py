@@ -113,6 +113,15 @@ PRICES_USD_PER_1M_TOKENS: dict[str, Price] = {
     "text-embedding-3-large": Price(0.13, 0.0),
 }
 
+#: OpenAI Batch API: requests submitted through ``/v1/batches`` (completion
+#: window 24h) are billed at HALF the standard rate, on input and output alike.
+#: Same caveat as the table: recorded by hand on :data:`BATCH_CHECKED_ON`, not
+#: fetched, re-verify at :data:`PRICING_URL`. Applied by :func:`batch_price` /
+#: ``usd(..., batch=True)`` — never folded into the table itself, so a realtime
+#: and a batch figure for the same model always come from the same row.
+BATCH_PRICE_MULTIPLIER = 0.5
+BATCH_CHECKED_ON = "2026-09-24"
+
 #: Fallback token estimator. Four characters per token is the usual English
 #: rule of thumb for BPE tokenizers; it is not a tokenizer and is never claimed
 #: to be one. Anything counted this way is flagged ``estimated``.
@@ -318,12 +327,26 @@ def usage_from_response(response: object, *, prompt_text: str = "") -> Usage:
 
 
 # ── Money ────────────────────────────────────────────────────────────────────
-def usd(usage: Usage, price: Price | None) -> float | None:
+def batch_price(price: Price | None) -> Price | None:
+    """``price`` at the Batch API rate (:data:`BATCH_PRICE_MULTIPLIER`), same date."""
+    if price is None:
+        return None
+    return Price(
+        price.input_usd_per_1m * BATCH_PRICE_MULTIPLIER,
+        price.output_usd_per_1m * BATCH_PRICE_MULTIPLIER,
+        checked_on=price.checked_on,
+    )
+
+
+def usd(usage: Usage, price: Price | None, *, batch: bool = False) -> float | None:
     """Cost of ``usage`` at ``price``, or ``None`` when the model has no price.
 
+    ``batch=True`` prices it at the Batch API rate (see :func:`batch_price`).
     Unrounded: rounding happens once, in :func:`format_usd`, so a sum of many
     small calls is not rounded twice.
     """
+    if batch:
+        price = batch_price(price)
     if price is None:
         return None
     return (

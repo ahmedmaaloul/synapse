@@ -14,6 +14,77 @@ commercial licence is required for any commercial use; the `synapse-graphrag` cl
 
 ### Added
 
+- **Synapse Lab: compare retrieval approaches on your own data, FinOps-first.** Several retrieval
+  approaches ("arms") run over the same questions and the same graph, under the same token budgets,
+  read by one reader with one prompt, and ranked by **$ per 100 correct answers** next to three
+  evidence floors. Guide: [`docs/lab.md`](./docs/lab.md).
+  - **Eight arms** (`app/lab/arms.py`), each with a cited source and **0 retrieval-time LLM
+    calls**:
+    - three evidence floors: `null_closed_book` (N0), `null_vocabulary` (N1: every entity name,
+      the question ignored) and `null_random` (N2: seeded random passages at the same budget);
+    - two passage baselines: `bm25` (Lucene BM25 over the `:Chunk` full-text index) and `dense`
+      (the `:Chunk` vector index);
+    - three graph arms: `synapse_d` (the shipped retrieval path, split into units),
+      `synapse_lean` (PathRAG-style flow-pruned paths with a LiteRAG-style log-degree hub
+      penalty; [arXiv:2502.14902](https://arxiv.org/abs/2502.14902),
+      [arXiv:2609.10239](https://arxiv.org/abs/2609.10239)) and `ppr` (HippoRAG-2-style
+      Personalized PageRank over entities and passages, without the LLM triple filter;
+      [arXiv:2502.14802](https://arxiv.org/abs/2502.14802)).
+
+    The "-style" arms are re-implementations over Synapse's graph, not the authors' code, and
+    say so in their descriptions.
+  - **One packer, one reader.** Arms return ranked evidence units. One packer (`packer.py`) fills
+    every budget, counted with the reader's own tokenizer (`tiktoken`; a flagged `len/4`
+    fallback), and never exceeds it; PathRAG's reliability-ascending placement is an option. One
+    short-answer prompt (`reader.py`) reads every arm, and its output cap covers a reasoning
+    model's hidden reasoning.
+  - **Metrics** (`metrics.py`, pure):
+    - EM / F1, tokens per correct, and $ per 100 correct (cost-of-pass);
+    - amortized cost-of-pass at 100, 1,000 and 10,000 queries per corpus;
+    - gain above N0 and above N2, and the graph premium over the better passage baseline at the
+      same budget;
+    - F1-vs-$ and F1-vs-tokens Pareto frontiers.
+
+    A difference is called only when it clears the one-question effect floor (100 / n points) and
+    its seeded, paired-bootstrap 95% CI (10,000 resamples) excludes 0.
+  - **Three modes.**
+    - `retrieve` is the default and costs **$0**. It reports context tokens, units by kind, answer
+      containment and HotpotQA gold-paragraph recall.
+    - `realtime` reads now, metered call by call.
+    - `batch` goes through the OpenAI Batch API at half price (`batch.py`). Parts stay under the
+      SDK's documented limits, resubmission is idempotent, failed requests can be resent, and an
+      optional gate keeps the enqueued tokens under the organisation's limit.
+  - **Spend controls.** A free estimator (`estimate.py`) gives a point estimate and an upper bound
+    per phase and per arm × budget cell. It refuses when the upper bound exceeds `max_usd` or
+    cannot be priced. A run is checked again on its measured contexts before any call, and realtime
+    reads reserve each request's worst case against the cap before sending it.
+  - **Runs** (`runner.py`) are resumable directories under `backend/lab_runs/` (gitignored). Each
+    holds:
+    - a manifest: git SHA, arm config hashes, packer policy, dataset sha256 and question ids,
+      models, tokenizer, price dates, and estimate vs actual per phase;
+    - every packed context with its sha256;
+    - the requests, the answers, the scored rows, `leaderboard.json` and `report.md`.
+
+    Datasets: the demo QA set, uploaded QA files, and HotpotQA, which is refused until its sample
+    is ingested.
+  - **Batch ingest** (`ingest.py`): plan, submit and apply a corpus's extraction through the Batch
+    API, with the same prompt, parser and writes as the realtime pipeline. Community summaries are
+    off by default. `graph_builder` gains `render_extraction_request`, `parse_extraction` and
+    `build_knowledge_graph_from_extractions`; `build_knowledge_graph` behaves exactly as before.
+  - **API** under `/api/lab/`: arms, models, datasets, qa-files, estimate, runs, events (SSE) and
+    resume.
+  - **CLI** `synapse-graphrag lab arms | models | datasets | upload | estimate | run | runs | show
+    | resume`. It prints the estimate first and asks for consent before any run. A client method
+    covers each endpoint.
+  - A read-only **MCP tool**, `synapse_lab_runs`. No MCP tool starts or resumes a run.
+  - **UI**: a **Lab** view next to *Knowledge | Procedures*, with:
+    - an arm picker by family;
+    - an estimate table with a refusal banner;
+    - live progress and a runs list;
+    - the leaderboard, with floor rows styled apart;
+    - a Pareto plot with the floor band shaded.
+  - `benchmarks/public/cost.py` gains the Batch price multiplier (×0.5, dated) and
+    `usd(..., batch=True)`.
 - **Procedural memory: Procedural Graphs.** An implementation of Lu, Chen, Wu, Arık,
   *"Procedural Graphs: Self-Evolving Execution Structures for LLM Agents"*
   ([arXiv:2609.09153](https://arxiv.org/abs/2609.09153)). The entity graph records *what* the

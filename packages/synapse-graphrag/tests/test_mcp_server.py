@@ -32,7 +32,15 @@ from synapse_graphrag.mcp_server import (
     graph_stats,
     main,
 )
-from tests.conftest import AGENT_RESULT, GRAPH, INGEST_DONE, PROC_NAME, FakeBackend
+from tests.conftest import (
+    AGENT_RESULT,
+    GRAPH,
+    INGEST_DONE,
+    LAB_BATCH_ID,
+    LAB_RUN_ID,
+    PROC_NAME,
+    FakeBackend,
+)
 
 # The bundled prior the host-facing tools default to, in the repo checkout (absent
 # from an sdist, where the test that reads it skips).
@@ -72,6 +80,8 @@ TOOLS = {
     "synapse_procedure_guidance": {"readOnlyHint": True, "idempotentHint": True},
     "synapse_record_trajectory": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": False},
     "synapse_agent_ask": {"readOnlyHint": True, "idempotentHint": False},
+    # Synapse Lab: read-only by design (runs spend; they start from the CLI / UI).
+    "synapse_lab_runs": {"readOnlyHint": True, "idempotentHint": True},
 }
 
 
@@ -475,6 +485,45 @@ async def test_agent_ask_tool_defaults_and_no_graph(backend: FakeBackend):
         await server.call_tool("synapse_agent_ask", {"query": "q", "max_steps": 21})
     with pytest.raises(ToolError, match="HTTP 404: Procedural graph 'nope' not found."):
         await server.call_tool("synapse_agent_ask", {"query": "q", "graph": "nope"})
+
+
+# ── Synapse Lab ──────────────────────────────────────────────────────────────
+async def test_lab_is_read_only_over_mcp(backend: FakeBackend):
+    """Runs spend reader-model money: no tool may start or resume one."""
+    server = make_server(backend)
+    tools = {tool.name: tool for tool in await server.list_tools()}
+    lab = [name for name in tools if "lab" in name]
+    assert lab == ["synapse_lab_runs"]
+    description = tools["synapse_lab_runs"].description
+    assert "Read-only" in description and "never starts, resumes or pays" in description
+    assert tools["synapse_lab_runs"].input_schema["properties"]["run_id"]["default"] is None
+    assert "synapse_lab_runs" in server.instructions
+
+
+async def test_lab_runs_tool_lists_without_server_paths(backend: FakeBackend):
+    server = make_server(backend)
+    listing = _structured(await server.call_tool("synapse_lab_runs", {}))
+    ids = [r["run_id"] for r in listing["runs"]]
+    assert LAB_RUN_ID in ids and LAB_BATCH_ID in ids
+    assert all("run_dir" not in r for r in listing["runs"])
+    assert backend.paths() == ["/api/lab/runs"]
+
+
+async def test_lab_runs_tool_reads_one_report_and_never_writes(backend: FakeBackend):
+    server = make_server(backend)
+    report = _structured(await server.call_tool("synapse_lab_runs", {"run_id": LAB_RUN_ID}))
+    assert report["status"] == "done" and report["scored"] is True
+    assert report["mode"] == "realtime" and report["reader_model"] == "gpt-5-nano"
+    assert report["report"].startswith(f"# Synapse Lab run `{LAB_RUN_ID}`")
+    assert report["pareto_frontier_f1_vs_usd"] == ["bm25@500", "synapse_lean@500"]
+    assert report["dataset"] == {"name": "demo", "split": "test", "n": 9}
+    parked = _structured(await server.call_tool("synapse_lab_runs", {"run_id": LAB_BATCH_ID}))
+    assert parked["status"] == "batch_submitted" and parked["scored"] is False
+    assert parked["report"] is None
+    assert {c.method for c in backend.calls} == {"GET"}
+    assert backend.calls[0].params["limit"] == "0"  # no per-question rows over MCP
+    with pytest.raises(ToolError, match="Unknown Lab run"):
+        await server.call_tool("synapse_lab_runs", {"run_id": "ghost"})
 
 
 async def test_unknown_procedure_is_a_readable_tool_error(backend: FakeBackend):

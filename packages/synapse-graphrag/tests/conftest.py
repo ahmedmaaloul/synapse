@@ -233,6 +233,149 @@ EVOLVE_REPORT = {
 }
 
 
+# ── Synapse Lab (the HTTP contract of routers/lab.py) ───────────────────────
+LAB_ARMS = {
+    "arms": [
+        {"name": "null_closed_book", "family": "null", "family_title": "Evidence floors", "title": "N0 · Closed-book", "description": "No evidence at all.", "source": {"citation": "Synapse null controls", "url": "https://github.com/ahmedmaaloul/synapse"}, "retrieval_llm_calls": 0, "needs_graph": False, "is_null": True, "k_role": "none"},
+        {"name": "bm25", "family": "passage", "family_title": "Passage baselines", "title": "BM25", "description": "Lucene BM25 over the chunk index.", "source": {"citation": "Robertson & Zaragoza 2009", "url": "https://doi.org/10.1561/1500000019"}, "retrieval_llm_calls": 0, "needs_graph": False, "is_null": False, "k_role": "passages"},
+        {"name": "synapse_lean", "family": "graph", "family_title": "Graph arms", "title": "Synapse-lean", "description": "PathRAG-style flow-pruned paths with a LiteRAG-style hub penalty.", "source": {"citation": "PathRAG arXiv:2502.14902", "url": "https://arxiv.org/abs/2502.14902"}, "retrieval_llm_calls": 0, "needs_graph": True, "is_null": False, "k_role": "seeds"},
+    ],
+    "families": [{"family": "null", "title": "Evidence floors"}, {"family": "passage", "title": "Passage baselines"}, {"family": "graph", "title": "Graph arms"}],
+    "modes": ["realtime", "batch", "retrieve"],
+    "default_mode": "retrieve",
+    "budgets": [500, 1000, 2000, 4000, 8000, None],
+    "batch_available": True,
+}
+
+LAB_MODELS = {
+    "models": [
+        {"name": "gpt-4o-mini", "input_usd_per_1m": 0.15, "output_usd_per_1m": 0.6, "batch_input_usd_per_1m": 0.075, "batch_output_usd_per_1m": 0.3, "reasoning": False, "max_output_tokens": 32, "tokenizer": "tiktoken:o200k_base", "price_checked_on": "2026-07-21"},
+        {"name": "gpt-5-nano", "input_usd_per_1m": 0.05, "output_usd_per_1m": 0.4, "batch_input_usd_per_1m": 0.025, "batch_output_usd_per_1m": 0.2, "reasoning": True, "max_output_tokens": 544, "tokenizer": "tiktoken:o200k_base", "price_checked_on": "2026-09-24"},
+    ],
+    "default": "gpt-5-nano",
+    "batch_multiplier": 0.5,
+    "pricing_url": "https://openai.com/api/pricing/",
+    "note": "prices are hand-recorded",
+}
+
+LAB_DATASETS = {
+    "datasets": [
+        {"id": "demo", "name": "demo", "title": "Demo QA set", "splits": {"test": 9, "train": 12, "val": 9}, "default_split": "test", "n": 9, "source": "demo_qa.json"},
+        {"id": "qa-file:mine.jsonl", "name": "qa-file", "file": "mine.jsonl", "title": "mine.jsonl", "bytes": 300, "n": 3, "splits": {"test": 2, "train": 1}},
+    ],
+    "unavailable": [{"id": "hotpotqa", "name": "hotpotqa", "reason": "no HotpotQA paragraph is ingested in the knowledge graph"}],
+}
+
+LAB_RUN_ID = "20260925-101500-a1b2c3"
+LAB_ABORTED_ID = "aborted-run"
+LAB_BATCH_ID = "batch-run"
+
+
+def _cmp(diff: float, reportable: bool, against: str) -> dict[str, Any]:
+    return {"diff": diff, "ci_low": diff - 5, "ci_high": diff + 5, "n": 9, "floor": 11.11, "reportable": reportable, "against": against, "verdict": "above" if reportable else "too close to call"}
+
+
+LAB_BOARD_READ = {
+    "mode": "read",
+    "n_questions": 9,
+    "effect_floor_points": 11.11,
+    "bootstrap": {"iterations": 10000, "seed": 20260924, "confidence": 0.95},
+    "rows": [
+        {"arm": "bm25", "budget": 500, "budget_label": "500", "family": "passage", "title": "BM25", "is_null": False, "n": 9, "f1": 66.7, "em": 55.6, "tokens_per_correct": 812.4, "usd_per_100_correct": 0.0123, "comparisons": {"gain_above_n0": _cmp(22.2, True, "null_closed_book")}, "rank": 1},
+        {"arm": "synapse_lean", "budget": 500, "budget_label": "500", "family": "graph", "title": "Synapse-lean", "is_null": False, "n": 9, "f1": 70.1, "em": 55.6, "tokens_per_correct": 901.0, "usd_per_100_correct": 0.0150, "comparisons": {"gain_above_n0": _cmp(25.6, True, "null_closed_book"), "graph_premium": _cmp(3.4, False, "bm25")}, "rank": 2},
+        {"arm": "null_closed_book", "budget": 500, "budget_label": "500", "family": "null", "title": "N0", "is_null": True, "n": 9, "f1": 44.4, "em": 33.3, "tokens_per_correct": 350.0, "usd_per_100_correct": 0.0301, "comparisons": {}, "rank": 3},
+    ],
+    "floors": {"n0_f1": 44.4, "n2_f1_by_budget": {}},
+    "frontiers": {"f1_vs_usd": [{"arm": "bm25", "budget": 500}, {"arm": "synapse_lean", "budget": 500}], "f1_vs_tokens": []},
+    "notes": ["ingest cost unknown: amortized cost-of-pass for graph arms is not computed"],
+}
+
+LAB_BOARD_RETRIEVE = {
+    "mode": "retrieve",
+    "n_questions": 9,
+    "effect_floor_points": 11.11,
+    "rows": [
+        {"arm": "null_closed_book", "budget": None, "budget_label": "default", "family": "null", "is_null": True, "n": 9, "context_tokens_mean": 0.0, "units_mean": 0.0, "containment": 0.0, "recall_permissive": None, "recall_strict": None},
+        {"arm": "bm25", "budget": None, "budget_label": "default", "family": "passage", "is_null": False, "n": 9, "context_tokens_mean": 734.2, "units_mean": 8.0, "containment": 88.9, "recall_permissive": None, "recall_strict": None},
+    ],
+    "floors": {"n0_f1": None, "n2_f1_by_budget": {}},
+    "frontiers": {"f1_vs_usd": [], "f1_vs_tokens": []},
+}
+
+LAB_ROWS = [
+    {"arm": "bm25", "budget": 500, "qid": f"demo-{i:02d}", "question": f"q{i}", "gold": ["1843"], "context_tokens": 480, "units_used": 3, "containment": True, "answer": "1843", "em": 1.0, "f1": 1.0}
+    for i in range(1, 4)
+]
+
+
+def lab_estimate_payload(body: dict[str, Any]) -> dict[str, Any]:
+    """A deterministic stand-in for the backend estimator: $0.001 point / $0.002 upper per cell."""
+    mode = body.get("mode", "retrieve")
+    arms = body.get("arms") or [a["name"] for a in LAB_ARMS["arms"]]
+    budgets = body.get("budgets") or [None]
+    paid = mode != "retrieve"
+    cells = [
+        {"arm": a, "budget": b, "calls": 9 if paid else 0, "prompt_tokens": 4500 if paid else 0, "completion_tokens": 72 if paid else 0, "upper_prompt_tokens": 4950 if paid else 0, "upper_completion_tokens": 4896 if paid else 0, "point_usd": 0.001 if paid else 0.0, "upper_usd": 0.002 if paid else 0.0, "context_tokens": float(b or 4000) if paid else 0.0, "measured": False, "note": ""}
+        for a in arms for b in budgets
+    ]
+    upper = sum(c["upper_usd"] for c in cells)
+    max_usd = body.get("max_usd")
+    refuse = max_usd is not None and upper > max_usd
+    return {
+        "mode": mode,
+        "reader_model": body.get("reader_model", "gpt-5-nano"),
+        "batch": mode == "batch",
+        "n_questions": 9,
+        "phases": [{"phase": "reader", "model": "gpt-5-nano", "batch": mode == "batch", "calls": sum(c["calls"] for c in cells), "point_usd": sum(c["point_usd"] for c in cells), "upper_usd": upper}] if paid else [],
+        "cells": cells,
+        "total_point_usd": sum(c["point_usd"] for c in cells),
+        "total_upper_usd": upper,
+        "max_usd": max_usd,
+        "refuse": refuse,
+        "refuse_reason": f"upper bound ${upper:.4f} exceeds the cap ${max_usd:.4f}" if refuse else None,
+        "tokenizer": "tiktoken:o200k_base",
+        "reasoning_allowance": 512 if paid else 0,
+        "max_output_tokens": 544,
+        "price_dates": {"table": "2026-07-21"},
+        "assumptions": ["prices hand-recorded"] if paid else ["retrieve-only mode never calls a model: the estimate is $0"],
+        "pricing_url": "https://openai.com/api/pricing/",
+        "batch_multiplier": 0.5,
+        "dataset": {"name": "demo", "split": "test", "n": 9, "source": "demo_qa.json", "sha256": "abc"},
+        "measured_from": {"run_id": body["measured_run_id"], "cells": [], "unmeasured": []} if body.get("measured_run_id") else None,
+        "config_hash": "0123456789abcdef",
+        "cells_count": len(cells),
+    }
+
+
+def lab_detail(run_id: str, mode: str, status: str, *, cap: float | None = 1.0, pending: dict[str, Any] | None = None) -> dict[str, Any]:
+    board = None if status in ("batch_submitted", "refused") else copy.deepcopy(LAB_BOARD_RETRIEVE if mode == "retrieve" else LAB_BOARD_READ)
+    manifest = {
+        "run_id": run_id,
+        "status": status,
+        "created_at": "2026-09-25T10:15:00+00:00",
+        "config": {"mode": mode, "reader_model": "gpt-5-nano", "arms": ["null_closed_book", "bm25", "synapse_lean"], "budgets": [500]},
+        "dataset": {"name": "demo", "split": "test", "n": 9},
+        "code": {"git_sha": "c6a6e35f00d1", "git_dirty": True, "synapse_version": "0.4.0"},
+        "actual": {"reader": {"usd": 0.0021 if mode != "retrieve" else 0.0}},
+        "estimate": {"read": {"total_point_usd": 0.002, "total_upper_usd": 0.009}, "read_pending": pending or {"requests": 0, "upper_usd": 0.0, "spent_usd": 0.0021}},
+        "budget_cap_usd": cap,
+    }
+    if status == "aborted":
+        manifest["abort_reason"] = "spend cap: 5 request(s) not sent"
+    return {
+        "run_id": run_id,
+        "status": status,
+        "active": False,
+        "job_id": None,
+        "manifest": manifest,
+        "leaderboard": board,
+        "frontiers": (board or {}).get("frontiers"),
+        "floors": (board or {}).get("floors"),
+        "rows": {"total": len(LAB_ROWS), "offset": 0, "limit": 0, "rows": []},
+        "report": f"# Synapse Lab run `{run_id}`\n\n| Arm | Budget | F1 |\n|---|---|---|\n| bm25 | 500 | 66.7 |\n" if board else None,
+    }
+
+
 def _guidance_payload(name: str, body: dict[str, Any]) -> dict[str, Any]:
     """A deterministic stand-in for ``procedural_guidance.guide()``."""
     trajectory = body.get("trajectory") or []
@@ -304,6 +447,18 @@ class FakeBackend:
     procedures: dict[str, dict[str, Any]] = field(
         default_factory=lambda: {PROC_NAME: {**copy.deepcopy(PROC_GRAPH), "version": 3, "score": 0.5556}}
     )
+    lab_runs: dict[str, dict[str, Any]] = field(
+        default_factory=lambda: {
+            LAB_RUN_ID: lab_detail(LAB_RUN_ID, "realtime", "done"),
+            LAB_ABORTED_ID: lab_detail(LAB_ABORTED_ID, "realtime", "aborted", cap=0.5, pending={"requests": 5, "upper_usd": 0.004, "spent_usd": 0.5}),
+            LAB_BATCH_ID: lab_detail(LAB_BATCH_ID, "batch", "batch_submitted"),
+        }
+    )
+    # Overrides the events of the next run/resume stream (None: derived from the run's mode).
+    lab_events: list[dict[str, Any]] | None = None
+    # The final status a resumed run reaches (None: "done").
+    lab_resume_status: str | None = None
+    lab_uploads: list[bytes] = field(default_factory=list)
 
     def _stream(self, events: list[dict[str, Any]]) -> httpx.Response:
         stream = ChunkedStream(split_bytes(sse(*events), self.chunk_size))
@@ -380,6 +535,8 @@ class FakeBackend:
             return httpx.Response(200, json=result)
         if raw_path == "/api/procedures" or raw_path.startswith("/api/procedures/"):
             return self._procedures(request.method, raw_path, request.url.params, body)
+        if raw_path.startswith("/api/lab/"):
+            return self._lab(request.method, raw_path, request.url.params, body)
         return httpx.Response(404, json={"detail": "Not Found"})
 
     def _procedures(self, method: str, raw_path: str, params: Any, body: bytes) -> httpx.Response:
@@ -430,6 +587,100 @@ class FakeBackend:
             return httpx.Response(200, json=PROC_REJECTIONS)
         if method == "POST" and rest == "evolve":
             return httpx.Response(200, json={"job_id": "job_000009", "status": "processing"})
+        return httpx.Response(404, json={"detail": "Not Found"})
+
+    def _lab_done(self, run_id: str, status: str) -> dict[str, Any]:
+        detail = self.lab_runs.get(run_id) or lab_detail(run_id, "retrieve", status)
+        manifest = detail["manifest"]
+        return {
+            "run_id": run_id,
+            "status": status,
+            "mode": manifest["config"]["mode"],
+            "dataset": manifest["dataset"],
+            "reason": manifest.get("abort_reason") if status == "aborted" else None,
+            "phases": {"retrieve": "done", "read": "done", "score": "done"},
+            "spent_usd": manifest["actual"]["reader"]["usd"],
+            "cap_usd": manifest["budget_cap_usd"],
+            "pending": manifest["estimate"]["read_pending"],
+            "estimate_upper_usd": 0.009,
+        }
+
+    def _lab_stream(self, run_id: str) -> httpx.Response:
+        if self.lab_events is not None:
+            return self._stream(self.lab_events)
+        detail = self.lab_runs.get(run_id)
+        if detail is None:
+            return self._stream([{"type": "error", "data": "Unknown Lab run."}])
+        mode = detail["manifest"]["config"]["mode"]
+        events: list[dict[str, Any]] = [
+            {"type": "phase", "phase": "retrieve", "status": "running", "total": 27, "run_id": run_id},
+            *({"type": "progress", "phase": "retrieve", "done": i, "total": 27, "arm": "bm25", "run_id": run_id} for i in range(1, 28)),
+            {"type": "phase", "phase": "retrieve", "status": "done", "run_id": run_id},
+        ]
+        if mode == "realtime":
+            events += [
+                {"type": "phase", "phase": "read", "status": "running", "total": 18, "run_id": run_id},
+                {"type": "progress", "phase": "read", "done": 18, "total": 18, "spent_usd": 0.0021, "run_id": run_id},
+            ]
+        if mode == "batch":
+            events.append({"type": "batch_submitted", "requests": 18, "batch": {"batches": ["b1"]}, "run_id": run_id})
+        return self._stream([*events, {"type": "done", "data": self._lab_done(run_id, detail["status"])}])
+
+    def _lab(self, method: str, raw_path: str, params: Any, body: bytes) -> httpx.Response:
+        """``/api/lab/…`` routed like routers/lab.py (the run id is ONE encoded segment)."""
+        segments = [unquote(s) for s in raw_path.split("/")[3:]]
+        head = segments[0] if segments else ""
+        if method == "GET" and head == "arms":
+            return httpx.Response(200, json=LAB_ARMS)
+        if method == "GET" and head == "models":
+            return httpx.Response(200, json=LAB_MODELS)
+        if method == "GET" and head == "datasets":
+            return httpx.Response(200, json=LAB_DATASETS)
+        if method == "POST" and head == "qa-files":
+            self.lab_uploads.append(body)
+            if b"replace" not in body and b"taken.jsonl" in body:
+                return httpx.Response(409, json={"detail": "A different QA file named 'taken.jsonl' already exists; past runs refer to it by content hash. Upload under another name, or set replace=true."})
+            return httpx.Response(200, json={"status": "created", "id": "qa-file:mine.jsonl", "name": "qa-file", "file": "mine.jsonl", "n": 3, "splits": {"test": 2, "train": 1}, "bytes": 300, "sha256": "f" * 64})
+        payload = json.loads(body) if body else {}
+        if method == "POST" and head == "estimate":
+            return httpx.Response(200, json=lab_estimate_payload(payload))
+        if head != "runs":
+            return httpx.Response(404, json={"detail": "Not Found"})
+        if len(segments) == 1 and method == "GET":
+            runs = [
+                {"run_id": rid, "status": d["status"], "created_at": d["manifest"]["created_at"], "mode": d["manifest"]["config"]["mode"], "dataset": "demo", "n": 9, "arms": d["manifest"]["config"]["arms"], "budgets": [500, None], "reader_model": "gpt-5-nano", "run_dir": f"/srv/lab_runs/{rid}", "active": False}
+                for rid, d in self.lab_runs.items()
+            ]
+            return httpx.Response(200, json={"runs": runs})
+        if len(segments) == 1 and method == "POST":
+            mode = payload.get("mode", "retrieve")
+            if mode != "retrieve" and payload.get("max_usd") is None:
+                return httpx.Response(422, json={"detail": {"message": "A paid run needs max_usd", "diagnostics": ["set max_usd"]}})
+            estimate = lab_estimate_payload(payload)
+            if estimate["refuse"]:
+                return httpx.Response(422, json={"detail": {"message": "Refused: the estimated upper bound breaks the spend cap", "diagnostics": [estimate["refuse_reason"]], "estimate": estimate}})
+            run_id = payload.get("run_id") or "20260925-120000-d4e5f6"
+            status = "batch_submitted" if mode == "batch" else "done"
+            self.lab_runs[run_id] = lab_detail(run_id, mode, status)
+            return httpx.Response(200, json={"job_id": "job_000010", "run_id": run_id, "status": "running", "mode": mode, "estimate": estimate, "events": f"/api/lab/runs/{run_id}/events"})
+        run_id, rest = segments[1], "/".join(segments[2:])
+        if method == "GET" and rest == "events":
+            return self._lab_stream(run_id)
+        if run_id not in self.lab_runs:
+            return httpx.Response(404, json={"detail": f"Unknown Lab run {run_id!r}."})
+        detail = self.lab_runs[run_id]
+        if method == "GET" and not rest:
+            shown = copy.deepcopy(detail)
+            limit, offset = int(params.get("limit", 50)), int(params.get("offset", 0))
+            rows = [r for r in LAB_ROWS if params.get("arm") in (None, r["arm"])]
+            shown["rows"] = {"total": len(rows), "offset": offset, "limit": limit, "rows": rows[offset : offset + limit]}
+            return httpx.Response(200, json=shown)
+        if method == "POST" and rest == "resume":
+            previous = detail["status"]
+            status = self.lab_resume_status or "done"
+            mode = detail["manifest"]["config"]["mode"]
+            self.lab_runs[run_id] = lab_detail(run_id, mode, status, cap=payload.get("max_usd") or detail["manifest"]["budget_cap_usd"])
+            return httpx.Response(200, json={"job_id": "job_000011", "run_id": run_id, "status": "running", "previous_status": previous, "events": f"/api/lab/runs/{run_id}/events"})
         return httpx.Response(404, json={"detail": "Not Found"})
 
     @property

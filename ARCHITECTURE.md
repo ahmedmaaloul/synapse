@@ -15,6 +15,7 @@ flowchart TB
         CH[ChatPanel] -->|POST /chat · POST /agent/ask| API
         API -.->|SSE tokens + citations| CH
         GP[GraphPanel] -->|GET /graph-data · /procedures/…/graph-data| API
+        LB[LabPanel] -->|/lab/estimate · /lab/runs · SSE| API
     end
 
     subgraph Agents [MCP hosts · CLI · SDK]
@@ -25,11 +26,14 @@ flowchart TB
         API[/REST + SSE/] --> GB[graph_builder]
         API --> CE[chat_engine]
         API --> NAV["graph_agent · procedural_guidance<br/>procedural_evolution"]
+        API --> LAB["lab: arms · packer · runner"]
         NAV --> CE
+        LAB -->|read-only retrieval| CE
         GB --> LP[llm_provider]
         CE --> LP
         NAV --> LP
         LP --> EXT{{"10 chat providers · 9 embedding providers<br/>Gemini · Claude · OpenAI · Azure · Vertex<br/>Bedrock · Groq · Mistral · Ollama · OpenAI-compatible"}}
+        LAB -->|reader · Batch API| OAI{{OpenAI API}}
     end
 
     subgraph Data [Neo4j 5]
@@ -43,6 +47,7 @@ flowchart TB
     CE --> VIDX
     CE --> FIDX
     NAV --> PROC
+    LAB -.->|read-only| NODES
 ```
 
 ## The provider layer
@@ -208,8 +213,9 @@ installs in seconds with `uvx`. It also keeps the wire contract honest: the
 UI, the CLI and the MCP tools all consume the same endpoints, so a change that
 breaks one breaks the tests of all three.
 
-The MCP surface is deliberately small — twelve tools (eight over the knowledge
-graph, four over procedural memory), one resource and three prompts
+The MCP surface is deliberately small — thirteen tools (eight over the knowledge
+graph, four over procedural memory, one read-only listing of Synapse Lab runs),
+one resource and three prompts
 (`answer_with_graph`, `safety_brief`, `follow_procedure`) — and the tool the
 server's instructions steer the model towards is
 `synapse_retrieve`, which returns context rather than an answer. The host
@@ -310,6 +316,98 @@ middle of a save. Only one run per graph is allowed in a process. An accepted
 candidate becomes a new version; a rejected one becomes a `ProcedureRejection`
 row and part of the refiner's next prompt.
 
+## Synapse Lab
+
+The Lab compares retrieval approaches ("arms") on the user's own questions and
+ranks them by what a correct answer costs, next to three evidence floors:
+closed-book, a vocabulary null and random context. The full reference is
+[docs/lab.md](./docs/lab.md). This section covers how it is put together.
+
+| Module (`app/lab/`) | Role | I/O |
+| --- | --- | --- |
+| `evidence` | `EvidenceUnit` (text, kind, source, score) and `Evidence`: the only thing an arm returns | none: pure |
+| `tokens` | `tiktoken` counts in the reader's encoding; a `len/4` fallback that is flagged, never silent | tokenizer cache |
+| `packer` | the one packer: ranked units in, budgeted context out, never over the budget | none: pure |
+| `arms` | the eight arms and their registry (`ARMS`), with citations and config hashes | Neo4j (read-only), embedder |
+| `reader` | the one short-answer prompt, the request bodies, the realtime reader and its spend guard | OpenAI API |
+| `metrics` | EM / F1, cost per correct, amortized cost-of-pass, floors, graph premium, paired bootstrap, Pareto | none: pure |
+| `estimate` | the free dry-run estimator: point and upper bound per phase and per cell, and the refusal | none: price table and tokenizer |
+| `runner` | `LabRun`: retrieve → read → score, the run directory, resume | Neo4j (read-only), files, OpenAI via `reader` / `batch` |
+| `batch` | the OpenAI Batch API as a file-backed state machine | OpenAI Files and Batches, files |
+| `ingest` | a corpus's extraction through the Batch API, written by `graph_builder` | OpenAI Batch, **Neo4j writes** |
+
+`routers/lab.py` exposes it over HTTP on the same `job_bus` + SSE pattern as
+ingestion and evolution: a run is a background job, and its events end with
+`done` carrying the run's status.
+
+```mermaid
+sequenceDiagram
+    participant U as UI · CLI · SDK
+    participant A as /api/lab
+    participant R as runner
+    participant N as Neo4j
+    participant O as OpenAI
+
+    U->>A: POST /lab/estimate (free)
+    U->>A: POST /lab/runs {arms, budgets, mode, max_usd}
+    A->>A: upper bound > max_usd? → 422 with the estimate
+    A-->>U: {job_id, run_id} · SSE events
+    A->>R: run_lab (background job)
+    loop every arm × question
+        R->>N: arm.retrieve (read-only)
+        R->>R: pack at every budget → contexts.jsonl
+    end
+    R->>R: re-estimate on the measured contexts → refused?
+    alt realtime
+        R->>O: chat.completions, each call reserved against the cap first
+    else batch
+        R->>O: upload + create batches → status batch_submitted
+        U->>A: POST /lab/runs/{id}/resume → poll, collect
+    end
+    R->>R: score → leaderboard.json · report.md
+```
+
+Four properties carry the design:
+
+- **Arms retrieve; nothing else does.** An arm returns ranked units and never
+  renders a prompt or cuts to a budget. The packer is the only code that turns
+  units into text and the only place a budget is enforced, counted in the
+  reader's own tokenizer. The reader builds one request body for realtime and
+  Batch alike. So two arms can differ only in *what* they retrieved, not in how
+  it was laid out, counted or asked about. The graph arms reuse `chat_engine`'s
+  hybrid seed ranker, keyword query, neighbourhood reads and path renderer, so
+  `synapse_d` is the shipped retrieval and not a copy of it.
+- **A pure core.** `evidence`, `packer`, `metrics` and `estimate` do no I/O.
+  Their tests need no database and no model, and a finished run is re-scored
+  from its files alone.
+- **Money moves in one direction.** A free estimate, then a refusal before
+  anything starts, then a re-estimate on the measured contexts after the free
+  retrieve phase, then, while reading in realtime, a `SpendGuard` that reserves
+  each request's worst case (its prompt + 10%, its output cap) before sending
+  it. Every request carries its own output cap, a reasoning model's hidden
+  reasoning included, so the upper bound is a real bound for a Batch submission
+  too. A model with no price on file is refused, because a cap it cannot check
+  is not a cap.
+- **Files, not graph data.** A run is a directory under `backend/lab_runs/`:
+  a manifest written atomically, append-only JSONL for contexts and answers
+  (a line torn by a crash is repaired on resume), and a config hash that stops
+  a second configuration from reusing the directory. The Batch layer writes its
+  `batches.json` before and after every network step and recognises a part it
+  already submitted by the sha256 of its bytes, so a crash cannot bill twice.
+  Nothing about a run lives in Neo4j, and no arm writes to it.
+
+**Ingest through the Batch API.** `graph_builder` is split so extraction and
+writing can happen apart, without changing `build_knowledge_graph`:
+`render_extraction_request` renders the exact messages the realtime pipeline
+sends, `parse_extraction` is its parser, and
+`build_knowledge_graph_from_extractions` runs everything after extraction
+(parsing, de-duplication, embeddings, entity resolution, writes, the passage
+store). `build_knowledge_graph` still extracts and then calls the same shared
+code, and a test holds the two paths to the same Neo4j writes. `lab/ingest.py`
+sends the extraction requests as a batch and applies the replies one document
+at a time, in corpus order. It is the only Lab module that writes to the graph,
+and only when its apply step is called.
+
 ## Design decisions
 
 | Decision | Why |
@@ -324,6 +422,11 @@ row and part of the refiner's next prompt.
 | **Procedural memory in the same Neo4j** | Facts and the strategy for navigating them are inspected, backed up and restored together, with no second datastore. Separate labels keep the two apart: `/api/graph-data` stays `:Entity`-only, and `DELETE /api/graph` excludes `PROCEDURAL_LABELS`, so a corpus reset does not erase a strategy that took paid evolution rounds to learn. |
 | **Raw procedural guidance by default** | The paper has a guidance LLM rewrite the local subgraph at every step, and measures the extra tokens. By default Synapse hands the serialized subgraph to the solver or MCP host as-is: **zero** extra LLM calls, the same retrieve-don't-generate stance as `/api/retrieve`. It is a hypothesis, and the procedural benchmark harness exists to test it against the paper's generative mode. |
 | **Localization cascade** | Exact-name matching falls back to the full graph whenever a model writes `Search_Entities(query=…)`. The paper's ablation finds the full graph both worse and costlier. `normalized` and `semantic` matching keep more steps local, and an embedding failure only skips the semantic step. |
+| **One packer and one reader for every Lab arm** | A comparison of retrieval approaches is only fair if the approaches differ in what they retrieve. Letting each arm format and trim its own context would compare prompt engineering. Arms return ranked units; the shared packer and the shared prompt do the rest, and the packer's policy is written into every run manifest. |
+| **Evidence floors on every Lab leaderboard** | Closed-book (N0), a vocabulary null (N1) and random context (N2) run next to the real arms, and gains are reported above them. A score without them credits an arm with the reader's own knowledge, with context volume, or with a metric that a list of names can satisfy. |
+| **Retrieve-only is the Lab's default mode** | Most of what a comparison needs to settle first (context size, what reached the reader, containment and recall next to the floors) needs no model. The free tier comes first, and it also measures the contexts a paid run is then priced on. |
+| **Lab runs are directories, not graph data** | A run must be auditable, resumable and re-scorable without the database or a model, and the Lab must never write to the graph it measures. Append-only JSONL plus an atomically written manifest give crash recovery for free. |
+| **No MCP tool starts a Lab run** | Same reason as evolution: a paid run belongs behind a printed estimate and a human's consent. Agents get the read-only `synapse_lab_runs`. |
 | **Evolution is a budgeted job, not an MCP tool** | It can spend hundreds of LLM calls over minutes to hours. A model should not start that on its own initiative halfway through a task, so it lives behind the API and a CLI command that prints an upper-bound estimate and asks for consent. |
 | **In-memory job bus** | Single-replica-appropriate and dependency-free. The interface is deliberately small so swapping in Redis pub/sub for horizontal scaling is mechanical. |
 | **Best-effort degradation** | No vector index yet? Fall back to full-text. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
@@ -363,9 +466,16 @@ row and part of the refiner's next prompt.
   candidate compares two means over |val| questions, so the gate resolves only
   1/|val|. Rounds are a search trail, not significance. The report says so
   (`effect_floor`), and so does the paper.
+- **The Lab reader is OpenAI-only.** Its paid modes and the Batch ingest call the
+  OpenAI API directly (`OPENAI_API_KEY`), and its tokenizer covers OpenAI
+  encodings. Retrieval, and the rest of Synapse, stay provider-agnostic.
+- **Lab retrieval runs in the backend process.** A large run's retrieve phase
+  shares the event loop with the API, and scoring's bootstrap is CPU-bound
+  (vectorised with numpy), so a very large run can hold the loop for a few
+  seconds while it scores.
 - **Job state is per-process.** Fine for one backend replica; see the bus note above. The
-  same holds for the generative-guidance cache, the node-embedding cache and the
-  one-evolution-per-graph lock.
+  same holds for the generative-guidance cache, the node-embedding cache, the
+  one-evolution-per-graph lock and the one-job-per-Lab-run lock.
 
 ## Scaling notes
 

@@ -17,6 +17,13 @@ Arık, "Procedural Graphs: Self-Evolving Execution Structures for LLM Agents"
 (arXiv:2609.09153). The client reads, edits, versions and evolves those graphs
 and asks for step-local guidance; it never runs an agent itself.
 
+The Synapse Lab (``/api/lab``) compares retrieval approaches side by side on
+the user's own questions, scored on answer quality AND cost next to evidence
+floors. The client lists arms, datasets and reader models, uploads QA files,
+prices a run for free (:meth:`SynapseClient.lab_estimate`), starts and follows
+one, and reads results back. Only ``realtime`` / ``batch`` runs spend, always
+under the ``max_usd`` the caller sets; :func:`lab_request` builds their body.
+
 Why a client over HTTP rather than importing the engine: the backend needs
 Neo4j, an embedding model and an LLM provider; a host only needs ``httpx``.
 
@@ -843,6 +850,301 @@ class SynapseClient:
         if max_steps is not None:
             body["max_steps"] = max_steps
         return _as_dict(await self._request("POST", "/api/agent/ask", json=body))
+
+    # ── Synapse Lab ──────────────────────────────────────────────────────
+    # Compare retrieval approaches ("arms") side by side on your own questions,
+    # scored on answer quality AND cost next to three evidence floors. The
+    # ``retrieve`` mode is free (no model is called); ``realtime`` and ``batch``
+    # call the backend's reader model and need ``max_usd``. The request body of
+    # estimate / run is built by :func:`lab_request`.
+    async def lab_arms(self) -> dict[str, Any]:
+        """``GET /api/lab/arms`` — ``{"arms": [...], "families", "modes", "default_mode",
+        "budgets", "batch_available"}``; each arm has ``name``, ``family``, ``title``,
+        ``description``, ``source`` {citation, url}, ``retrieval_llm_calls``,
+        ``needs_graph`` and ``is_null``."""
+        return _as_dict(await self._request("GET", "/api/lab/arms"))
+
+    async def lab_models(self) -> dict[str, Any]:
+        """``GET /api/lab/models`` — reader models with their $/1M tokens (realtime and
+        Batch), ``reasoning`` flag, output cap and the date each price was recorded."""
+        return _as_dict(await self._request("GET", "/api/lab/models"))
+
+    async def lab_datasets(self) -> dict[str, Any]:
+        """``GET /api/lab/datasets`` — ``{"datasets": [...], "unavailable": [...]}``. Each
+        dataset's ``id`` is what ``lab_request(dataset=...)`` takes (``demo``,
+        ``qa-file:<name>``, ``hotpotqa``); an unavailable one says why."""
+        return _as_dict(await self._request("GET", "/api/lab/datasets"))
+
+    async def lab_upload_qa_file(
+        self, path: str | Path, name: str | None = None, replace: bool = False
+    ) -> dict[str, Any]:
+        """``POST /api/lab/qa-files`` — store a JSON array or JSONL of ``{question,
+        answer[, id][, split]}`` records on the backend (validated there first).
+
+        ``name`` stores it under another file name. A different file already
+        stored under the same name is refused (409) unless ``replace`` — past runs
+        refer to it by content hash. Returns ``{status, id, file, n, splits, sha256}``;
+        ``id`` is the dataset to pass to :func:`lab_request`.
+        """
+        file_path = Path(path)
+        if not file_path.is_file():
+            raise SynapseError(None, f"File not found: {file_path}")
+        if file_path.suffix.lower() not in (".json", ".jsonl"):
+            raise SynapseError(None, f"A QA file must be .json or .jsonl: {file_path.name}")
+        content = await asyncio.to_thread(file_path.read_bytes)
+        data: dict[str, str] = {}
+        if name:
+            data["name"] = name
+        if replace:
+            data["replace"] = "true"
+        return _as_dict(
+            await self._request(
+                "POST",
+                "/api/lab/qa-files",
+                files={"file": (file_path.name, content, "application/json")},
+                data=data,
+            )
+        )
+
+    async def lab_estimate(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /api/lab/estimate`` — the free dry-run estimate of ``body`` (see
+        :func:`lab_request`): per phase and per (arm, budget) cell, a POINT estimate
+        and an UPPER BOUND in tokens and $, plus ``refuse`` / ``refuse_reason`` when
+        the upper bound exceeds ``max_usd``. Nothing is spent, no graph is read."""
+        return _as_dict(await self._request("POST", "/api/lab/estimate", json=dict(body)))
+
+    async def lab_start_run(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``POST /api/lab/runs`` — start a run; returns ``{job_id, run_id, status,
+        mode, estimate, events}`` without waiting. A paid run whose upper bound
+        breaks ``max_usd`` is refused with status 422 (``payload["estimate"]``)."""
+        return _as_dict(await self._request("POST", "/api/lab/runs", json=dict(body)))
+
+    async def lab_events(
+        self, run_id: str, on_progress: ProgressCallback | None = None
+    ) -> dict[str, Any]:
+        """Follow ``GET /api/lab/runs/{run_id}/events`` until ``done``; returns its summary
+        (``status``: ``done``, ``batch_submitted``, ``refused`` or ``aborted``;
+        ``reason``, ``spent_usd``, ``cap_usd``, ``phases``…).
+
+        No idle timeout: a retrieve phase or a realtime read can be minutes long.
+        Stopping to listen does not stop the run.
+        """
+        return await self._follow_job(
+            _lab_run_path(run_id, "/events"),
+            on_progress,
+            timeout=httpx.Timeout(None, connect=min(CONNECT_TIMEOUT, self.timeout)),
+        )
+
+    async def lab_run(
+        self, body: dict[str, Any], on_progress: ProgressCallback | None = None
+    ) -> dict[str, Any]:
+        """Start a run (:meth:`lab_start_run`) and follow it (:meth:`lab_events`).
+
+        ``on_progress`` receives a client-side ``accepted`` event (``job_id``,
+        ``run_id``, the server's ``estimate``), then the runner's ``phase`` /
+        ``progress`` / ``refused`` / ``aborted`` / ``batch_submitted`` events.
+        Returns the final summary with ``job_id`` and ``run_id``. A ``batch``
+        run ends in ``batch_submitted``: call :meth:`lab_resume` later.
+        """
+        accepted = await self.lab_start_run(body)
+        run_id = str(accepted.get("run_id") or "")
+        if not run_id:
+            raise SynapseError(None, f"Lab run accepted without a run_id: {accepted}")
+        await _notify(on_progress, {"type": "accepted", **accepted})
+        done = await self.lab_events(run_id, on_progress)
+        return {"job_id": accepted.get("job_id"), "run_id": run_id, **done}
+
+    async def lab_runs(self) -> dict[str, Any]:
+        """``GET /api/lab/runs`` — ``{"runs": [{run_id, status, mode, dataset, n, arms,
+        budgets, reader_model, created_at, active}]}``, newest first."""
+        return _as_dict(await self._request("GET", "/api/lab/runs"))
+
+    async def lab_show(
+        self,
+        run_id: str,
+        *,
+        offset: int = 0,
+        limit: int = 50,
+        arm: str | None = None,
+        budget: int | str | None = None,
+    ) -> dict[str, Any]:
+        """``GET /api/lab/runs/{run_id}`` — ``manifest``, ``leaderboard`` (``None`` until
+        scored), ``frontiers``, ``floors``, ``report`` (markdown) and ``rows``: a page
+        of per-question rows (``offset`` / ``limit``, optionally one ``arm`` and one
+        ``budget`` — a token count or ``"default"``)."""
+        params: dict[str, Any] = {"offset": offset, "limit": limit}
+        if arm is not None:
+            params["arm"] = arm
+        if budget is not None:
+            # Same spelling as ``lab run --budgets``: "2k" → 2000, "default" stays.
+            parsed = parse_budget(budget)
+            params["budget"] = "default" if parsed is None else str(parsed)
+        return _as_dict(await self._request("GET", _lab_run_path(run_id), params=params))
+
+    async def lab_resume(
+        self,
+        run_id: str,
+        *,
+        max_usd: float | None = None,
+        retry_failed: bool = False,
+        on_progress: ProgressCallback | None = None,
+    ) -> dict[str, Any]:
+        """``POST /api/lab/runs/{run_id}/resume`` and follow it; returns the summary.
+
+        A ``batch_submitted`` run polls its batch (and collects and scores it once
+        done): no new spend. An ``aborted`` / ``refused`` run reads what is left —
+        that SPENDS, under ``max_usd`` when given, else the run's stored cap.
+        ``retry_failed`` re-reads requests that came back with an error; nothing
+        that already has an answer is ever sent again.
+        """
+        body: dict[str, Any] = {"retry_failed": bool(retry_failed)}
+        if max_usd is not None:
+            body["max_usd"] = _non_negative(max_usd, "max_usd")
+        accepted = _as_dict(
+            await self._request("POST", _lab_run_path(run_id, "/resume"), json=body)
+        )
+        await _notify(on_progress, {"type": "accepted", **accepted})
+        done = await self.lab_events(run_id, on_progress)
+        return {"job_id": accepted.get("job_id"), "run_id": run_id, **done}
+
+
+# ── Synapse Lab requests ─────────────────────────────────────────────────────
+LAB_MODES = ("retrieve", "realtime", "batch")
+LAB_ORDERS = ("score", "ascending")
+
+
+def parse_budget(value: Any) -> int | None:
+    """A token budget: a positive int, ``"2k"`` (= 2000), or ``"default"`` / ``None``
+    (each arm's own, uncapped context)."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise SynapseError(None, f"invalid budget {value!r}")
+    if isinstance(value, int):
+        budget = value
+    else:
+        text = str(value).strip().lower()
+        if text in ("", "default", "none"):
+            return None
+        scale = 1000 if text.endswith("k") else 1
+        try:
+            budget = int(float(text[:-1] if scale == 1000 else text) * scale)
+        except ValueError as exc:
+            raise SynapseError(
+                None, f"invalid budget {value!r}: a token count (500, 2k) or 'default'"
+            ) from exc
+    if budget <= 0:
+        raise SynapseError(None, f"a budget must be positive, got {value!r}")
+    return budget
+
+
+def parse_budgets(text: str) -> list[int | None]:
+    """``"500,2k,default"`` → ``[500, 2000, None]``."""
+    parts = [p for p in (s.strip() for s in text.split(",")) if p]
+    if not parts:
+        raise SynapseError(None, "name at least one budget (e.g. 500,2k,default)")
+    return [parse_budget(p) for p in parts]
+
+
+def _non_negative(value: Any, label: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise SynapseError(None, f"{label} must be a number, got {value!r}") from exc
+    if number < 0 or number != number:  # NaN is not a cap
+        raise SynapseError(None, f"{label} must be >= 0, got {value!r}")
+    return number
+
+
+def lab_request(
+    *,
+    dataset: str = "demo",
+    arms: Iterable[str] | None = None,
+    budgets: Iterable[int | str | None] | None = None,
+    mode: str = "retrieve",
+    max_usd: float | None = None,
+    reader_model: str | None = None,
+    file: str | None = None,
+    split: str | None = None,
+    n: int | None = None,
+    offset: int | None = None,
+    sample_seed: int | None = None,
+    k: int | None = None,
+    passage_k: int | None = None,
+    seed: int | None = None,
+    order: str | None = None,
+    reasoning_allowance: int | None = None,
+    max_concurrency: int | None = None,
+    extra_cells: Iterable[tuple[str, int | str | None]] | None = None,
+    ingest: dict[str, Any] | None = None,
+    ingest_usd: float | None = None,
+    measured_run_id: str | None = None,
+    run_id: str | None = None,
+) -> dict[str, Any]:
+    """The JSON body of ``/api/lab/estimate`` and ``/api/lab/runs``, checked before sending.
+
+    Omitted values take the backend's defaults (every arm, the ``default``
+    budget, ``gpt-5-nano``, ``k=8``…). ``dataset`` is ``demo``, ``hotpotqa``, or
+    ``qa-file:<name>`` for an uploaded file. ``mode`` is ``retrieve`` (free),
+    ``realtime`` or ``batch``; the paid modes need ``max_usd`` to START a run
+    (an estimate works without it). ``budgets`` take token counts, ``"2k"`` or
+    ``"default"``. ``extra_cells`` adds (arm, budget) cells beyond the grid, e.g.
+    each graph arm once at its default context. ``measured_run_id`` prices
+    the run on the MEASURED contexts of an earlier retrieve run of the same
+    configuration. ``ingest`` (``{"paragraphs", "model", "batch",
+    "community_summaries"}``) prices an ingest next to the run.
+    """
+    if mode not in LAB_MODES:
+        raise SynapseError(None, f"mode must be one of {', '.join(LAB_MODES)}, got {mode!r}")
+    if not isinstance(dataset, str) or not dataset.strip():
+        raise SynapseError(None, "dataset is required (demo, hotpotqa or qa-file:<name>)")
+    body: dict[str, Any] = {"dataset": dataset.strip(), "mode": mode}
+    if arms is not None:
+        names = [str(a).strip() for a in arms if str(a).strip()]
+        if not names:
+            raise SynapseError(None, "arms must name at least one arm (see `lab arms`)")
+        body["arms"] = list(dict.fromkeys(names))
+    if budgets is not None:
+        values = [parse_budget(b) for b in budgets]
+        if not values:
+            raise SynapseError(None, "budgets must name at least one budget")
+        body["budgets"] = list(dict.fromkeys(values))
+    if max_usd is not None:
+        body["max_usd"] = _non_negative(max_usd, "max_usd")
+    if ingest_usd is not None:
+        body["ingest_usd"] = _non_negative(ingest_usd, "ingest_usd")
+    if order is not None and order not in LAB_ORDERS:
+        raise SynapseError(None, f"order must be one of {', '.join(LAB_ORDERS)}, got {order!r}")
+    if extra_cells is not None:
+        body["extra_cells"] = [
+            {"arm": str(arm), "budget": parse_budget(budget)} for arm, budget in extra_cells
+        ]
+    optional = {
+        "reader_model": reader_model,
+        "file": file,
+        "split": split,
+        "n": n,
+        "offset": offset,
+        "sample_seed": sample_seed,
+        "k": k,
+        "passage_k": passage_k,
+        "seed": seed,
+        "order": order,
+        "reasoning_allowance": reasoning_allowance,
+        "max_concurrency": max_concurrency,
+        "ingest": dict(ingest) if ingest is not None else None,
+        "measured_run_id": measured_run_id,
+        "run_id": run_id,
+    }
+    body.update({key: value for key, value in optional.items() if value is not None})
+    return body
+
+
+def _lab_run_path(run_id: str, suffix: str = "") -> str:
+    """``/api/lab/runs/{run_id}{suffix}`` with ``run_id`` percent-encoded as ONE segment."""
+    if not isinstance(run_id, str) or not run_id.strip():
+        raise SynapseError(None, "A Lab run id is required.")
+    return f"/api/lab/runs/{quote(run_id.strip(), safe='')}{suffix}"
 
 
 def _procedure_path(name: str, suffix: str = "") -> str:

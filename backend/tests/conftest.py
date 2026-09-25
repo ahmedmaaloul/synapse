@@ -32,6 +32,22 @@ def _clear_settings_cache():
     llm_provider._load_embeddings.cache_clear()
 
 
+@pytest.fixture(autouse=True)
+def _no_lab_calibration_file(monkeypatch):
+    """Never read the user's ``backend/lab_runs/calibration.json``.
+
+    ``estimate.load_calibration()`` (the router's estimate, ``ingest.plan_ingest``)
+    reads that file when it exists, so a measured calibration on the developer's
+    machine would change every priced ingest a test asserts. Point it at a path
+    that cannot exist; a test that wants a calibration passes one explicitly.
+    """
+    from pathlib import Path
+
+    from app.lab import estimate
+
+    monkeypatch.setattr(estimate, "CALIBRATION_PATH", Path(os.devnull) / "calibration.json")
+
+
 QueryHandler = Callable[[str, dict], list]
 
 # Modules that are known to do ``from app.neo4j_driver import execute_query``.

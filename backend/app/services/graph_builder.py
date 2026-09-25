@@ -23,6 +23,13 @@ Turns raw text chunks into a knowledge graph:
 
 The extraction schema is theme-aware so a CV, a research paper, and a contract
 each get domain-appropriate entity/relationship types.
+
+Step 1 is separable from steps 2-7: :func:`render_extraction_request` renders
+the exact extraction prompt as chat messages, and
+:func:`build_knowledge_graph_from_extractions` runs steps 2-7 on replies obtained
+elsewhere (the Lab sends the prompts through the OpenAI Batch API at half price —
+see ``app/lab/ingest.py``). :func:`build_knowledge_graph` is unchanged: it
+extracts in realtime, then hands its parsed replies to the same shared code.
 """
 
 from __future__ import annotations
@@ -128,6 +135,29 @@ CRITICAL RULES:
             ("human", "Extract entities and relationships from this text:\n\n{text}"),
         ]
     )
+
+
+#: LangChain message type → OpenAI chat role (what ``ChatOpenAI`` itself sends).
+_CHAT_ROLES = {"system": "system", "human": "user", "ai": "assistant"}
+
+
+def render_extraction_request(
+    chunk: str, document_name: str, theme: str = DEFAULT_THEME
+) -> list[dict[str, str]]:
+    """The extraction prompt for one chunk, as OpenAI chat messages.
+
+    Rendered by the same template :func:`build_knowledge_graph` invokes (same
+    variables: ``text``, ``theme``, ``document_name``), so a caller that sends
+    these messages elsewhere — the Lab's Batch ingest — asks the model exactly
+    what the realtime pipeline asks it. Returns
+    ``[{"role": "system", ...}, {"role": "user", ...}]``.
+    """
+    messages = get_extraction_prompt(theme).format_messages(
+        text=chunk, theme=theme, document_name=document_name
+    )
+    return [
+        {"role": _CHAT_ROLES.get(m.type, m.type), "content": str(m.content)} for m in messages
+    ]
 
 
 def _parse_llm_json(text: str) -> dict:
@@ -443,6 +473,91 @@ async def build_knowledge_graph(
         *(process_chunk(i + 1, chunk) for i, chunk in enumerate(chunks))
     )
 
+    return await _build_from_parsed(chunks, results, document_name, settings, report)
+
+
+def parse_extraction(extraction: str | dict | None) -> dict:
+    """One chunk's extraction → ``{"entities": [...], "relationships": [...]}``.
+
+    ``str`` is a raw model reply and goes through :func:`_parse_llm_json`, the
+    parser the realtime pipeline uses; a ``dict`` (an already-parsed reply) gets
+    that parser's final normalisation; ``None`` is a failed extraction and
+    becomes the empty shape — exactly what ``_extract_with_timeout`` returns
+    when a call times out or errors, so the chunk is still stored.
+    """
+    if extraction is None:
+        return {"entities": [], "relationships": []}
+    if isinstance(extraction, str):
+        return _parse_llm_json(extraction)
+    if isinstance(extraction, dict):
+        # The same normalisation _parse_llm_json applies once it holds a dict.
+        return {
+            "entities": extraction.get("entities", []) or [],
+            "relationships": extraction.get("relationships", []) or [],
+        }
+    raise TypeError(
+        f"an extraction must be a model reply (str), a parsed dict or None, "
+        f"not {type(extraction).__name__}"
+    )
+
+
+async def build_knowledge_graph_from_extractions(
+    chunks: list[str],
+    extractions: list[str | dict | None],
+    filename: str,
+    theme: str = DEFAULT_THEME,
+    on_progress: ProgressCallback | None = None,
+) -> dict:
+    """Everything :func:`build_knowledge_graph` does AFTER extraction, from given replies.
+
+    ``extractions[i]`` is chunk ``i``'s extraction (see :func:`parse_extraction`)
+    — e.g. a reply the OpenAI Batch API returned for
+    :func:`render_extraction_request`. Parsing, de-duplication, embeddings,
+    entity resolution, the node/edge writes, the source-chunk store and the
+    whole-graph resolution pass then run through the very same code path as a
+    realtime ingest, with the same progress events and the same return dict.
+
+    ``theme`` only shaped the extraction prompt; it is accepted so both entry
+    points share a signature, and logged.
+    """
+    if len(extractions) != len(chunks):
+        raise ValueError(
+            f"{len(extractions)} extraction(s) for {len(chunks)} chunk(s): "
+            "one extraction per chunk, in chunk order"
+        )
+    settings = get_settings()
+
+    async def report(event: dict) -> None:
+        if on_progress is not None:
+            await on_progress(event)
+
+    parsed_results: list[dict] = []
+    for idx, extraction in enumerate(extractions, start=1):
+        parsed = parse_extraction(extraction)
+        logger.info(
+            "   Chunk %s: %s entities, %s relationships (pre-extracted, theme %s)",
+            idx,
+            len(parsed["entities"]),
+            len(parsed["relationships"]),
+            theme,
+        )
+        parsed_results.append(parsed)
+
+    return await _build_from_parsed(chunks, parsed_results, filename, settings, report)
+
+
+async def _build_from_parsed(
+    chunks: list[str],
+    results: list[dict],
+    document_name: str,
+    settings: Settings,
+    report: Callable[[dict], Awaitable[None]],
+) -> dict:
+    """The post-extraction pipeline shared by both entry points.
+
+    ``results[i]`` is chunk ``i``'s parsed extraction. Moved here verbatim from
+    :func:`build_knowledge_graph`, whose behaviour it therefore keeps exactly.
+    """
     all_entities: list[dict] = []
     all_relationships: list[dict] = []
     # ``asyncio.gather`` preserves argument order, so ``results[i]`` is chunk i —

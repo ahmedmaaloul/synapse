@@ -49,6 +49,16 @@ build
 packages/**/dist
 packages/**/build
 
+# Local-only files (.gitignore keeps them out of git; keep them out of every
+# image too): the private research harness and its runs, the user's Synapse Lab
+# runs and uploaded QA files (the API would serve them from a baked-in copy),
+# and benchmark reports that describe one run.
+backend/research
+backend/lab_runs
+backend/benchmarks/public/results_hotpotqa.md
+backend/benchmarks/procedural/results_procedural.md
+paper
+
 # Docs & screenshots — pure weight, nothing imports them.
 docs/*.png
 docs/*.jpg

@@ -48,3 +48,7 @@ backend/benchmarks/public/results_hotpotqa.md
 # A procedural-graphs benchmark run describes that run (model, date, spend),
 # not the repository; the harness regenerates it.
 backend/benchmarks/procedural/results_procedural.md
+
+# Synapse Lab runs (manifests, contexts, answers, leaderboards) and uploaded QA
+# files describe one user's data and spend, not the repository.
+backend/lab_runs/

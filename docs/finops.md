@@ -7,7 +7,10 @@ see [§5](#5-procedural-guidance-the-navigator-and-evolution).
 
 This page covers the honest cost model behind the defaults, the settings that
 bound each cost, and the 0.4.0 additions that let an MCP host (Claude, Cursor,
-…) consume **budgeted context instead of paying for a second LLM call**.
+…) consume **budgeted context instead of paying for a second LLM call**. The
+[Synapse Lab](./lab.md) measures the choice behind the per-question bill: which
+retrieval approach, at which context budget, reaches a correct answer for the
+fewest tokens and dollars ([§7](#7-the-lab-what-a-correct-answer-costs)).
 
 > Every number below is a *shape*, not a price. Provider prices change; measure
 > your own runs with the ledger in [`backend/benchmarks/public/cost.py`](../backend/benchmarks/public/cost.py)
@@ -42,7 +45,7 @@ summary per community after each of the 10 ingests, and then each question costs
 
 | Profile | Settings | What you pay |
 | --- | --- | --- |
-| **Zero** — demo, tests, UI work | `make demo`, `EMBEDDING_PROVIDER=fastembed`, no `LLM_PROVIDER` key | Nothing. Graph view, retrieval, `POST /api/retrieve`, the procedural-graph view, `raw` procedural guidance and the whole test suite work without a model. |
+| **Zero** — demo, tests, UI work | `make demo`, `EMBEDDING_PROVIDER=fastembed`, no `LLM_PROVIDER` key | Nothing. Graph view, retrieval, `POST /api/retrieve`, the procedural-graph view, `raw` procedural guidance, retrieve-only Lab runs and the whole test suite work without a model. |
 | **Lean cloud** — most teams | `LLM_PROVIDER=gemini` (free tier) or `groq`, `openai` with `gpt-4o-mini`; keep `MAX_CHUNKS=40` | Cents per document; fractions of a cent per question. |
 | **Private** — regulated data | `LLM_PROVIDER=ollama` (+ `EMBEDDING_PROVIDER=ollama` or `fastembed`) | Hardware only; no tokens leave the machine. |
 | **Premium answers, cheap ingest** | Any provider; ingest with a small model, then switch `LLM_PROVIDER`/model for chat | Extraction is the volume cost — spend the strong model only on answers. |
@@ -98,7 +101,10 @@ print("\n".join(ledger.lines()))   # tokens, calls, elapsed, estimated USD
 It reads the provider's reported usage when present and falls back to a
 character-based estimate that stays flagged as an estimate for the life of the
 ledger. Its price table is hand-recorded with a date — treat every USD figure as
-an estimate to check against the invoice.
+an estimate to check against the invoice. An entry verified on another day
+carries its own date (the gpt-5 family does), and `usd(usage, price, batch=True)`
+prices a request at the OpenAI Batch rate: the same row × `BATCH_PRICE_MULTIPLIER`
+(0.5, dated separately), never a second table.
 
 ---
 
@@ -194,14 +200,94 @@ bill. Synapse recognizes them by model id (`^(gpt-5|o[1-9])`) on the `openai`,
   usage instead: its output count already includes the reasoning, and the ledger from §4 prints
   that part separately ("of which N hidden reasoning, billed as output").
 
-The Navigator and evolution multiply this: every step of every rollout is one such call.
+The Navigator and evolution multiply this: every step of every rollout is one such call. The
+Lab's reader caps it per call ([§7](#reasoning-models-in-the-lab)).
 
 ---
 
-## 7. What is *not* done yet (roadmap)
+## 7. The Lab: what a correct answer costs
 
-- **Per-request USD accounting in the app.** Wire the ledger above into ingest and
-  chat so `usage` carries measured tokens (and an estimated cost) per provider.
+§1 to §6 bound what Synapse spends. The [Synapse Lab](./lab.md) measures the choice that sets the
+biggest recurring cost, what goes into the prompt of every question: it runs retrieval approaches
+("arms") side by side on your own questions, under the same token budgets, and ranks them by what
+a *correct* answer costs. Every arm retrieves with zero LLM calls, so an arm's query cost is its
+reader call and nothing else.
+
+### Leaderboard metrics
+
+| Metric | Definition | Why it is on a FinOps table |
+| --- | --- | --- |
+| **$ per 100 correct** (the ranking) | reader $ ÷ EM-correct answers × 100: cost-of-pass ([Erol et al.](https://arxiv.org/abs/2504.13359)) | tokens per call rewards a context that is small and wrong; this rewards a context that is small *and* answers |
+| tokens per correct | total tokens ÷ correct answers (and ÷ ΣF1) | the same, in tokens, independent of price changes |
+| amortized cost-of-pass(Q) | `(C_ingest / Q + C_query) ÷ accuracy`, Q = 100, 1,000, 10,000 queries per corpus | a graph arm also carries the extraction bill; this spreads it over the questions the corpus will serve. `C_ingest` is the measured spend (`--ingest-usd`) and is charged only to arms that need the extracted graph. Unknown ingest → no figure, never a silent $0. |
+| gain above N0 · gain above N2 | F1 − F1(closed-book); F1 − F1(random context at the same budget) | context tokens that do not beat no evidence, or do no better than random passages of the same size, buy tokens rather than retrieval |
+| graph premium at B | F1(graph arm, B) − F1(the better of BM25 and dense at B) | what the graph adds over plain passages at the same token budget |
+| Pareto frontiers | the non-dominated (arm, budget) points for F1 vs $ per query and F1 vs tokens per query | the cheapest arm for each level of quality, in both units, since dollars also weigh output and reasoning tokens |
+
+Differences are paired-bootstrap estimates (10,000 resamples, 95% CI) and are reported only when
+they clear a one-question effect floor (100 / n points) and the CI excludes 0. See
+[lab.md](./lab.md#the-leaderboard) for every column, including the free retrieve-only ones.
+
+### Spend controls
+
+- **Retrieve-only is the default and costs $0.** No model is called. It reports context tokens,
+  units by kind and whether the gold answer reached the context, next to the floors.
+- **A free estimate first.** Per phase and per arm × budget: a point estimate (real-tokenizer
+  prompts, assumed answer length) and an upper bound (output at the request's cap, 0% cache hits,
+  +10% on every prompt). `refuse` when the upper bound exceeds `--max-usd` or when a model has no
+  price on file.
+- **Three checks.** Before the run starts (the API answers 422 with the estimate); after the free
+  retrieve phase, re-priced on the contexts actually packed; and, in realtime, a spend guard that
+  reserves each request's worst case before sending it and stops *before* the cap.
+- **Price on measured contexts.** A capped context is assumed to fill its budget until measured.
+  Run the configuration retrieve-only first (free), then estimate the paid run with
+  `--measured-from RUN_ID`.
+- **Calibration.** `backend/lab_runs/calibration.json` replaces the assumed answer and reasoning
+  lengths and the ingest tokens per paragraph with measured ones; every run records its estimate
+  next to its actual spend.
+- **Identical requests are paid once.** Closed-book reads the same empty context at every budget,
+  and an arm whose context is the same at two budgets sends one request for both.
+
+### Batch
+
+The OpenAI Batch API bills input and output at **half** the realtime rate, for results within 24
+hours. The Lab uses it for both of its paid phases:
+
+- **Reader** (`--mode batch`): the run retrieves, passes the measured-context check, submits and
+  parks as `batch_submitted`; `lab resume RUN_ID` collects and scores. Requests that expire or fail
+  come back as errors and can be resent with `--retry-failed`; nothing is sent twice.
+- **Ingest** (`app/lab/ingest.py`, Python): one extraction request per document, with the same
+  prompt, parser and writes as the realtime pipeline. Its estimate uses tokens per paragraph
+  measured on HotpotQA with `gpt-4o-mini` (434 prompt, 464 completion) until a calibration file
+  says otherwise. **Community summaries are off by default**: they would be realtime calls on the
+  chat provider, neither batched nor half price, and no Lab arm needs them except `synapse_d`'s
+  global route.
+- **Queue limits.** OpenAI caps the tokens an organisation may have enqueued per model.
+  `SYNAPSE_LAB_BATCH_MAX_ENQUEUED_TOKENS` sizes parts under that cap and submits them in waves.
+
+### Reasoning models in the Lab
+
+The default reader, `gpt-5-nano`, is a reasoning model (§6). The Lab bounds its hidden reasoning
+per request: `max_completion_tokens` = 32 answer tokens + a **reasoning allowance** (512 by
+default, `--reasoning-allowance`). The upper bound charges every call at that cap, so it holds
+whatever the model does. The point estimate assumes 64 reasoning tokens per call at effort
+`minimal`, which is an assumption until a calibrated run replaces it.
+
+Lowering the allowance lowers the bound and the request's own cap together, so the bound stays
+true. But a call that spends its whole allowance thinking returns no visible answer
+(`finish_reason: "length"` in the run's rows) and scores 0. Check for those before tightening the
+allowance further. Tokens per correct counts reasoning tokens, since they are billed as output.
+
+---
+
+## 8. What is *not* done yet (roadmap)
+
+- **Per-request USD accounting in the app.** The Lab meters its own reader calls per request
+  (tokens and $ in each run's `responses.jsonl`). Chat and ingest still report characters; wire
+  the ledger above into them so `usage` carries measured tokens (and an estimated cost) per
+  provider.
+- **Cached-input pricing.** The price table has no cached-input rate, so the Lab prices cached
+  prompt tokens at the full input rate, and its upper bound assumes no cache hits at all.
 - **Incremental community summaries.** Community ids are content-derived and
   stable, but summaries are regenerated after every ingest; reusing the summary
   of an unchanged community would make the per-ingest cost proportional to what

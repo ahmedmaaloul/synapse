@@ -28,6 +28,9 @@ export default function Home() {
   // The latest Navigator run, so the Procedures view can show which steps of
   // the procedural graph the agent actually took.
   const [navigatorRun, setNavigatorRun] = useState<AgentResult | null>(null);
+  // The Lab can take the chat's height for its tables; the chat stays mounted
+  // (hidden, not unmounted) so a conversation survives the round trip.
+  const [labExpanded, setLabExpanded] = useState(false);
 
   const bumpThemes = useCallback(() => setThemesVersion((n) => n + 1), []);
 
@@ -160,10 +163,16 @@ export default function Home() {
             // races the wipe and re-seats the themes that were just deleted.
             onClearComplete={bumpThemes}
             navigatorRun={navigatorRun}
+            labExpanded={labExpanded}
+            onLabExpandedChange={setLabExpanded}
           />
         </div>
 
-        <div className="flex h-[40%] min-h-[350px] flex-col bg-[#09090b]">
+        <div
+          className={`flex h-[40%] min-h-[350px] flex-col bg-[#09090b] ${
+            labExpanded ? "hidden" : ""
+          }`}
+        >
           <ChatPanel
             ingestResult={ingestResult}
             onCitations={showCitations}

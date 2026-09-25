@@ -394,3 +394,410 @@ export interface AgentAskOptions {
 
 /** The chat panel either streams a GraphRAG answer or runs the navigator agent. */
 export type ChatMode = "chat" | "navigator";
+
+// ── Synapse Lab ───────────────────────────────────────
+// Compare retrieval approaches ("arms") side by side on your own questions,
+// FinOps-first: every arm is scored on quality AND on what it costs, next to
+// three evidence floors. Shapes below mirror the backend's /api/lab contract
+// (app/lab/{arms,estimate,metrics,runner}.py); every field a newer or older
+// router might omit is optional.
+
+/** Evidence floors (null controls) · passage baselines · graph arms. */
+export type LabFamily = "null" | "passage" | "graph";
+
+/** One row of `GET /api/lab/arms`. */
+export interface LabArm {
+  name: string;
+  // Typed loosely so an unknown family from a newer backend still renders.
+  family: LabFamily | string;
+  family_title?: string;
+  title: string;
+  description: string;
+  source: { citation: string; url: string };
+  /** LLM calls the arm makes while *retrieving* (0 for every arm today). */
+  retrieval_llm_calls: number;
+  /** True when the arm reads the LLM-extracted knowledge graph. */
+  needs_graph: boolean;
+  /** A null control (N0 closed-book, N1 vocabulary, N2 random context). */
+  is_null: boolean;
+  k_role?: string;
+}
+
+/**
+ * "retrieve" is the free tier: retrieval only, no reader, no LLM, $0.
+ * "realtime" reads with the official client, metered against the cap;
+ * "batch" hands the reads to the OpenAI Batch API (half price, up to 24h).
+ */
+export type LabMode = "retrieve" | "realtime" | "batch";
+
+/** A token budget; `null` is the arm's own default (uncapped) context. */
+export type LabBudget = number | null;
+
+/** `GET /api/lab/arms` — the catalog plus what a run can be configured with. */
+export interface LabArmCatalog {
+  arms: LabArm[];
+  /** False when this build has no Batch layer (batch runs are a 501). */
+  batchAvailable: boolean;
+}
+
+/** A reader model with its hand-recorded price (`GET /api/lab/models`). */
+export interface LabReaderModel {
+  id: string;
+  /** USD per 1M tokens, standard (realtime) rate. */
+  input: number;
+  output: number;
+  /** Hidden reasoning tokens are billed as output (gpt-5*, o-series). */
+  reasoning: boolean;
+  /** When this price was recorded by hand. */
+  checkedOn: string;
+}
+
+/** One selectable dataset, normalized from `GET /api/lab/datasets`. */
+export interface LabDatasetInfo {
+  /** The router's dataset id (`demo`, `hotpotqa`, `qa-file:<name>`); the UI key. */
+  key: string;
+  /** What the API takes as `dataset`: demo | qa-file | hotpotqa. */
+  dataset: string;
+  /** Uploaded QA files only: the stored file name, sent as `file`. */
+  file: string | null;
+  label: string;
+  description: string | null;
+  splits: string[];
+  /** Questions per split, when the backend counted them. */
+  splitCounts: Record<string, number>;
+  defaultSplit: string | null;
+  /** Questions available, when the backend says. */
+  n: number | null;
+  /** The sample size used when n is left empty (HotpotQA). */
+  defaultN: number | null;
+  available: boolean;
+  /** Why it is unavailable (e.g. the HotpotQA corpus is not ingested). */
+  reason: string | null;
+}
+
+/** Body of `POST /api/lab/estimate` and (with `seed`) `POST /api/lab/runs`. */
+export interface LabRunRequest {
+  dataset: string;
+  split?: string | null;
+  n?: number | null;
+  /** qa-file only: the uploaded file's name (see `POST /api/lab/qa-files`). */
+  file?: string | null;
+  arms: string[];
+  budgets: LabBudget[];
+  k?: number;
+  reader_model: string;
+  mode: LabMode;
+  max_usd: number | null;
+  seed?: number;
+  /** Price on the MEASURED contexts of an earlier retrieve-only run of this config. */
+  measured_run_id?: string | null;
+}
+
+/** One phase of the dry-run estimate (ingest, retrieval_llm, reader). */
+export interface LabPhaseEstimate {
+  phase: string;
+  model: string;
+  batch: boolean;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  reasoning_tokens?: number;
+  upper_prompt_tokens: number;
+  upper_completion_tokens: number;
+  point_usd: number | null;
+  upper_usd: number | null;
+  price_checked_on?: string | null;
+  notes?: string[];
+}
+
+/** One (arm × budget) cell of the estimate. */
+export interface LabCellEstimate {
+  arm: string;
+  budget: LabBudget;
+  calls: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  upper_prompt_tokens: number;
+  upper_completion_tokens: number;
+  point_usd: number | null;
+  upper_usd: number | null;
+  /** Mean context tokens assumed per question (measured when `measured`). */
+  context_tokens: number;
+  measured?: boolean;
+  note?: string;
+}
+
+/** `POST /api/lab/estimate` — free: no model, no Neo4j, no network. */
+export interface LabEstimate {
+  mode: LabMode | string;
+  reader_model: string;
+  batch: boolean;
+  n_questions: number;
+  phases: LabPhaseEstimate[];
+  cells: LabCellEstimate[];
+  total_point_usd: number | null;
+  total_upper_usd: number | null;
+  max_usd: number | null;
+  /** The upper bound exceeds the cap (or cannot be computed): no run. */
+  refuse: boolean;
+  refuse_reason: string | null;
+  tokenizer?: string;
+  reasoning_allowance?: number;
+  max_output_tokens?: number;
+  price_dates?: Record<string, string>;
+  assumptions?: string[];
+  pricing_url?: string;
+  batch_multiplier?: number;
+  /** Set when priced on the MEASURED contexts of an earlier retrieve-only run. */
+  measured_from?: {
+    run_id: string;
+    cells: { arm: string; budget: LabBudget }[];
+    unmeasured: { arm: string; budget: LabBudget }[];
+  } | null;
+}
+
+/** A paired-bootstrap difference, in F1 points. */
+export interface LabComparison {
+  diff: number;
+  ci_low: number;
+  ci_high: number;
+  n: number;
+  /** Effect floor: one question, 100/n points. */
+  floor: number;
+  /** Exceeds the floor AND the 95% CI excludes 0. */
+  reportable: boolean;
+  against: string;
+  verdict?: string;
+}
+
+/** One (arm, budget) row of a run's leaderboard. */
+export interface LabLeaderboardRow {
+  arm: string;
+  budget: LabBudget;
+  budget_label?: string;
+  family?: string | null;
+  title?: string;
+  is_null: boolean;
+  n: number;
+  // Retrieval-level — always present.
+  context_tokens_mean?: number | null;
+  context_tokens_max?: number | null;
+  truncated_rate?: number | null;
+  units_by_kind_mean?: Record<string, number>;
+  units_mean?: number | null;
+  /** % of contexts containing a gold answer string (QA files, demo). */
+  containment?: number | null;
+  recall_permissive?: number | null;
+  recall_strict?: number | null;
+  both_gold_permissive?: number | null;
+  both_gold_strict?: number | null;
+  retrieval_errors?: number;
+  // Read runs only (points 0–100, tokens, $).
+  answered?: number;
+  read_errors?: number;
+  em?: number | null;
+  f1?: number | null;
+  correct?: number;
+  total_tokens?: number;
+  tokens_per_query?: number | null;
+  tokens_per_correct?: number | null;
+  tokens_per_f1?: number | null;
+  usd?: number | null;
+  usd_per_query?: number | null;
+  usd_per_100_correct?: number | null;
+  amortized_cost_of_pass?: Record<string, number | null>;
+  comparisons?: {
+    gain_above_n0?: LabComparison;
+    gain_above_n2?: LabComparison;
+    graph_premium?: LabComparison;
+  };
+  /** Rank by $ per 100 correct; null when unpriced or nothing correct. */
+  rank?: number | null;
+}
+
+export interface LabFrontierPoint {
+  arm: string;
+  budget: LabBudget;
+  f1: number | null;
+  usd_per_query: number | null;
+  tokens_per_query: number | null;
+  is_null: boolean;
+}
+
+export interface LabFrontiers {
+  f1_vs_usd: LabFrontierPoint[];
+  f1_vs_tokens: LabFrontierPoint[];
+}
+
+/** `leaderboard.json` — `metrics.leaderboard` plus the run's labels. */
+export interface LabLeaderboard {
+  /** "read" (answers scored) or "retrieve" (retrieval-level columns only). */
+  mode: "read" | "retrieve" | string;
+  n_questions: number;
+  effect_floor_points: number;
+  bootstrap?: { iterations: number; seed: number; confidence: number };
+  rows: LabLeaderboardRow[];
+  floors?: { n0_f1: number | null; n2_f1_by_budget: Record<string, number | null> };
+  frontiers?: LabFrontiers;
+  run_id?: string;
+  dataset?: { name: string; split: string | null; n: number };
+  reader_model?: string | null;
+  ingest_usd?: number | null;
+  notes?: string[];
+}
+
+export type LabRunStatus =
+  | "created"
+  | "retrieving"
+  | "retrieved"
+  | "reading"
+  | "batch_submitted"
+  | "refused"
+  | "aborted"
+  | "done"
+  | "failed";
+
+/** One row of `GET /api/lab/runs`. */
+export interface LabRunSummary {
+  run_id: string;
+  status: LabRunStatus | string;
+  created_at: string | null;
+  updated_at: string | null;
+  mode: LabMode | string | null;
+  dataset: string | null;
+  n: number | null;
+  arms: string[];
+  budgets: LabBudget[];
+  reader_model: string | null;
+  /** A job is working on the run in this backend right now. */
+  active?: boolean;
+}
+
+export interface LabPhaseState {
+  status?: string;
+  reason?: string;
+  total?: number;
+  requests?: number;
+  pending?: number;
+  failed?: number;
+  skipped?: number;
+  started_at?: string;
+  finished_at?: string;
+}
+
+/** A run's manifest — only the fields the UI reads are typed. */
+export interface LabManifest {
+  run_id?: string;
+  status?: LabRunStatus | string;
+  created_at?: string;
+  updated_at?: string;
+  finished_at?: string;
+  /** The run's config; `dataset` is the runner's DatasetSpec (or a bare name). */
+  config?: Omit<Partial<LabRunRequest>, "dataset"> & {
+    dataset?:
+      | { name?: string; split?: string | null; n?: number | null; path?: string | null }
+      | string;
+  };
+  code?: {
+    git_sha?: string | null;
+    git_dirty?: boolean | null;
+    git_source?: string | null;
+    /** Why the commit is unknown (e.g. no git in the Docker image). */
+    git_unavailable?: string | null;
+    synapse_version?: string;
+  };
+  dataset?: { name?: string; split?: string | null; n?: number; sha256?: string; source?: string };
+  tokenizer?: string;
+  budget_cap_usd?: number | null;
+  phases?: Record<string, LabPhaseState>;
+  estimate?: { pre_run?: LabEstimate; read?: LabEstimate; read_pending?: LabPendingReads };
+  actual?: { reader?: { calls?: number; usd?: number } };
+  refuse_reason?: string;
+  abort_reason?: string;
+  error?: string;
+}
+
+/** `manifest.estimate.read_pending`: what resuming would still read. */
+export interface LabPendingReads {
+  requests?: number;
+  upper_usd?: number | null;
+  spent_usd?: number;
+}
+
+/** One scored (arm, budget, question) row — the drill-down under a leaderboard row. */
+export interface LabQuestionRow {
+  arm: string;
+  budget: LabBudget;
+  qid: string;
+  question: string;
+  gold: string[];
+  context_tokens?: number | null;
+  containment?: boolean | null;
+  recall_permissive?: number;
+  recall_strict?: number;
+  retrieval_error?: string | null;
+  answer?: string | null;
+  em?: number;
+  f1?: number;
+  usd?: number | null;
+  read_error?: string;
+}
+
+export interface LabRowsPage {
+  rows: LabQuestionRow[];
+  total: number;
+  offset: number;
+}
+
+/** `GET /api/lab/runs/{id}`. */
+export interface LabRunDetail {
+  run_id: string;
+  /** A job for this run is in flight in the backend process. */
+  active: boolean;
+  manifest: LabManifest;
+  /** Null until the run has been scored. */
+  leaderboard: LabLeaderboard | null;
+  frontiers: LabFrontiers | null;
+  rows: LabRowsPage | null;
+}
+
+/** `POST /api/lab/runs` and `POST /api/lab/runs/{id}/resume`. */
+export interface LabRunStarted {
+  run_id: string;
+  /** The SSE job to follow, when the router runs it in the background. */
+  job_id: string | null;
+  status: string | null;
+  estimate: LabEstimate | null;
+}
+
+// Server-Sent Events of a running Lab job (the runner's own events).
+export type LabEvent =
+  | { type: "phase"; phase: string; status: string; total?: number }
+  | {
+      type: "progress";
+      phase: string;
+      done: number;
+      total: number;
+      arm?: string;
+      spent_usd?: number;
+    }
+  // The measured re-estimate broke the cap before any read: nothing spent.
+  | { type: "refused"; reason: string; estimate?: LabEstimate }
+  | { type: "batch_submitted"; requests: number; batch?: unknown }
+  | { type: "batch_status"; status: unknown }
+  // The metered cap stopped the reads; followed by `done`.
+  | { type: "aborted"; reason: string }
+  // The job's ending: `data` summarizes the run's final state.
+  | { type: "done"; status?: string; data?: LabJobSummary }
+  | { type: "error"; error?: string; data?: string };
+
+/** The `done` event's summary of a finished Lab job. */
+export interface LabJobSummary {
+  run_id?: string;
+  /** done | batch_submitted | refused | aborted */
+  status?: string;
+  reason?: string | null;
+  spent_usd?: number | null;
+  cap_usd?: number | null;
+  estimate_upper_usd?: number | null;
+}
