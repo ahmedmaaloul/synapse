@@ -155,6 +155,30 @@ commercial licence is required for any commercial use; the `synapse-graphrag` cl
 
 ### Changed
 
+- **Cross-document entity resolution no longer slows down as the graph grows.** Each ingest used to
+  load every `:Entity` and its embedding and cluster the whole graph again, so per-document cost
+  grew with the corpus. At 5,458 entities a one-paragraph document took 16-35 s, about 80% of it
+  in Python building dicts from the full result set. The pass now asks the entity vector index for
+  each new entity's nearest neighbours above the merge threshold, all in one batched `UNWIND` query
+  (`entity_resolution.fetch_candidate_entities`). It then grows that candidate set breadth-first
+  until it stops changing, so the work is O(new entities × k) whatever the graph size. k counts
+  every node above the threshold, including this document's own entities and nodes already
+  fetched, so the query also reports each new entity whose k answers all cleared it. That entity
+  is asked again with twice the k, up to 5,000 (`MAX_CANDIDATE_K`, as many rows as the old scan
+  read). Only a crowded neighbourhood pays for this. The merge decision is unchanged, and the
+  clusters equal those of a full scan with no row cap. The proof is in the `entity_resolution`
+  module docstring. Property tests over 200 random graphs of up to ~1,800 entities check it
+  against an exact k-nearest-neighbour index, at k = 25 and at k = 1. A counting test shows the
+  rows read stay the same while the graph grows 16x. There are two documented exceptions: a
+  neighbourhood of more than 5,000 entities above the threshold, which logs a warning, and a
+  neighbour the approximate HNSW index misses. Either can only leave an entity out of a merge,
+  never cause a wrong one. New setting `ENTITY_RESOLUTION_CANDIDATE_K` (default 25; 0 restores the
+  full scan). Without a usable vector index the pass falls back to the full scan and warns once.
+  That scan, like the old one, stops at 5,000 entities (`MAX_GRAPH_CANDIDATES`), and it now logs a
+  warning when it does. On a larger graph the new path finds merges the scan misses.
+  `cosine_similarity` now returns 0.0 for a NaN or infinite vector. Such a vector could previously
+  slip past the cosine gate and let the name signal merge on its own. A new entity whose vector is
+  NaN therefore no longer merges on its name alone.
 - **`DELETE /api/graph` keeps procedural memory.** It now deletes every node *except* those with a
   procedural label (`graph_schema.PROCEDURAL_LABELS`), and answers "Knowledge graph cleared
   (procedural memory kept)". A strategy learned over paid evolution rounds should not vanish when a

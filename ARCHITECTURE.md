@@ -429,7 +429,7 @@ and only when its apply step is called.
 | **No MCP tool starts a Lab run** | Same reason as evolution: a paid run belongs behind a printed estimate and a human's consent. Agents get the read-only `synapse_lab_runs`. |
 | **Evolution is a budgeted job, not an MCP tool** | It can spend hundreds of LLM calls over minutes to hours. A model should not start that on its own initiative halfway through a task, so it lives behind the API and a CLI command that prints an upper-bound estimate and asks for consent. |
 | **In-memory job bus** | Single-replica-appropriate and dependency-free. The interface is deliberately small so swapping in Redis pub/sub for horizontal scaling is mechanical. |
-| **Best-effort degradation** | No vector index yet? Fall back to full-text. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
+| **Best-effort degradation** | No vector index yet? Fall back to full-text, and entity resolution scans the whole graph instead of the index's nearest neighbours. No APOC? Fall back to `:RELATED_TO`. Embeddings fail? Keyword-only retrieval. The system stays useful under partial failure. |
 | **Diffed graph polling** | The client only re-heats the force simulation when the node/link set actually changes, avoiding constant jitter. |
 
 ## Known coupling & limits

@@ -19,7 +19,9 @@ Turns raw text chunks into a knowledge graph:
      prose into 15-word descriptions; keeping the original passages is what lets
      retrieval return the graph *and* the evidence it was built from.
   7. Resolve the freshly written entities against those earlier documents left
-     in the graph, so duplicates cannot accumulate across ingests.
+     in the graph, so duplicates cannot accumulate across ingests. Only their
+     nearest neighbours in the entity vector index are compared, so the cost
+     does not grow with the graph.
 
 The extraction schema is theme-aware so a CV, a research paper, and a contract
 each get domain-appropriate entity/relationship types.
@@ -370,6 +372,185 @@ async def _store_source_chunks(
     return stored
 
 
+#: Set after the first fallback from the vector-index candidates to the
+#: whole-graph scan has been logged. A Neo4j without vector search then warns
+#: once per process, not on every ingest.
+_candidate_fallback_logged = False
+
+
+def _fresh_names(fresh_entities: list[dict]) -> set[str]:
+    return {str(e.get("name", "")) for e in fresh_entities if str(e.get("name", "")).strip()}
+
+
+def _overlay_fresh(
+    fresh_entities: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    graph_entities: list[dict],
+    graph_embeddings: dict[str, list[float]],
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """This document's entities and vectors laid over the ones read from Neo4j.
+
+    Both resolution paths use this function, so the inputs they cluster differ
+    only in *which* graph entities they include, never in how they are
+    combined. Fresh embeddings win, because the node's stored vector may be
+    missing when the Neo4j build lacks the vector procedures.
+    """
+    combined_embeddings = {**graph_embeddings, **embeddings_by_name}
+    combined_entities = {str(e.get("name", "")): e for e in graph_entities}
+    for entity in fresh_entities:
+        name = str(entity.get("name", ""))
+        if name.strip():
+            combined_entities[name] = entity
+    return list(combined_entities.values()), combined_embeddings
+
+
+async def _clusters_touching_fresh(
+    entities: list[dict],
+    embeddings: dict[str, list[float]],
+    fresh: set[str],
+    settings: Settings,
+) -> list[list[str]]:
+    # Clustering is CPU-bound (blocking + union-find over every candidate pair).
+    # Run inline, a large pass would freeze the event loop, and with it every
+    # other request the API is serving, so it runs in a worker thread.
+    clusters = await asyncio.to_thread(
+        entity_resolution.find_duplicate_clusters, entities, embeddings, settings=settings
+    )
+    return [c for c in clusters if fresh.intersection(c)]
+
+
+async def _full_scan_clusters(
+    fresh_entities: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    settings: Settings,
+) -> list[list[str]]:
+    """Clusters touching a fresh entity, found by reading the *whole* graph.
+
+    O(graph size) per document, and capped at
+    :data:`entity_resolution.MAX_GRAPH_CANDIDATES` entities. This is the fallback
+    when the vector index cannot answer. It is also the reference that
+    :func:`_candidate_clusters` must match: the proof is in the
+    ``entity_resolution`` module docstring, and the property test over random
+    graphs is in ``tests/test_entity_resolution.py``.
+
+    Like the candidate path, it clusters this document's entities even when
+    the read returns nothing. Fresh pairs were already collapsed in memory
+    under the same rule, so in the pipeline this finds nothing new.
+    """
+    graph_entities, graph_embeddings = await entity_resolution.fetch_graph_entities()
+    entities, embeddings = _overlay_fresh(
+        fresh_entities, embeddings_by_name, graph_entities, graph_embeddings
+    )
+    return await _clusters_touching_fresh(
+        entities, embeddings, _fresh_names(fresh_entities), settings
+    )
+
+
+async def _candidate_clusters(
+    fresh_entities: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    settings: Settings,
+    k: int,
+) -> list[list[str]]:
+    """The same clusters as :func:`_full_scan_clusters`, from the fresh entities' neighbourhoods.
+
+    Each round is one batched query
+    (:func:`entity_resolution.fetch_candidate_entities`). Round one probes the
+    vector index with every fresh entity's vector. It also fetches by exact
+    name the entities whose stored vector cannot stand in for the one used
+    here: aliases this document folded in memory, and fresh names it has no
+    vector for, which keep their stored one. After each round the candidates
+    are clustered, and every member of a cluster touching a fresh entity that
+    has not probed yet probes in the next round. The loop stops when a round
+    adds nobody. The ``entity_resolution`` module docstring proves that this
+    fixpoint holds exactly the full scan's clusters. A document that merges
+    nothing costs one query. A merge costs one more query, which normally
+    only confirms that the chain ends there. A probe with more than ``k``
+    neighbours above the threshold costs extra queries inside
+    :func:`entity_resolution.fetch_candidate_entities`, which widens that
+    probe's ``k`` until its whole neighbourhood is in.
+
+    Raises:
+        entity_resolution.CandidateSearchUnavailable: the index could not answer.
+    """
+    fresh = _fresh_names(fresh_entities)
+    overridden = {name for name in embeddings_by_name if name.strip()}
+    pinned = sorted((overridden - fresh) | (fresh - overridden))
+    frontier = sorted(fresh & overridden)
+
+    graph_entities: dict[str, dict] = {}
+    graph_embeddings: dict[str, list[float]] = {}
+    embeddings = dict(embeddings_by_name)  # the overlay on an empty graph
+    probed: set[str] = set()
+    clusters: list[list[str]] = []
+    # Ends: after round one nothing is pinned any more, and every later round
+    # probes names that have not probed yet, out of a finite graph. The number
+    # of rounds is at most the size of the cluster being merged, and merging
+    # that cluster costs more queries than that anyway.
+    while frontier or pinned:
+        new_entities, new_embeddings = await entity_resolution.fetch_candidate_entities(
+            frontier,
+            embeddings,
+            k,
+            settings=settings,
+            pinned_names=pinned,
+            known_names=fresh | set(graph_entities),
+        )
+        probed.update(frontier)
+        pinned = []
+        for entity in new_entities:
+            graph_entities.setdefault(entity["name"], entity)
+        for name, vector in new_embeddings.items():
+            graph_embeddings.setdefault(name, vector)
+
+        entities, embeddings = _overlay_fresh(
+            fresh_entities, embeddings_by_name, list(graph_entities.values()), graph_embeddings
+        )
+        clusters = await _clusters_touching_fresh(entities, embeddings, fresh, settings)
+        members = fresh.union(*clusters)
+        frontier = sorted(
+            name
+            for name in members - probed
+            if entity_resolution.is_probe_vector(embeddings.get(name))
+        )
+    return clusters
+
+
+def _log_candidate_fallback(error: Exception) -> None:
+    global _candidate_fallback_logged
+    if _candidate_fallback_logged:
+        logger.debug("Entity vector index unavailable for resolution (%s); full scan", error)
+        return
+    _candidate_fallback_logged = True
+    logger.warning(
+        "⚠️ Entity vector index unavailable for resolution (%s); comparing new entities "
+        "with the WHOLE graph instead, so each ingest now slows down as the graph grows. "
+        "Check that the '%s' index exists and matches EMBEDDING_DIM. "
+        "Logged once; later fallbacks log at DEBUG.",
+        error,
+        entity_resolution.ENTITY_VECTOR_INDEX,
+    )
+
+
+async def _graph_clusters(
+    fresh_entities: list[dict],
+    embeddings_by_name: dict[str, list[float]],
+    settings: Settings,
+) -> list[list[str]]:
+    """Clusters linking the fresh entities to earlier documents' entities.
+
+    Uses the vector-index candidates and falls back to the whole-graph scan
+    when the index cannot answer, or when ``entity_resolution_candidate_k`` is 0.
+    """
+    k = settings.entity_resolution_candidate_k
+    if k > 0:
+        try:
+            return await _candidate_clusters(fresh_entities, embeddings_by_name, settings, k)
+        except entity_resolution.CandidateSearchUnavailable as e:
+            _log_candidate_fallback(e)
+    return await _full_scan_clusters(fresh_entities, embeddings_by_name, settings)
+
+
 async def _resolve_against_graph(
     fresh_entities: list[dict],
     embeddings_by_name: dict[str, list[float]],
@@ -378,36 +559,17 @@ async def _resolve_against_graph(
     """Merge the just-written entities into equivalents from earlier documents.
 
     The in-memory pass only sees this document; this pass compares the fresh
-    entities against everything already in Neo4j, so "Postgres" from document 1
+    entities against what is already in Neo4j, so "Postgres" from document 1
     and "PostgreSQL" from document 2 still end up as one node. Only clusters that
     involve at least one fresh entity are merged — the rest of the graph is left
     exactly as previous ingests decided.
+
+    Candidates come from the entity vector index, so the cost is O(fresh × k)
+    rather than O(graph size). The result is the same as comparing against the
+    whole graph (see :func:`_graph_clusters` and the ``entity_resolution``
+    module docstring).
     """
-    graph_entities, graph_embeddings = await entity_resolution.fetch_graph_entities()
-    if not graph_entities:
-        return 0
-
-    fresh_names = {str(e.get("name", "")) for e in fresh_entities if str(e.get("name", "")).strip()}
-    # Fresh embeddings win: the node's stored vector may be missing when the
-    # Neo4j build lacks the vector procedures.
-    combined_embeddings = {**graph_embeddings, **embeddings_by_name}
-    combined_entities = {str(e.get("name", "")): e for e in graph_entities}
-    for entity in fresh_entities:
-        name = str(entity.get("name", ""))
-        if name.strip():
-            combined_entities[name] = entity
-
-    # Clustering is CPU-bound (blocking + union-find over every candidate pair)
-    # and scales with the whole graph, not just this document. Running it inline
-    # would freeze the event loop — and with it every other request the API is
-    # serving — so it is offloaded to a worker thread.
-    clusters = await asyncio.to_thread(
-        entity_resolution.find_duplicate_clusters,
-        list(combined_entities.values()),
-        combined_embeddings,
-        settings=settings,
-    )
-    clusters = [c for c in clusters if fresh_names.intersection(c)]
+    clusters = await _graph_clusters(fresh_entities, embeddings_by_name, settings)
     if not clusters:
         return 0
 

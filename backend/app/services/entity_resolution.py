@@ -37,21 +37,123 @@ Candidate pairs are generated with classic **blocking** (see :func:`_block_keys`
 rather than a full O(n²) sweep, which is what keeps a whole-graph consolidation
 pass affordable as the corpus grows.
 
+Cross-document resolution: nearest neighbours, not the whole graph
+------------------------------------------------------------------
+Each ingest also resolves its *fresh* entities against the ones earlier
+documents left in Neo4j. Reading the whole graph for that
+(:func:`fetch_graph_entities`) makes every document cost O(graph size), which is
+quadratic over a corpus: at 5,458 entities a one-paragraph document spent
+16-35 s there, about 80% of it building Python dicts from the full result set.
+:func:`fetch_candidate_entities` asks the entity vector index for the fresh
+entities' nearest neighbours instead, so a document costs O(fresh × k),
+whatever the size of the graph. The one thing that can raise it is a crowded
+neighbourhood, where more than k entities clear the merge threshold around one
+new entity (see 2 below). That probe then costs as many rows as there are
+entities in its neighbourhood, up to :data:`MAX_CANDIDATE_K`.
+
+**Why the result is the same as the full scan.** Call a pair the rule above
+accepts an *edge*. The reference is the *uncapped* full scan: it clusters every
+entity in the graph, with this document's vectors overriding the stored ones,
+and keeps the clusters that contain a fresh entity. (The scan the code
+actually ships with, :func:`fetch_graph_entities`, reads at most
+:data:`MAX_GRAPH_CANDIDATES` entities. Below that size the two are the same,
+and above it the capped scan is the one that misses merges; see the end of this
+section.) The candidate path returns the same clusters because:
+
+  1. *Edges are pairwise.* Whether (a, b) is an edge depends on a and b alone
+     (types, block keys, names, vectors). So clustering any subset S of the
+     graph finds exactly the full graph's edges inside S, and a cluster of S
+     never reaches outside the full cluster that contains it.
+  2. *An edge needs cosine >= threshold.* A cosine vector index scores a
+     neighbour (1 + cos) / 2 (see :func:`vector_index_score_floor`). An exact
+     top-k query with the matching score floor therefore returns every entity
+     that could form an edge with the probe, except when its k answers all
+     clear the floor, since more may lie beyond them. k counts *every* node
+     above the floor, including this document's own entities and entities an
+     earlier round already fetched. The query drops those only after ranking,
+     so they take up places too. The query reports each probe whose answers
+     all cleared the floor, counted before that filter, and
+     :func:`fetch_candidate_entities` asks those probes again with twice the
+     k until an answer ends below the floor. So an exact index returns every
+     such entity, however crowded the neighbourhood, up to
+     :data:`MAX_CANDIDATE_K` (see (a) below). This holds for the vectors the
+     index stores; 4 covers the rest.
+  3. *The candidates are grown breadth-first until nothing changes.* The fresh
+     entities probe the index. Every entity that joins a cluster touching a
+     fresh entity then probes it too, until a round adds nobody. Take any x in
+     a full-scan cluster of a fresh f, and a path of edges f = p0, ..., pm = x.
+     Suppose some p_i were never fetched, and take the first one. Then
+     p_0 ... p_(i-1) were fetched, so by 1 the path edges between them were
+     found, so p_(i-1) sits in a cluster touching f. At the fixpoint it has
+     therefore probed, with a usable vector (it has an edge). By 2 its probe
+     returned p_i, or by 4 p_i was fetched anyway. That is a contradiction.
+     Every full-scan cluster that touches a fresh entity is therefore found
+     whole, and by 1 it is found with nothing extra. The outputs are identical.
+  4. *No entity whose vector here differs from the index's copy is left to
+     the index.* The fresh entities are always candidates. An alias this
+     document folded in memory takes this document's vector in the full scan,
+     but the index may hold an older node of that name under another vector,
+     so aliases are fetched by exact name. So is a fresh name this document
+     has no vector for, because it keeps its stored vector, as it did in the
+     full scan.
+
+Existing entities that match each other were normally merged by the ingest
+that wrote the second of them. So in practice step 3 stops after one extra
+query (and only on a document that merged something). Step 3 is what keeps the
+result exact when that merge did not happen, for example a merge held back by
+an unsafe relationship type (see :func:`_plain_merge`), resolution switched off
+at the time, or a threshold lowered since.
+
+**Where the two can still differ.** Step 2 needs the index to return *every*
+neighbour above the floor. It may not, in two cases:
+
+  (a) More than :data:`MAX_CANDIDATE_K` (5,000, or k if that is larger)
+      nodes clear cosine >= 0.93 against one probe. The doubling stops there,
+      so one probe never reads more rows than the whole-graph scan does, and
+      :func:`fetch_candidate_entities` logs a warning that names the probe.
+      The crowd need not be duplicates: model versions with near-identical
+      descriptions can fill a neighbourhood without passing the name gate.
+      Between k and the ceiling a crowded probe is exact but costs more, one
+      extra query per doubling, each returning only the new rows.
+  (b) The HNSW index's recall is approximate (Neo4j's docs say so for
+      ``db.index.vector.queryNodes``). HNSW misses sit mostly deep in the
+      ranking, and a duplicate at cosine >= 0.93 sits at the top of it.
+
+Either case can only leave an entity *out* of a cluster. By 1, every cluster
+the candidate path finds lies inside a full-scan cluster, and the merge
+decision is still the Python rule above, run on fetched vectors. So the
+candidate path never merges two entities that the full scan would keep apart.
+When only part of a cluster is found, though, the surviving name can differ,
+since it is chosen among fewer members, and the missed members stay behind
+as duplicates.
+
+The shipped full scan errs in the opposite direction. It reads at most
+:data:`MAX_GRAPH_CANDIDATES` entities, so on a larger graph it never compares
+the rest (the 5,458-entity graph above was already past it), and it logs a
+warning each time it stops short. That scan is what the fallback and k = 0
+run. The candidate path has no such cap, so on a graph that size it finds
+merges the capped scan misses.
+
 Public API (other services code against these exact signatures):
     find_duplicate_clusters(entities, embeddings, settings=None) -> list[list[str]]
     choose_canonical(names) -> str
     await merge_entity_clusters(clusters) -> {"clusters": int, "merged": int}
+    await fetch_graph_entities(limit) -> (entities, embeddings)
+    await fetch_candidate_entities(fresh_names, fresh_embeddings, k, ...) -> (entities, embeddings)
 """
 
 from __future__ import annotations
 
 import logging
+import math
 import re
 import unicodedata
+from collections.abc import Iterable, Mapping
 from difflib import SequenceMatcher
 
 from app import neo4j_driver
 from app.config import Settings, get_settings
+from app.services.graph_schema import ENTITY_VECTOR_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +176,20 @@ PREFIX_MIN_LENGTH_RATIO = 0.6
 #: Upper bound on entities pulled from Neo4j for a whole-graph consolidation
 #: pass, so ingestion time stays predictable on a large corpus.
 MAX_GRAPH_CANDIDATES = 5000
+
+#: Cosine slack below ``entity_resolution_threshold`` when it becomes a vector
+#: index score floor. Lucene scores in float32, so a pair sitting exactly on the
+#: threshold in Python's float64 can score a hair under it in the index. The
+#: slack only widens the candidate set: the merge decision is still
+#: :func:`find_duplicate_clusters` on the fetched vectors.
+CANDIDATE_COSINE_MARGIN = 1e-4
+
+#: How far :func:`fetch_candidate_entities` doubles k for a probe whose answers
+#: all clear the score floor. The configured k raises it if k is larger. It
+#: equals :data:`MAX_GRAPH_CANDIDATES`, so one crowded probe never reads more
+#: rows than the whole-graph scan. Past it a warning is logged, and a duplicate
+#: ranked beyond it can be missed (residual (a) in the module docstring).
+MAX_CANDIDATE_K = MAX_GRAPH_CANDIDATES
 
 #: Relationship types are interpolated into Cypher for the no-APOC fallback
 #: (Neo4j < 5.26 cannot parameterize a type), so they are strictly validated.
@@ -152,7 +268,13 @@ def name_similarity(a: str, b: str) -> float:
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Cosine similarity of two equal-length vectors (0.0 if either is degenerate)."""
+    """Cosine similarity of two equal-length vectors (0.0 if either is degenerate).
+
+    Degenerate covers a NaN or infinite component too. A NaN result would slip
+    through the ``cosine < threshold`` gate in :func:`find_duplicate_clusters`
+    (every comparison with NaN is false), so a broken vector would let the name
+    signal merge on its own.
+    """
     if not a or not b or len(a) != len(b):
         return 0.0
     dot = norm_a = norm_b = 0.0
@@ -162,7 +284,8 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
         norm_b += y * y
     if norm_a <= 0.0 or norm_b <= 0.0:
         return 0.0
-    return dot / ((norm_a**0.5) * (norm_b**0.5))
+    similarity = dot / ((norm_a**0.5) * (norm_b**0.5))
+    return similarity if math.isfinite(similarity) else 0.0
 
 
 def _entity_type(entity: dict) -> str:
@@ -523,21 +646,12 @@ LIMIT $limit
 """
 
 
-async def fetch_graph_entities(
-    limit: int = MAX_GRAPH_CANDIDATES,
-) -> tuple[list[dict], dict[str, list[float]]]:
-    """Load entities already in Neo4j as ``(entities, embeddings_by_name)``.
+def _entities_from_rows(rows: list[dict]) -> tuple[list[dict], dict[str, list[float]]]:
+    """``(name, type, embedding)`` rows -> ``(entities, embeddings_by_name)``.
 
-    Nodes stored without an embedding are still returned (their type is needed as
-    a merge barrier) but are simply absent from the embeddings map, which makes
-    them ineligible for merging.
+    Shared by both fetches, so the full scan and the candidate path hand
+    :func:`find_duplicate_clusters` data in exactly the same shape.
     """
-    try:
-        rows = await neo4j_driver.execute_query(_FETCH_GRAPH_ENTITIES, {"limit": limit}) or []
-    except Exception as e:  # noqa: BLE001 - resolution is best-effort
-        logger.warning("⚠️ Could not load existing entities for resolution: %s", e)
-        return [], {}
-
     entities: list[dict] = []
     embeddings: dict[str, list[float]] = {}
     for row in rows:
@@ -549,3 +663,202 @@ async def fetch_graph_entities(
         if isinstance(vector, list) and vector:
             embeddings[name] = [float(v) for v in vector]
     return entities, embeddings
+
+
+async def fetch_graph_entities(
+    limit: int = MAX_GRAPH_CANDIDATES,
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """Load entities already in Neo4j as ``(entities, embeddings_by_name)``.
+
+    Nodes stored without an embedding are still returned (their type is needed as
+    a merge barrier) but are simply absent from the embeddings map, which makes
+    them ineligible for merging.
+
+    This is the whole-graph read, O(graph size). Cross-document resolution
+    uses :func:`fetch_candidate_entities` and falls back to this only when the
+    vector index cannot answer.
+
+    At most ``limit`` entities come back. One more row is requested, so a
+    graph larger than ``limit`` is detected and logged at WARNING: the rest of
+    it is not compared, and duplicates there are missed.
+    """
+    try:
+        rows = await neo4j_driver.execute_query(_FETCH_GRAPH_ENTITIES, {"limit": limit + 1}) or []
+    except Exception as e:  # noqa: BLE001 - resolution is best-effort
+        logger.warning("⚠️ Could not load existing entities for resolution: %s", e)
+        return [], {}
+    if len(rows) > limit:
+        logger.warning(
+            "⚠️ Entity resolution read only the first %s entities of a larger graph; "
+            "duplicates among the rest are not compared. The vector-index path "
+            "(ENTITY_RESOLUTION_CANDIDATE_K > 0) has no such cap.",
+            limit,
+        )
+        rows = rows[:limit]
+    return _entities_from_rows(rows)
+
+
+# ── Cross-document candidates (vector index) ─────────────
+class CandidateSearchUnavailable(RuntimeError):
+    """The entity vector index could not answer. Use :func:`fetch_graph_entities`."""
+
+
+def vector_index_score_floor(threshold: float, margin: float = CANDIDATE_COSINE_MARGIN) -> float:
+    """The ``db.index.vector.queryNodes`` score that matches ``cosine >= threshold``.
+
+    A cosine vector index does not return the raw cosine. Neo4j's Cypher
+    manual ("Vector indexes", section "Cosine and Euclidean similarity
+    functions") defines the cosine score as ``(1 + cos(v, u)) / 2``, which maps
+    [-1, 1] onto [0, 1]. This is Lucene's ``VectorSimilarityFunction.COSINE``,
+    and :data:`graph_schema.ENTITY_VECTOR_INDEX` is created with
+    ``vector.similarity_function: 'cosine'``. So ``cos >= t`` holds exactly when
+    ``score >= (1 + t) / 2``: the default 0.93 becomes 0.965, not 0.93. Using
+    the raw threshold as the floor would admit neighbours down to cosine 0.86.
+    Checked on Neo4j 5.26 with ``vector.similarity.cosine``, which the manual
+    says uses the index's function: orthogonal vectors score 0.5, opposite
+    vectors 0.0, and cosine 0.93 scores 0.9650000333786011, a float32 value.
+
+    ``margin`` lowers the cosine side slightly (see
+    :data:`CANDIDATE_COSINE_MARGIN`), so float32 rounding in the index can only
+    add a candidate, never drop one.
+    """
+    return min(1.0, max(0.0, (1.0 + threshold - margin) / 2.0))
+
+
+def is_probe_vector(vector: object) -> bool:
+    """True for a vector the index can be probed with: non-empty, finite, not all zero.
+
+    A vector that fails this has cosine 0.0 with everything (see
+    :func:`cosine_similarity`), so it can never form an edge. Skipping it loses
+    nothing, and Neo4j would reject it anyway.
+    """
+    if not isinstance(vector, list | tuple) or not vector:
+        return False
+    try:
+        values = [float(v) for v in vector]
+    except (TypeError, ValueError):
+        return False
+    return all(math.isfinite(v) for v in values) and any(v != 0.0 for v in values)
+
+
+# One round trip, whatever the number of probes: every probe's top-k comes back
+# in the same query, deduplicated. `k` is the caller's k + 1 because a probe's
+# own node is in the index and ranks first (see fetch_candidate_entities).
+# `saturated` lists the probes (by index into $probes) whose k answers all
+# cleared $min_score, so more may lie beyond them. They are counted *before*
+# `$known` is applied, because known nodes take up places in the top k too.
+# `$known` then stops the query from sending back nodes the caller already
+# holds, the probes' own nodes included. `$names` fetches by exact name the
+# entities whose stored vector cannot be trusted (point 4 of the module
+# docstring). The answer is always exactly one row, even when both lists are
+# empty or every hit is known, because an aggregation with no grouping key over
+# zero rows still yields one row. Checked on Neo4j 5.26: with no probes and no
+# names it returns [{saturated: [], entities: []}].
+_FETCH_CANDIDATE_ENTITIES = """
+UNWIND range(0, size($probes) - 1) AS i
+CALL db.index.vector.queryNodes($index, $k, $probes[i]) YIELD node, score
+    WHERE score >= $min_score
+WITH i, collect(node) AS hits
+UNWIND hits AS node
+WITH collect(DISTINCT CASE WHEN size(hits) >= $k THEN i END) AS saturated,
+     collect(DISTINCT CASE WHEN NOT node.name IN $known THEN node END) AS near
+OPTIONAL MATCH (named:Entity) WHERE named.name IN $names
+WITH saturated, near, collect(DISTINCT named) AS pinned
+RETURN saturated,
+       [n IN near + [p IN pinned WHERE NOT p IN near] | n {.name, .type, .embedding}] AS entities
+"""
+
+
+async def fetch_candidate_entities(
+    fresh_names: Iterable[str],
+    fresh_embeddings: Mapping[str, list[float]],
+    k: int,
+    *,
+    settings: Settings | None = None,
+    pinned_names: Iterable[str] = (),
+    known_names: Iterable[str] = (),
+) -> tuple[list[dict], dict[str, list[float]]]:
+    """The entities that could merge with ``fresh_names``, as ``(entities, embeddings_by_name)``.
+
+    This is the same shape as :func:`fetch_graph_entities`, but only for the
+    fresh entities' neighbourhoods. For each name in ``fresh_names`` that has a
+    usable vector in ``fresh_embeddings`` (see :func:`is_probe_vector`), the
+    entity vector index returns its ``k`` nearest neighbours that score at
+    least :func:`vector_index_score_floor` of ``entity_resolution_threshold``.
+    All probes go in one batched ``UNWIND`` query, so it is one round trip and
+    at most ``len(fresh_names) × k`` rows, however large the graph is, unless
+    a neighbourhood is crowded (see below).
+
+    ``pinned_names`` are fetched by exact name as well (point 4 of the module
+    docstring). ``known_names`` are left out of the vector results, because the
+    caller already holds them. The index is asked for ``k + 1`` neighbours so
+    that a probe's own node, which always ranks first, does not use up one of
+    the ``k`` places.
+
+    A probe whose answers all clear the floor may have more neighbours above it
+    than ``k`` let through, and known nodes count towards that. Those probes
+    are asked again together, in one query, with twice the ``k`` and the rows
+    already fetched marked known. This repeats until every answer ends below
+    the floor, so an exact index yields the whole neighbourhood. It stops at
+    :data:`MAX_CANDIDATE_K` (or ``k`` if larger) and logs a warning, because a
+    duplicate ranked past that point can be missed.
+
+    Raises:
+        CandidateSearchUnavailable: a query failed. Typical causes are no
+            vector index, a Neo4j build without the vector procedures, or
+            vectors whose dimension does not match the index. Callers fall
+            back to :func:`fetch_graph_entities`.
+    """
+    settings = settings or get_settings()
+    probe_names = [
+        name
+        for name in dict.fromkeys(str(n) for n in fresh_names)
+        if is_probe_vector(fresh_embeddings.get(name))
+    ]
+    names = sorted({str(n) for n in pinned_names if str(n).strip()})
+    if not probe_names and not names:
+        return [], {}
+
+    k = max(1, int(k))
+    ceiling = max(k, MAX_CANDIDATE_K)
+    min_score = vector_index_score_floor(settings.entity_resolution_threshold)
+    known = {str(n) for n in known_names}
+    entities: list[dict] = []
+    embeddings: dict[str, list[float]] = {}
+    while True:
+        params = {
+            "index": ENTITY_VECTOR_INDEX,
+            "k": k + 1,
+            "probes": [[float(v) for v in fresh_embeddings[name]] for name in probe_names],
+            "min_score": min_score,
+            "known": sorted(known),
+            "names": names,
+        }
+        try:
+            rows = await neo4j_driver.execute_query(_FETCH_CANDIDATE_ENTITIES, params) or []
+        except Exception as e:  # noqa: BLE001 - the caller owns the fallback
+            raise CandidateSearchUnavailable(str(e)) from e
+        row = rows[0] if rows else {}
+        found, vectors = _entities_from_rows(row.get("entities") or [])
+        entities += found
+        embeddings.update(vectors)
+        known.update(entity["name"] for entity in found)
+        saturated = [
+            probe_names[i]
+            for i in sorted({int(index) for index in row.get("saturated") or []})
+            if 0 <= i < len(probe_names)
+        ]
+        if not saturated:
+            return entities, embeddings
+        if k >= ceiling:
+            logger.warning(
+                "⚠️ Entity resolution: more than %s entities clear the merge threshold "
+                "around %s, so a duplicate ranked past them can be missed. Raise "
+                "ENTITY_RESOLUTION_CANDIDATE_K to look further.",
+                k,
+                saturated[:5],
+            )
+            return entities, embeddings
+        k = min(2 * k, ceiling)
+        logger.debug("Crowded neighbourhoods around %s; asking again with k=%s", saturated, k)
+        probe_names, names = saturated, []

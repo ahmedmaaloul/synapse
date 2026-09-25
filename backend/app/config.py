@@ -167,6 +167,15 @@ class Settings(BaseSettings):
     entity_resolution_threshold: float = 0.93
     # Fuzzy name-similarity floor (0-1) required alongside the vector signal.
     entity_resolution_name_threshold: float = 0.87
+    # Nearest neighbours the entity vector index returns per new entity when
+    # resolving against earlier documents. Only these are compared, not the
+    # whole graph, so an ingest costs the same whatever the graph size. k counts
+    # every node above the merge threshold, this document's own entities
+    # included. When all k clear it, that entity is asked again with twice k,
+    # up to entity_resolution.MAX_CANDIDATE_K (5,000), so merges still match a
+    # full scan (see entity_resolution's module docstring). 0 turns the index
+    # lookup off and scans the graph as before, which stops at 5,000 entities.
+    entity_resolution_candidate_k: int = 25
 
     # ── GraphRAG brain: communities ──────────────────────
     # Louvain clustering (networkx) groups the graph into topical communities,
