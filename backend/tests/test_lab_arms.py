@@ -420,8 +420,13 @@ class TestPPR:
 
     def test_matches_pagerank_on_the_full_graph(self):
         ppr = arms.build_ppr_graph(RELATIONS, MENTIONS, CHUNKS)
-        full = nx.pagerank(ppr.graph, alpha=0.5, personalization={"e:A": 1.0, "e:C": 0.5},
-                           weight="weight")
+        # The pure-Python reference, not nx.pagerank: networkx 3's pagerank needs SciPy,
+        # which is not in requirements.txt (CI and the Docker image run without it).
+        from networkx.algorithms.link_analysis import pagerank_alg
+
+        full = pagerank_alg._pagerank_python(
+            ppr.graph, alpha=0.5, personalization={"e:A": 1.0, "e:C": 0.5}, weight="weight"
+        )
         expected = sorted(((n[2:], m) for n, m in full.items() if n.startswith("c:") and m > 1e-6),
                           key=lambda x: (-x[1], x[0]))
         ranked = arms.ppr_rank_chunks(ppr, ["A", "C"], k=5)
