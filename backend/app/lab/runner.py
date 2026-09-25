@@ -822,15 +822,23 @@ class BatchBackend(Protocol):
 
     ``submit`` receives the request lines exactly as written to requests.jsonl
     (OpenAI Batch input format) and returns a status dict. ``poll`` returns at
-    least ``{"done": bool, "status": str}``. ``collect`` returns one record per
-    finished request: either an OpenAI Batch OUTPUT line
-    (``{"custom_id", "response": {"status_code", "body"}, "error"}``) or
-    ``{"custom_id", **ReaderResult.to_dict()}``.
+    least ``{"done": bool, "status": str}``, and ``"rejected": [...]`` when a
+    batch was refused at validation (nothing ran, $0): those requests have no
+    result, are not errors, and must be sent again (see :func:`collect_batch`).
+    ``collect`` returns one record per finished request: either an OpenAI Batch
+    OUTPUT line (``{"custom_id", "response": {"status_code", "body"}, "error"}``)
+    or ``{"custom_id", **ReaderResult.to_dict()}``.
 
     Optionally, ``collected(run_dir)`` returns every result collected so far,
     earlier calls included, from local files only. ``collect`` hands each result
     over ONCE; when that hand-over is interrupted (a crash, a failed download of
     a later part), ``collected`` is how the runner recovers what was billed.
+    Optionally too, ``rejected_requests(run_dir)`` returns the request lines a
+    rejected batch still owes (local files only): what is re-planned after a
+    rejection besides the requests with no response line at all. A backend
+    without them, over a run dir holding ``app.lab.batch``'s ``batches.json``,
+    is read through that module's local state instead, so no wrapper can hide
+    billed answers or owed requests (see :func:`_backend_local_read`).
     """
 
     async def submit(self, run_dir: Path, requests: list[dict], *, run_id: str) -> dict: ...
@@ -873,6 +881,33 @@ class ModuleBatchBackend:
     async def collected(self, run_dir: Path) -> list[dict]:
         """Every result of every collected part (local files only, no network)."""
         return list(self.module.latest_records(run_dir).values())
+
+    async def rejected_requests(self, run_dir: Path) -> list[dict]:
+        """The request lines rejected parts still owe (local files only, no network)."""
+        return list(self.module.rejected_requests(run_dir))
+
+
+async def _backend_local_read(backend: Any, name: str, run_dir: Path) -> list[dict]:
+    """``backend.<name>(run_dir)`` — or, when the backend lacks it, ``app.lab.batch``'s own
+    local reading of this run dir's ``batches.json`` (``collected`` → ``latest_records``,
+    ``rejected_requests`` → ``rejected_requests``). Local files only; ``[]`` otherwise.
+
+    ``app.lab.batch.submit`` never re-sends a request whose collected result
+    succeeded, so the runner must always be able to see those results: a wrapper
+    that forwards only submit / poll / collect would otherwise strand billed
+    answers for good (the 2026-09-25 review of the iso-token harness).
+    """
+    method = getattr(backend, name, None)
+    if callable(method):
+        result = method(run_dir)
+        return list((await result if asyncio.iscoroutine(result) else result) or [])
+    from app.lab import batch as module
+
+    if not module.state_path(run_dir).exists():
+        return []
+    if name == "collected":
+        return list(module.latest_records(run_dir).values())
+    return list(module.rejected_requests(run_dir))
 
 
 def result_from_record(record: dict) -> reader.ReaderResult:
@@ -1240,9 +1275,29 @@ async def _read_phase(
         # cell whose retrieval failed has none: it is not read).
         needs = cell_to_id.get((ctx["arm"], label, ctx["qid"]))
         unique[key] = unique.get(key, 0) + int(needs == owner)
+    batch = run.mode == "batch"
+    backend = (batch_backend or ModuleBatchBackend()) if batch else None
+    if backend is not None:
+        # Record every answer the Batch state already holds (billed) before planning:
+        # a collect interrupted after its hand-over must never leave one out (and
+        # the Batch layer would refuse to send it again).
+        _record_results(run, paths, await _backend_local_read(backend, "collected", paths.root))
     latest = _latest_responses(paths)
-    done_ids = {cid for cid, r in latest.items() if not r.get("error") and not r.get("skipped")}
-    pending = [line for line in lines if line["custom_id"] not in done_ids]
+    if manifest["phases"]["read"].get("only_unanswered"):
+        # Re-planning after a batch was rejected at validation: send what never ran —
+        # no response line at all, or owed by a rejected part (a refused --retry-failed
+        # batch held requests with an old error line) — and nothing else that came
+        # back with an error (that is --retry-failed).
+        owed = set()
+        if backend is not None:
+            owed = {str(x.get("custom_id")) for x in
+                    await _backend_local_read(backend, "rejected_requests", paths.root)}
+        pending = [line for line in lines if line["custom_id"] not in latest
+                   or (line["custom_id"] in owed and not _answered(latest[line["custom_id"]]))]
+    else:
+        done_ids = {cid for cid, r in latest.items()
+                    if not r.get("error") and not r.get("skipped")}
+        pending = [line for line in lines if line["custom_id"] not in done_ids]
     spent = _spent(paths)
     remaining_cap = None if run.max_usd is None else max(0.0, run.max_usd - spent)
     estimate = estimate_run(
@@ -1257,7 +1312,6 @@ async def _read_phase(
         unique_requests=unique,
         reasoning_allowance=run.reasoning_allowance,
     )
-    batch = run.mode == "batch"
     pending_upper = 0.0
     unpriced = False
     for line in pending:
@@ -1288,17 +1342,36 @@ async def _read_phase(
         return "refused"
 
     if not pending:
-        _phase(paths, manifest, "read", status="done", requests=len(lines))
+        _read_ended(manifest)
+        failed = sum(1 for line in lines
+                     if (latest.get(line["custom_id"]) or {}).get("error")
+                     or (latest.get(line["custom_id"]) or {}).get("skipped"))
+        _phase(paths, manifest, "read", status="done_with_errors" if failed else "done",
+               requests=len(lines), **({"failed": failed} if failed else {}))
         return "done"
 
-    if batch:
-        backend = batch_backend or ModuleBatchBackend()
+    if backend is not None:
         info = await backend.submit(paths.root, pending, run_id=str(run.run_id))
+        read = manifest["phases"]["read"]
+        resent = bool(read.pop("only_unanswered", None))
+        read.pop("rejected", None)  # outstanding no more: history stays in "rejections"
+        changes: dict[str, Any] = {}
+        if resent:
+            parts = list((info or {}).get("parts") or [])
+            message = (
+                f"{read.get('message') or 'batch rejected at validation'} — re-submitted "
+                f"{len(pending):,} request(s) that never ran in {len(parts)} part(s)"
+                + (", sent one at a time as the gate allows"
+                   if (info or {}).get("queued") else "")
+            )
+            changes = {"message": message, "resubmitted_at": _now()}
         _phase(paths, manifest, "read", status="batch_submitted", submitted_at=_now(),
-               requests=len(lines), pending=len(pending), batch=info)
-        _save(paths, manifest, status="batch_submitted")
+               requests=len(lines), pending=len(pending), batch=info, **changes)
+        _save(paths, manifest, status="batch_submitted",
+              **({"message": changes["message"]} if resent else {}))
         await _emit(on_event, {"type": "batch_submitted", "requests": len(pending),
-                               "batch": info})
+                               "batch": info,
+                               **({"message": changes["message"]} if resent else {})})
         return "batch_submitted"
 
     _phase(paths, manifest, "read", status="running", started_at=_now(),
@@ -1346,9 +1419,55 @@ async def _read_phase(
         _save(paths, manifest, abort_reason=reason)
         await _emit(on_event, {"type": "aborted", "reason": reason})
         return "aborted"
+    _read_ended(manifest)
     _phase(paths, manifest, "read", status="done_with_errors" if failed else "done",
            finished_at=_now(), failed=failed)
     return "done"
+
+
+def _answered(record: dict | None) -> bool:
+    return record is not None and not record.get("error") and not record.get("skipped")
+
+
+def _read_ended(manifest: dict[str, Any]) -> None:
+    """The read phase is over (done / done_with_errors): nothing is re-submitted any more.
+
+    Clears the rejection message and markers, so neither the manifest nor a
+    caller printing ``message`` can still claim a re-submission in progress.
+    """
+    read = manifest["phases"]["read"]
+    for key in ("only_unanswered", "rejected"):
+        read.pop(key, None)
+    manifest.pop("message", None)
+
+
+def _record_results(
+    run: LabRun, paths: RunPaths, records: Iterable[dict]
+) -> tuple[list[dict], dict[str, dict]]:
+    """Append each Batch result that responses.jsonl does not hold yet.
+
+    An answer is never recorded twice, nor replaced by an error; an error is
+    replaced by a later answer. Returns ``(appended lines, latest per custom_id)``.
+    """
+    _repair_jsonl(paths.responses)
+    latest = _latest_responses(paths)
+    out = []
+    for record in records:
+        custom_id = record.get("custom_id")
+        if not custom_id:
+            continue
+        result = result_from_record(record)
+        previous = latest.get(custom_id)
+        if previous is not None and (not previous.get("error") or result.error):
+            continue  # already answered (never billed twice), or still the same failure
+        if not result.model:
+            result.model = run.reader_model
+        line = _response_record(custom_id, result, _usd(result, run.reader_model, True), True)
+        out.append(line)
+        latest[custom_id] = line
+    if out:
+        _append_jsonl(paths.responses, out)
+    return out, latest
 
 
 def _write_jsonl(path: Path, records: Iterable[dict]) -> None:
@@ -1372,42 +1491,78 @@ async def collect_batch(
     result without a response line is appended — an answer is never recorded
     twice, nor replaced by an error. The read status is then judged over ALL
     requests, not over this call's records.
+
+    REJECTED AT VALIDATION. When the poll lists parts OpenAI refused
+    (``"rejected"``: nothing ran, $0), their requests are NOT answered-with-
+    errors and the run is NOT scored. Once nothing else is running, whatever
+    did finish is collected, then the run goes back to ``reading`` with the
+    read phase ``pending`` (``only_unanswered``) and a message saying why:
+    the next :func:`resume` / :func:`run_lab` re-plans only the requests that
+    never ran, re-prices them against the remaining cap and sends them through
+    the Batch backend's enqueued-token gate. Returns False in that case.
     """
     status = await backend.poll(paths.root)
     _phase(paths, manifest, "read", last_poll=status, polled_at=_now())
     await _emit(on_event, {"type": "batch_status", "status": status})
+    rejected = [r for r in status.get("rejected") or [] if isinstance(r, dict)]
     if not status.get("done"):
+        if rejected:  # re-planned once the parts still running have finished
+            message = _rejection_message(rejected, status, waiting=True)
+            _phase(paths, manifest, "read", rejected=rejected, message=message)
+            _save(paths, manifest, message=message)
         return False
     records = list(await backend.collect(paths.root) or [])
-    recover = getattr(backend, "collected", None)
-    if recover is not None:
-        recovered = recover(paths.root)
-        records.extend((await recovered if asyncio.iscoroutine(recovered) else recovered) or [])
-    _repair_jsonl(paths.responses)
-    latest = _latest_responses(paths)
-    out = []
-    for record in records:
-        custom_id = record.get("custom_id")
-        if not custom_id:
-            continue
-        result = result_from_record(record)
-        previous = latest.get(custom_id)
-        if previous is not None and (not previous.get("error") or result.error):
-            continue  # already answered (never billed twice), or still the same failure
-        if not result.model:
-            result.model = run.reader_model
-        line = _response_record(custom_id, result, _usd(result, run.reader_model, True), True)
-        out.append(line)
-        latest[custom_id] = line
-    _append_jsonl(paths.responses, out)
+    records.extend(await _backend_local_read(backend, "collected", paths.root))
+    out, latest = _record_results(run, paths, records)
     wanted = [str(r["custom_id"]) for r in read_jsonl(paths.requests) if r.get("custom_id")]
+    if rejected:
+        message = _rejection_message(rejected, status)
+        read = manifest["phases"]["read"]
+        history = [*(read.get("rejections") or []),
+                   {"at": _now(), "parts": [r.get("part") for r in rejected],
+                    "requests": sum(int(r.get("requests") or 0) for r in rejected),
+                    "code": rejected[0].get("code"), "limit": rejected[0].get("limit"),
+                    "gate": status.get("max_enqueued_tokens")}]
+        unanswered = sum(1 for cid in wanted if cid not in latest)
+        _phase(paths, manifest, "read", status="pending", rejected=rejected,
+               rejected_at=_now(), rejections=history, message=message,
+               only_unanswered=True, collected=len(out), unanswered=unanswered,
+               resubmit="auto" if all(r.get("retryable") for r in rejected) else "manual")
+        _save(paths, manifest, status="reading", message=message)
+        await _emit(on_event, {"type": "batch_rejected", "message": message,
+                               "unanswered": unanswered, "rejected": rejected})
+        return False
     failed = sum(
         1 for cid in wanted
         if cid not in latest or latest[cid].get("error") or latest[cid].get("skipped")
     )
+    _read_ended(manifest)
     _phase(paths, manifest, "read", status="done" if not failed else "done_with_errors",
            finished_at=_now(), collected=len(out), failed=failed)
     return True
+
+
+def _rejection_message(rejected: list[dict], status: dict, *, waiting: bool = False) -> str:
+    """The manifest message for a rejection.
+
+    ``batch rejected at validation: <OpenAI message>; re-submitting in parts under
+    <gate> enqueued tokens`` — or why it is not re-submitted automatically.
+    """
+    first = rejected[0]
+    reason = str(first.get("message") or first.get("code") or "no reason given").strip()
+    head = "batch rejected at validation" if len(rejected) == 1 else (
+        f"{len(rejected)} batch parts rejected at validation"
+    )
+    head = f"{head}: {reason}"
+    gate = status.get("max_enqueued_tokens")
+    if not all(r.get("retryable") for r in rejected):
+        return (f"{head}; nothing ran ($0). Not re-submitted automatically (the file itself "
+                "was refused): fix the cause, then resume to re-plan the unanswered requests")
+    tail = (f"re-submitting in parts under {int(gate):,} enqueued tokens" if gate
+            else "re-submitting the unanswered requests")
+    if waiting:
+        tail = f"{tail} once the parts still running finish"
+    return f"{head}; {tail}"
 
 
 # ── Phase 3: score ───────────────────────────────────────────────────────────
@@ -1741,7 +1896,9 @@ async def run_lab(
 
     Statuses: ``done`` · ``refused`` (the measured upper bound breaks the cap;
     nothing was spent) · ``aborted`` (the metered cap stopped reading; resume
-    with a higher cap) · ``batch_submitted`` (call :func:`resume` later).
+    with a higher cap) · ``batch_submitted`` (call :func:`resume` later) ·
+    ``reading`` with a ``message`` (a batch was rejected at validation and not
+    re-sent automatically; resume re-plans its unanswered requests).
     """
     paths = _prepare(run)
     dataset = dataset or load_dataset(run.dataset)
@@ -1813,6 +1970,15 @@ async def resume(
     the way to continue a run the metered cap aborted. ``retry_failed`` re-reads
     the requests that came back with an error (realtime, or a new batch for a
     batch run) — nothing that already has an answer is ever re-sent.
+
+    A batch OpenAI rejected at validation (e.g. the organisation's enqueued-
+    token limit) is never scored as errors: the run goes back to ``reading``
+    and, when the rejection is a capacity one, its unanswered requests are
+    re-planned right away — re-priced against the remaining cap (the rejected
+    batch cost $0) and sent in parts under the enqueued-token gate the
+    rejection set (see :func:`collect_batch` and ``app.lab.batch``). Requests a
+    rejected batch owed are re-planned even when they carry an older error line
+    (a refused ``retry_failed`` batch), with or without ``retry_failed``.
     """
     paths = RunPaths(Path(run_dir))
     if not paths.manifest.exists():
@@ -1830,6 +1996,14 @@ async def resume(
         except Exception as e:
             _save(paths, manifest, error=f"{type(e).__name__}: {e}"[:1000])
             raise
+        if manifest.get("status") == "reading":  # rejected at validation: nothing ran
+            if manifest["phases"]["read"].get("resubmit") != "auto":
+                return manifest  # the file itself was refused: the owner decides
+            if retry_failed:
+                manifest["phases"]["read"].pop("only_unanswered", None)
+                _save(paths, manifest)
+            return await run_lab(run, client=client, batch_backend=backend,
+                                 on_event=on_event, dataset=dataset)
         if not finished:
             return manifest
         _score_phase(run, dataset, paths, manifest)
@@ -1837,6 +2011,8 @@ async def resume(
         await _emit(on_event, {"type": "done", "status": "done"})
         return manifest
     read_status = manifest["phases"]["read"].get("status")
+    if retry_failed and manifest["phases"]["read"].pop("only_unanswered", None):
+        _save(paths, manifest)
     if manifest.get("status") in ("aborted", "refused") or (
         retry_failed and read_status == "done_with_errors"
     ):

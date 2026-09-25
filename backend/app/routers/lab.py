@@ -973,7 +973,10 @@ async def resume_run(
     """Continue a run as a background job, from its manifest.
 
     A ``batch_submitted`` run polls its batch and, once it is done, collects the
-    answers and scores them (no new spend). An ``aborted`` or ``refused`` run
+    answers and scores them. Polling itself costs nothing, but it can SPEND: it
+    sends parts queued behind the enqueued-token gate, and it re-submits, in parts
+    under the gate, the requests of a batch OpenAI rejected at validation (both
+    re-priced against the run's cap first). An ``aborted`` or ``refused`` run
     reads what is left, under ``max_usd`` when given (else its stored cap), and
     this DOES spend. ``retry_failed`` re-reads the requests that came back with
     an error. A request that already has an answer is never sent again. Batch runs

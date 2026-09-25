@@ -22,15 +22,19 @@ LIFECYCLE (one ``run_dir``; its state lives in ``run_dir/batches.json``)
              step and after it, so a crash anywhere is recoverable.
   poll     — refresh each open batch: status + request counts; submit any
              part still queued behind the enqueued-token gate (below).
+             A part OpenAI REJECTED at validation (below) is reported apart,
+             under ``"rejected"``.
   collect  — once every open batch is terminal: download the output and
              error files (kept under ``run_dir/batches/``), return one record
              per request in input order, and mark those parts collected.
-             A request that never ran (the batch expired, was cancelled or
-             failed validation) comes back as a synthesized error record, so
-             nothing silently disappears.
+             A request that never ran (the batch expired or was cancelled)
+             comes back as a synthesized error record, so nothing silently
+             disappears. A REJECTED part is never collected: it has no
+             records at all.
   failed_requests / resubmit_failed
-           — the request lines whose latest result is an error, and a new
-             submission of exactly those (the partial-failure path).
+           — the request lines whose latest result is an error, or that a
+             rejected part never ran, and a new submission of exactly those
+             (the partial-failure path).
   parse_results / latest_records / status / cancel
            — answers + usage per custom_id, the latest result per request
              across retries, a local (network-free) summary with the spend at
@@ -46,16 +50,39 @@ already in flight in a DIFFERENT open part is refused rather than sent twice.
 A part whose batch creation was attempted but not recorded is first looked up
 among the account's recent batches by its input file id.
 
-ENQUEUED-TOKEN GATE (optional). OpenAI caps the input tokens an organisation
-may have enqueued per model (tier-dependent — see the organisation's limits
-page). Set ``max_enqueued_tokens`` (or ``SYNAPSE_LAB_BATCH_MAX_ENQUEUED_TOKENS``)
-and parts are sized under it and submitted one wave at a time: ``poll`` sends
-the next part when the in-flight ones finish. Unset = no gating.
+ENQUEUED-TOKEN GATE. OpenAI caps the input tokens an organisation may have
+enqueued per model (tier-dependent — see the organisation's limits page). Set
+``max_enqueued_tokens`` (or ``SYNAPSE_LAB_BATCH_MAX_ENQUEUED_TOKENS``) and
+parts are sized under it and submitted one wave at a time: a part is created
+only when the model's in-flight tokens plus its own fit under the gate, and
+``poll`` sends the next part when the in-flight ones finish. Unset = no gate
+until OpenAI refuses a batch for it (below). When the gate TIGHTENS, the parts
+still queued under the looser one (never sent: no batch was created for them,
+nothing was billed) are re-planned under the new gate before anything else is
+sent — their part becomes ``replanned`` (never collected, $0) and its requests,
+in order, go to new parts — so no stale part is sent only to be refused again.
+
+REJECTED AT VALIDATION. A batch that ends ``failed`` with batch-level errors
+and no output file never ran a single request, and nothing was billed. Its
+part becomes ``rejected`` (never ``collected``; $0; the error code and message
+kept under ``rejection``), and ``poll`` lists it under ``"rejected"`` until
+its requests are submitted again — so a caller can tell a refusal of the whole
+file from per-request failures. When the code is ``token_limit_exceeded``
+("… Limit: 2,000,000 enqueued tokens …") the limit is parsed and the gate is
+set AUTOMATICALLY to ``floor(0.9 × limit)`` in ``batches.json`` (recorded
+under ``enqueued_gate``), unless the gate was set explicitly (the argument or
+the environment variable win). A part the gate let through that is still
+refused tightens the auto gate to 90% of that part. Resubmitting the rejected
+requests (``resubmit_failed``, or ``submit`` of ``rejected_requests``) splits
+them under the gate and sends them one part at a time. A rejected part's
+requests are owed until each is in flight again or has a SUCCESSFUL result —
+the same rule as ``failed_requests``, so a refused resend of failed requests
+stays owed (and listed) instead of silently resolving.
 
 COST. Every collected part records its usage and its $ at the batch rate
 (``cost.usd(..., batch=True)``). A request that comes back as an error carries
 no usage and is priced at $0 here; the runner reads it as an error
-(``done_with_errors``) and can resend it.
+(``done_with_errors``) and can resend it. A rejected part is $0.
 
 NEVER call this against the real API from a test: without an explicit
 ``client`` it builds :func:`app.lab.reader.default_client`, which refuses to
@@ -68,7 +95,9 @@ import hashlib
 import inspect
 import json
 import logging
+import math
 import os
+import re
 from collections.abc import Callable, Iterable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
@@ -99,9 +128,23 @@ _METADATA_VALUE_MAX = 512
 #: Local part states (before OpenAI has a batch for the part).
 LOCAL = "local"
 UPLOADED = "uploaded"
+#: A part whose batch OpenAI refused at validation (``failed``, batch-level
+#: errors, no output file): nothing ran, nothing was billed, never collected.
+REJECTED = "rejected"
+#: A queued part (never sent: no batch was created for it) whose requests were
+#: split again under a tighter enqueued-token gate: never collected, $0.
+REPLANNED = "replanned"
 #: OpenAI batch states.
 TERMINAL = frozenset({"completed", "failed", "expired", "cancelled"})
 IN_FLIGHT = frozenset({"validating", "in_progress", "finalizing", "cancelling"})
+#: The batch-level error code of an organisation's enqueued-token limit.
+TOKEN_LIMIT_CODE = "token_limit_exceeded"
+#: The auto gate keeps this fraction of the limit OpenAI reports (our tokenizer
+#: count and OpenAI's differ a little; other batches may hold some of the quota).
+AUTO_GATE_FRACTION = 0.9
+_LIMIT_RE = re.compile(r"limit:\s*([0-9][0-9,_ ]*)\s*(?:enqueued\s+)?tokens", re.IGNORECASE)
+_LIMIT_MODEL_RE = re.compile(r"limit reached for\s+(\S+?)\s+in organization", re.IGNORECASE)
+_ORG_RE = re.compile(r"\borg-[A-Za-z0-9]+")
 
 
 class BatchError(RuntimeError):
@@ -203,17 +246,36 @@ def _part_path(run_dir: Path, part: dict, kind: str) -> Path:
     return Path(run_dir) / PARTS_DIR / f"{part['name']}.{kind}.jsonl"
 
 
+def _is_rejected(part: dict) -> bool:
+    return part.get("status") == REJECTED
+
+
+def _never_runs(part: dict) -> bool:
+    """Rejected or re-planned: none of its requests ran (or will), nothing to collect."""
+    return part.get("status") in (REJECTED, REPLANNED)
+
+
 def _is_open(part: dict) -> bool:
-    return not part.get("collected_at")
+    """Not collected yet and not void: its requests are (or will be) in flight."""
+    return not part.get("collected_at") and not _never_runs(part)
 
 
 def _is_terminal(part: dict) -> bool:
-    return part.get("status") in TERMINAL
+    return part.get("status") in TERMINAL or _never_runs(part)
+
+
+def _outstanding_rejections(state: dict[str, Any]) -> list[dict]:
+    """Rejected parts whose requests have not been submitted again yet."""
+    return [p for p in state["parts"] if _is_rejected(p) and not p.get("resubmitted_at")]
 
 
 def _enqueued_limit(explicit: int | None) -> int | None:
     if explicit is not None:
         return int(explicit) if int(explicit) > 0 else None
+    return _env_enqueued_limit()
+
+
+def _env_enqueued_limit() -> int | None:
     raw = os.environ.get(ENQUEUED_TOKENS_ENV, "").strip()
     if not raw:
         return None
@@ -349,7 +411,8 @@ def _apply_batch(part: dict, batch: Any) -> None:
     errors = _get(_get(batch, "errors"), "data") or []
     if errors:
         part["batch_errors"] = [
-            {"code": _get(e, "code"), "message": _get(e, "message"), "line": _get(e, "line")}
+            {"code": _get(e, "code"), "message": redact(_get(e, "message")),
+             "line": _get(e, "line")}
             for e in errors
         ]
     for key in ("created_at", "in_progress_at", "finalizing_at", "completed_at", "failed_at",
@@ -357,6 +420,134 @@ def _apply_batch(part: dict, batch: Any) -> None:
         value = _get(batch, key)
         if value is not None:
             part.setdefault("openai_times", {})[key] = value
+
+
+# ── Rejection at validation, and the automatic enqueued-token gate ───────────
+def redact(message: Any) -> Any:
+    """``message`` with OpenAI organisation ids masked (they end up in manifests)."""
+    return _ORG_RE.sub("org-…", message) if isinstance(message, str) else message
+
+
+def parse_enqueued_limit(message: str | None) -> int | None:
+    """The limit in a ``token_limit_exceeded`` message, e.g. 2,000,000 → ``2000000``."""
+    match = _LIMIT_RE.search(message or "")
+    if not match:
+        return None
+    digits = re.sub(r"\D", "", match.group(1))
+    return int(digits) if digits and int(digits) > 0 else None
+
+
+def _rejection_of(part: dict) -> dict[str, Any] | None:
+    """What OpenAI refused a part for — ``None`` unless it was rejected at validation.
+
+    Rejected = the batch is ``failed`` (OpenAI's state for an input file that
+    failed validation) with batch-level errors and no output file: no request
+    ran, so nothing was billed and there is nothing to collect.
+    """
+    if part.get("status") != "failed" or part.get("output_file_id"):
+        return None
+    errors = [e for e in part.get("batch_errors") or [] if isinstance(e, dict)]
+    if not errors:
+        return None
+    first = next((e for e in errors if e.get("code") == TOKEN_LIMIT_CODE), errors[0])
+    message = str(redact(first.get("message")) or "")
+    code = str(first.get("code") or "")
+    token_limit = code == TOKEN_LIMIT_CODE or "enqueued token limit" in message.lower()
+    model_match = _LIMIT_MODEL_RE.search(message)
+    return {
+        "code": code or None,
+        "message": message,
+        "limit": parse_enqueued_limit(message) if token_limit else None,
+        "model": model_match.group(1) if model_match else part.get("model"),
+        # A capacity refusal clears once the quota frees up; any other validation
+        # error (a malformed file) would be refused again as it is.
+        "retryable": token_limit,
+        "errors": errors[:5],
+    }
+
+
+def _mark_rejected(state: dict[str, Any], part: dict) -> bool:
+    """Turn a refused part into ``rejected`` ($0, never collected). True when it was."""
+    if _is_rejected(part):
+        return False
+    rejection = _rejection_of(part)
+    if rejection is None:
+        return False
+    part["openai_status"] = part.get("status")
+    part["status"] = REJECTED
+    part["rejected_at"] = _now()
+    part["rejection"] = rejection
+    part["usage"] = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0,
+                     "calls": 0}
+    part["usd"] = 0.0
+    part["succeeded"] = 0
+    part["failed"] = 0
+    logger.warning("%s: batch %s rejected at validation (%s: %s) — nothing ran, $0",
+                   part["name"], part.get("batch_id"), rejection["code"], rejection["message"])
+    if rejection["limit"]:
+        _auto_gate(state, part, rejection)
+    return True
+
+
+def _auto_gate(state: dict[str, Any], part: dict, rejection: dict[str, Any]) -> None:
+    """Set the enqueued-token gate from the limit a rejection reported (explicit wins)."""
+    limit = int(rejection["limit"])
+    gate = math.floor(AUTO_GATE_FRACTION * limit)
+    current = state.get("max_enqueued_tokens")
+    tokens = part.get("prompt_tokens")
+    if current and tokens and int(tokens) <= int(current):
+        # The gate already let this part through and it was still refused: OpenAI
+        # counts more than we do, or other batches hold part of the quota. Tighten.
+        gate = min(gate, math.floor(AUTO_GATE_FRACTION * int(tokens)))
+    source = state.get("max_enqueued_tokens_source") or ("explicit" if current else None)
+    env = _env_enqueued_limit()
+    record: dict[str, Any] = {
+        "limit_reported": limit,
+        "model": rejection.get("model"),
+        "fraction": AUTO_GATE_FRACTION,
+        "from_part": part["name"],
+        "batch_id": part.get("batch_id"),
+        "message": rejection.get("message"),
+        "at": _now(),
+    }
+    if env is not None or source == "explicit":
+        kept = env if env is not None else int(current)
+        record.update(applied=False, value=kept, source="env" if env is not None else "explicit")
+        if kept > limit:
+            record["warning"] = (
+                f"the explicit gate {kept:,} is above the {limit:,} OpenAI reported; parts "
+                "sized under it can be refused again"
+            )
+            logger.warning("%s", record["warning"])
+        if env is not None:
+            state["max_enqueued_tokens"] = env
+            state["max_enqueued_tokens_source"] = "env"
+    else:
+        if current and source == "auto":
+            gate = min(gate, int(current))
+        state["max_enqueued_tokens"] = gate
+        state["max_enqueued_tokens_source"] = "auto"
+        record.update(applied=True, value=gate, source="auto")
+        logger.warning("enqueued-token gate set to %s (%.0f%% of OpenAI's reported %s)",
+                       f"{gate:,}", AUTO_GATE_FRACTION * 100, f"{limit:,}")
+    state["enqueued_gate"] = record
+    state.setdefault("gate_history", []).append(record)
+
+
+def _rejection_summary(part: dict) -> dict[str, Any]:
+    rejection = part.get("rejection") or {}
+    return {
+        "part": part["name"],
+        "batch_id": part.get("batch_id"),
+        "model": part.get("model"),
+        "requests": part.get("requests"),
+        "prompt_tokens": part.get("prompt_tokens"),
+        "code": rejection.get("code"),
+        "message": rejection.get("message"),
+        "limit": rejection.get("limit"),
+        "retryable": bool(rejection.get("retryable")),
+        "rejected_at": part.get("rejected_at"),
+    }
 
 
 # ── Submit ───────────────────────────────────────────────────────────────────
@@ -414,6 +605,7 @@ async def _advance(run_dir: Path, state: dict[str, Any], client: Any) -> Any:
 
     Returns the client it used (created lazily, only when something is sent).
     """
+    _replan_queued(run_dir, state)
     limit = state.get("max_enqueued_tokens")
     for part in state["parts"]:
         if part.get("status") not in (LOCAL, UPLOADED):
@@ -456,12 +648,88 @@ async def _advance(run_dir: Path, state: dict[str, Any], client: Any) -> Any:
                 )
             )
         _apply_batch(part, batch)
+        _mark_rejected(state, part)
         part["submitted_at"] = part.get("submitted_at") or _now()
         _save_state(run_dir, state)
         logger.info("%s: batch %s (%s requests) %s", part["name"], part["batch_id"],
                     part["requests"], part["status"])
     _save_state(run_dir, state)  # records every queued part's reason
     return client
+
+
+def _replan_queued(run_dir: Path, state: dict[str, Any]) -> None:
+    """Split again, under the CURRENT gate, the queued parts planned under a looser one.
+
+    A queued part was sized under the gate of its time. Once a rejection has
+    tightened the gate, sending it as it is would only get it refused again ($0,
+    but one owner re-run per stale part). Only parts no batch was ever created
+    for are touched (``local``/``uploaded`` with no creation attempt: nothing ran,
+    nothing was billed). The queued parts of one model and submission are
+    re-planned together, their requests in order, each new part no larger (in
+    requests and bytes) than the largest part it replaces; the old parts become
+    ``replanned`` and point at their successors (``replanned_into``).
+    """
+    gate = state.get("max_enqueued_tokens")
+    if not gate:
+        return
+    gate = int(gate)
+    queued: dict[tuple[str, Any], list[dict]] = {}
+    for part in state["parts"]:
+        if part.get("status") in (LOCAL, UPLOADED) and not part.get("create_attempted_at"):
+            queued.setdefault((str(part.get("model")), part.get("submission")), []).append(part)
+    token_cache: dict[str, int] = {}
+
+    def tokens_of(line: dict) -> int:
+        if line["custom_id"] not in token_cache:
+            token_cache[line["custom_id"]] = request_prompt_tokens(line)
+        return token_cache[line["custom_id"]]
+
+    replaced: dict[str, list[str]] = {}
+    for (model, submission), parts in queued.items():
+        for part in parts:
+            if part.get("prompt_tokens") is None:  # planned before any gate existed
+                part["prompt_tokens"] = sum(
+                    tokens_of(x) for x in _read_jsonl(_part_path(run_dir, part, "input")))
+        if not any(int(p["prompt_tokens"]) > gate and int(p.get("requests") or 0) > 1
+                   for p in parts):
+            continue  # the common case: no input file is read
+        lines = [x for p in parts for x in _read_jsonl(_part_path(run_dir, p, "input"))]
+        groups = plan_parts(lines, max_tokens=gate, tokens_of=tokens_of,
+                            max_requests=max(int(p.get("requests") or 1) for p in parts),
+                            max_bytes=max(int(p.get("bytes") or 1) for p in parts))
+        names = []
+        for group in groups:
+            data = b"".join(encode_line(x) for x in group)
+            new = {
+                "name": f"part-{len(state['parts']):04d}",
+                "submission": submission,
+                "model": model,
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "requests": len(group),
+                "bytes": len(data),
+                "prompt_tokens": sum(tokens_of(x) for x in group),
+                "status": LOCAL,
+                "planned_at": _now(),
+                "replanned_from": [p["name"] for p in parts],
+            }
+            _write_bytes_atomic(_part_path(run_dir, new, "input"), data)
+            state["parts"].append(new)
+            names.append(new["name"])
+        for part in parts:
+            part.pop("queued_reason", None)
+            part.update(status=REPLANNED, replanned_at=_now(), replanned_into=names,
+                        replanned_gate=gate, usd=0.0, succeeded=0, failed=0)
+            replaced[part["name"]] = names
+        logger.warning("re-planned %s queued part(s) (%s request(s)) of %s into %s part(s) "
+                       "under the tightened gate %s", len(parts), len(lines), model,
+                       len(names), f"{gate:,}")
+    if not replaced:
+        return
+    for part in state["parts"]:  # a rejection re-sent in a re-planned part: its successors
+        if part.get("resubmitted_in"):
+            part["resubmitted_in"] = list(dict.fromkeys(
+                n for x in part["resubmitted_in"] for n in replaced.get(x, [x])))
+    _save_state(run_dir, state)
 
 
 def _part_summary(part: dict) -> dict[str, Any]:
@@ -471,12 +739,43 @@ def _part_summary(part: dict) -> dict[str, Any]:
         "model": part.get("model"),
         "status": part.get("status"),
         "requests": part.get("requests"),
+        "prompt_tokens": part.get("prompt_tokens"),
         "request_counts": part.get("request_counts"),
         "submission": part.get("submission"),
         "collected": bool(part.get("collected_at")),
         **({"queued_reason": part["queued_reason"]} if part.get("queued_reason") else {}),
         **({"batch_errors": part["batch_errors"]} if part.get("batch_errors") else {}),
+        **({"rejection": part["rejection"]} if part.get("rejection") else {}),
+        **({"resubmitted_in": part["resubmitted_in"]} if part.get("resubmitted_in") else {}),
+        **({"replanned_into": part["replanned_into"]} if part.get("replanned_into") else {}),
     }
+
+
+def _answered_ids(run_dir: Path, state: dict[str, Any]) -> set[str]:
+    """custom_ids whose latest collected result is a success (local files only)."""
+    return {cid for cid, record in _latest(run_dir, state).items() if record_ok(record)}
+
+
+def _resolve_rejections(run_dir: Path, state: dict[str, Any]) -> bool:
+    """Mark rejected parts whose every request is now in an open part or answered.
+
+    "Answered" = a SUCCESSFUL latest result: an id whose latest result is an
+    error is still owed (see :func:`rejected_requests`). True when one changed.
+    """
+    outstanding = _outstanding_rejections(state)
+    if not outstanding:
+        return False
+    owners = _open_custom_ids(run_dir, state)
+    answered = _answered_ids(run_dir, state)
+    changed = False
+    for part in outstanding:
+        ids = [str(r["custom_id"]) for r in _read_jsonl(_part_path(run_dir, part, "input"))
+               if r.get("custom_id")]
+        if all(cid in owners or cid in answered for cid in ids):
+            part["resubmitted_at"] = _now()
+            part["resubmitted_in"] = sorted({owners[cid] for cid in ids if cid in owners})
+            changed = True
+    return changed
 
 
 async def submit(
@@ -492,18 +791,32 @@ async def submit(
 ) -> dict[str, Any]:
     """Submit request lines as one or more batches. Idempotent while they are open.
 
-    ``requests`` are OpenAI Batch input lines. Returns
-    ``{"batch_ids", "parts", "requests", "queued", "submission"}``.
+    ``requests`` are OpenAI Batch input lines. A line whose latest collected
+    result is already a success is never sent again (it is dropped and counted
+    under ``already_answered``). Returns
+    ``{"batch_ids", "parts", "requests", "queued", "submission", "max_enqueued_tokens"}``.
     """
     run_dir = Path(run_dir)
     lines = validate_requests(requests)
     state = load_state(run_dir)
+    answered = _answered_ids(run_dir, state) if lines and state["parts"] else set()
+    already_answered = sum(1 for line in lines if line["custom_id"] in answered)
+    if already_answered:
+        logger.warning("dropping %s request(s) that already have a successful answer",
+                       already_answered)
+        lines = [line for line in lines if line["custom_id"] not in answered]
     if not lines:
+        if state["parts"] and _resolve_rejections(run_dir, state):
+            _save_state(run_dir, state)  # a rejection whose requests all have an answer
         return {"batch_ids": [], "parts": [], "requests": 0, "queued": 0,
-                "submission": state.get("submissions", 0)}
+                "submission": state.get("submissions", 0),
+                "already_answered": already_answered}
     limit = _enqueued_limit(max_enqueued_tokens)
     if limit is not None:
         state["max_enqueued_tokens"] = limit
+        state["max_enqueued_tokens_source"] = (
+            "explicit" if max_enqueued_tokens is not None else "env"
+        )
     state["run_id"] = str(run_id)
     if metadata:
         state["metadata"] = {str(k): str(v) for k, v in metadata.items()}
@@ -560,6 +873,7 @@ async def submit(
         parts.append(part)
     if any(p.get("submission") == submission for p in parts):
         state["submissions"] = submission
+    _resolve_rejections(run_dir, state)
     _save_state(run_dir, state)
 
     await _advance(run_dir, state, client)
@@ -570,6 +884,8 @@ async def submit(
         "queued": sum(1 for p in parts if p.get("status") in (LOCAL, UPLOADED)),
         "submission": state.get("submissions", 0),
         "reused": sum(1 for p in parts if p["sha256"] in reused),
+        "already_answered": already_answered,
+        "max_enqueued_tokens": state.get("max_enqueued_tokens"),
     }
 
 
@@ -600,28 +916,42 @@ def _counts(parts: list[dict]) -> dict[str, int]:
 async def poll(run_dir: Path | str, *, client: Any = None) -> dict[str, Any]:
     """Refresh every open batch; send queued parts the gate now allows.
 
-    Returns ``{"done", "status", "parts", "request_counts", "batch_ids"}`` —
-    ``done`` once every open part is terminal (completed, failed, expired or
-    cancelled). Makes no network call when nothing is open.
+    Returns ``{"done", "status", "parts", "request_counts", "batch_ids",
+    "rejected", "max_enqueued_tokens", "enqueued_gate"}`` — ``done`` once every
+    open part is terminal (completed, failed, expired or cancelled). A part
+    OpenAI refused at validation is NOT among the open parts: it is listed under
+    ``rejected`` (with its error code and message) until its requests are
+    submitted again, so ``{"done": True, "rejected": [...]}`` means "nothing is
+    running, and these requests never ran" — not per-request failures. Makes no
+    network call when nothing is open.
     """
     run_dir = Path(run_dir)
     state = load_state(run_dir)
-    open_parts = [p for p in state["parts"] if _is_open(p)]
-    for part in open_parts:
-        if part.get("batch_id") and not _is_terminal(part):
+    for part in state["parts"]:
+        if _is_open(part) and part.get("batch_id") and not _is_terminal(part):
             client = _client(client)
             _apply_batch(part, await _maybe_await(client.batches.retrieve(part["batch_id"])))
+            _mark_rejected(state, part)
     state["polled_at"] = _now()
     _save_state(run_dir, state)
-    if any(p.get("status") in (LOCAL, UPLOADED) for p in open_parts):
+    if any(_is_open(p) and p.get("status") in (LOCAL, UPLOADED) for p in state["parts"]):
         client = await _advance(run_dir, state, client)
+    if all(_is_terminal(p) for p in state["parts"] if _is_open(p)) and _resolve_rejections(
+        run_dir, state
+    ):  # local, and only once nothing runs: a rejection whose requests are all answered
+        _save_state(run_dir, state)
+    open_parts = [p for p in state["parts"] if _is_open(p)]
+    rejected = [_rejection_summary(p) for p in _outstanding_rejections(state)]
     done = all(_is_terminal(p) for p in open_parts)
     return {
         "done": done,
-        "status": _aggregate_status(open_parts),
+        "status": _aggregate_status(open_parts) if open_parts or not rejected else REJECTED,
         "parts": [_part_summary(p) for p in open_parts],
         "request_counts": _counts(open_parts),
         "batch_ids": [p["batch_id"] for p in open_parts if p.get("batch_id")],
+        "rejected": rejected,
+        "max_enqueued_tokens": state.get("max_enqueued_tokens"),
+        "enqueued_gate": state.get("enqueued_gate"),
         "polled_at": state["polled_at"],
     }
 
@@ -754,6 +1084,8 @@ async def collect(
         )
     records: list[dict] = []
     for part in state["parts"]:
+        if _never_runs(part):
+            continue  # refused at validation or re-planned: nothing ran, nothing to hand over
         if not _is_open(part):
             if include_collected:
                 records.extend(_part_records(run_dir, part))
@@ -784,12 +1116,18 @@ def latest_records(run_dir: Path | str) -> dict[str, dict]:
     """custom_id → its latest collected result, a success always beating an error.
 
     Local only (reads the downloaded files); parts are read in submission order,
-    so a successful retry supersedes the error it retried.
+    so a successful retry supersedes the error it retried. A rejected or
+    re-planned part has no results at all (its requests never ran there), so it
+    contributes nothing.
     """
     run_dir = Path(run_dir)
+    return _latest(run_dir, load_state(run_dir))
+
+
+def _latest(run_dir: Path, state: dict[str, Any]) -> dict[str, dict]:
     latest: dict[str, dict] = {}
-    for part in load_state(run_dir)["parts"]:
-        if _is_open(part):
+    for part in state["parts"]:
+        if _is_open(part) or _never_runs(part):
             continue
         for record in _part_records(run_dir, part):
             custom_id = record["custom_id"]
@@ -800,22 +1138,50 @@ def latest_records(run_dir: Path | str) -> dict[str, dict]:
 
 
 def failed_requests(run_dir: Path | str) -> list[dict]:
-    """The request lines whose latest collected result is an error, ready to resubmit.
+    """The request lines to resubmit: latest collected result an error, or never run.
 
-    A request already being retried in an open part is not listed again.
+    "Never run" = held by a part OpenAI rejected at validation, with no result
+    since. A request already in flight in an open part is not listed again, and
+    one with a successful answer never is.
     """
     run_dir = Path(run_dir)
     state = load_state(run_dir)
-    latest = latest_records(run_dir)
+    latest = _latest(run_dir, state)
     in_flight = _open_custom_ids(run_dir, state)
     lines: dict[str, dict] = {}
     for part in state["parts"]:
-        if _is_open(part):
+        if _is_open(part) or part.get("status") == REPLANNED:
+            continue  # a re-planned part's requests live in its successors
+        rejected = _is_rejected(part)
+        for line in _read_jsonl(_part_path(run_dir, part, "input")):
+            custom_id = str(line.get("custom_id") or "")
+            if custom_id in in_flight:
+                continue
+            record = latest.get(custom_id)
+            never_ran = record is None and rejected
+            if never_ran or (record is not None and not record_ok(record)):
+                lines[custom_id] = line
+    return list(lines.values())
+
+
+def rejected_requests(run_dir: Path | str) -> list[dict]:
+    """The request lines rejected parts still owe: no SUCCESSFUL result, not in flight.
+
+    The rule of :func:`failed_requests` (and of :func:`_resolve_rejections`): an
+    id whose latest result is an error is owed too — a resend of failed requests
+    can itself be refused at validation, and those requests never ran again.
+    """
+    run_dir = Path(run_dir)
+    state = load_state(run_dir)
+    latest = _latest(run_dir, state)
+    in_flight = _open_custom_ids(run_dir, state)
+    lines: dict[str, dict] = {}
+    for part in state["parts"]:
+        if not _is_rejected(part):
             continue
         for line in _read_jsonl(_part_path(run_dir, part, "input")):
             custom_id = str(line.get("custom_id") or "")
-            record = latest.get(custom_id)
-            if record is not None and not record_ok(record) and custom_id not in in_flight:
+            if custom_id not in in_flight and not record_ok(latest.get(custom_id) or {}):
                 lines[custom_id] = line
     return list(lines.values())
 
@@ -823,7 +1189,11 @@ def failed_requests(run_dir: Path | str) -> list[dict]:
 async def resubmit_failed(
     run_dir: Path | str, *, run_id: str | None = None, client: Any = None
 ) -> dict[str, Any]:
-    """Submit exactly the failed requests again, as a new batch submission."""
+    """Submit exactly the failed requests again, as a new batch submission.
+
+    Includes the requests of parts OpenAI rejected at validation (they never ran),
+    split under the enqueued-token gate — the auto gate when a rejection set one.
+    """
     run_dir = Path(run_dir)
     lines = failed_requests(run_dir)
     state = load_state(run_dir)
@@ -857,22 +1227,35 @@ def status(run_dir: Path | str) -> dict[str, Any]:
     state = load_state(run_dir)
     parts = state["parts"]
     open_parts = [p for p in parts if _is_open(p)]
+    ran = [p for p in parts if not _never_runs(p)]
+    rejected = _outstanding_rejections(state)
     spent = [p.get("usd") for p in parts if p.get("collected_at")]
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0, "calls": 0}
     for part in parts:
         for key in usage:
             usage[key] += int((part.get("usage") or {}).get(key) or 0)
+    if open_parts:
+        overall = _aggregate_status(open_parts)
+    elif rejected:
+        overall = REJECTED
+    else:
+        overall = "collected" if parts else "empty"
     return {
         "run_id": state.get("run_id"),
         "submissions": state.get("submissions", 0),
-        "status": _aggregate_status(open_parts) if open_parts else (
-            "collected" if parts else "empty"
-        ),
+        "status": overall,
         "open": [_part_summary(p) for p in open_parts],
         "parts": [_part_summary(p) for p in parts],
-        "request_counts": _counts(parts),
+        # Rejected and re-planned parts ran nothing ($0): their requests are
+        # counted where they are sent again, never twice.
+        "request_counts": _counts(ran),
+        "rejected": [_rejection_summary(p) for p in rejected],
+        "rejected_parts": sum(1 for p in parts if _is_rejected(p)),
+        "replanned_parts": sum(1 for p in parts if p.get("status") == REPLANNED),
         "usage": usage,
         "usd": None if any(s is None for s in spent) else sum(spent),
         "max_enqueued_tokens": state.get("max_enqueued_tokens"),
+        "max_enqueued_tokens_source": state.get("max_enqueued_tokens_source"),
+        "enqueued_gate": state.get("enqueued_gate"),
         "batch_multiplier": cost.BATCH_PRICE_MULTIPLIER,
     }
