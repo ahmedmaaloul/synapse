@@ -551,8 +551,8 @@ are tool names, so it is localized on `Start` and the `ACTION` nodes (in practic
 through the hop-1 and hop-2 horizons, as the step between two tools.
 
 In the UI, the Chat panel's **Chat | Navigator** switch runs the Navigator (default graph, raw
-guidance) and renders its trace. The graph panel's **Knowledge | Procedures** switch draws the
-procedural graph, with the last run's steps overlaid on it.
+guidance) and renders its trace. In the graph panel's **Knowledge | Procedures | Lab** switch,
+**Procedures** draws the procedural graph, with the last run's steps overlaid on it.
 
 ---
 

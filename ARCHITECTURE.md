@@ -439,7 +439,7 @@ and only when its apply step is called.
   Gemini / Vertex / nomic = 768, Titan / Cohere = 1024, OpenAI
   `text-embedding-3-small` = 1536). Changing providers requires re-ingestion (or
   a re-run of `make demo`) so vectors share one space. This is documented in
-  `.env.example` and the README table, and is a natural place for a future
+  `.env.example` and [docs/configuration.md](./docs/configuration.md#2-embedding-model), and is a natural place for a future
   migration command.
 - **The dependency tree is pinned to `langchain-core` 0.3.x.** The `<0.4` cap in
   `requirements.txt` is load-bearing: provider SDKs otherwise pull core to 1.x

@@ -1,542 +1,662 @@
-<div align="center">
+# Synapse
 
-# Synapse 🧠
-
-**Turn any document into a queryable knowledge graph — then chat with it using vector-grounded GraphRAG.**
-
-*Ten AI providers. One env var. Zero API keys to try it.*
+Synapse builds a Neo4j knowledge graph from text-based PDFs and answers questions over it with
+graph retrieval and a chat model you configure. It also includes a graph-walking agent guided by
+versioned procedural graphs (the GraphRAG Navigator), and the Synapse Lab, which compares
+retrieval approaches on your own questions under a spend cap.
 
 [![CI](https://github.com/ahmedmaaloul/synapse/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmedmaaloul/synapse/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/ahmedmaaloul/synapse?include_prereleases)](https://github.com/ahmedmaaloul/synapse/releases)
-<!-- Enable after the first PyPI publish (vars.PYPI_PUBLISH=true on the release workflow):
-[![PyPI](https://img.shields.io/pypi/v/synapse-graphrag)](https://pypi.org/project/synapse-graphrag/)
--->
-[![License: PolyForm Noncommercial](https://img.shields.io/badge/License-PolyForm_Noncommercial_1.0.0-blue.svg)](./LICENSE)
-[![Client: Apache 2.0](https://img.shields.io/badge/Client-Apache_2.0-green.svg)](./packages/synapse-graphrag/LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](./CONTRIBUTING.md)
-[![Stars](https://img.shields.io/github/stars/ahmedmaaloul/synapse?style=flat&logo=github)](https://github.com/ahmedmaaloul/synapse/stargazers)
-[![Forks](https://img.shields.io/github/forks/ahmedmaaloul/synapse?style=flat&logo=github)](https://github.com/ahmedmaaloul/synapse/network/members)
+[![Licence: PolyForm Noncommercial 1.0.0](https://img.shields.io/badge/Licence-PolyForm_Noncommercial_1.0.0-blue.svg)](./LICENSE)
+[![Client licence: Apache 2.0](https://img.shields.io/badge/Client_licence-Apache_2.0-green.svg)](./packages/synapse-graphrag/LICENSE)
 
-![Python 3.12](https://img.shields.io/badge/python-3.12-3776AB?logo=python&logoColor=white)
-![Next.js 16](https://img.shields.io/badge/Next.js-16-000000?logo=next.js)
-![Neo4j 5](https://img.shields.io/badge/Neo4j-5-008CC1?logo=neo4j&logoColor=white)
-[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-181717?logo=github)](https://codespaces.new/ahmedmaaloul/synapse)
+![Synapse web UI: the Knowledge view shows the demo graph with cited entities ringed, and the chat panel below shows an answer about AlexNet and the Transformer with its reasoning paths, grounding entities and a LOCAL mode badge](./docs/screenshots/chat.png)
 
-Upload a PDF → Synapse extracts entities & relationships with an LLM, embeds them, and writes a **Neo4j property graph**. Ask a question → it runs **hybrid (vector + full-text) retrieval**, expands the subgraph, and streams a grounded answer with **clickable citations** back to the exact nodes it used.
+*Figure 1. Knowledge view and Chat mode on the bundled demo graph. Question: "How does AlexNet
+connect to the Transformer?" Under the answer: the reasoning paths, the seed entities that retrieval
+put into the prompt ("Grounded in") and the retrieval mode (LOCAL). Those entities are ringed in
+the graph. Chat model: OpenAI gpt-5-nano.*
 
-![Synapse — GraphRAG knowledge explorer](./docs/synapse-dashboard.png)
-
-</div>
-
----
-
-## ⚡ Try it in 60 seconds — no API key
-
-A fresh clone ships a **hand-curated demo knowledge graph** (53 entities, 106 relationships: a brief history of AI, from Babbage's Analytical Engine to GraphRAG). Seeding it skips the only step that needs an LLM — extraction — while still running the project's *real* schema, embedding and write pipeline.
-
-**Prerequisite:** [Docker Desktop](https://www.docker.com/products/docker-desktop/). Nothing else.
-
-```bash
-git clone https://github.com/ahmedmaaloul/synapse.git
-cd synapse
-cp .env.example .env      # no edits needed for the demo
-make up                   # neo4j + backend + frontend
-make demo                 # seed the graph — zero keys, zero signups
-```
-
-Open **<http://localhost:3000>** and you have a live, explorable knowledge graph.
-
-| Service | URL |
+| Item | Value |
 | --- | --- |
-| Frontend UI | <http://localhost:3000> |
-| Backend API (Swagger) | <http://localhost:8000/docs> |
-| Neo4j Browser | <http://localhost:7474> · `neo4j` / `synapse_secret` |
+| Version | 0.4.0 (tag `v0.4.0`, released 2026-09-10). `main` carries the changes listed under `[Unreleased]` in [CHANGELOG.md](./CHANGELOG.md): relicensing, Procedural Graphs, the Synapse Lab and vector-index candidates for entity resolution. |
+| Licence | Core: PolyForm Noncommercial 1.0.0, source-available; commercial use needs a commercial licence. Client package: Apache-2.0. See [10. Licence](#10-licence). |
+| Maturity | Pre-1.0, one maintainer. Single-node stack without authentication; background jobs run in one process. Read [7. Known limitations](#7-known-limitations) before exposing it on a network. |
+| Stack | Python 3.12, FastAPI, Next.js 16, Neo4j 5 Community with APOC |
+| Author | [Ahmed Maaloul](https://github.com/ahmedmaaloul) |
 
-> **What works with no key:** the graph view, node inspector, hybrid vector + full-text retrieval, embeddings (local `fastembed`), the procedural-graph view and raw procedural guidance, retrieve-only [Lab](#-synapse-lab-compare-retrieval-approaches-on-your-own-data) runs, and the whole test suite.
-> **What needs a key:** *generating* chat answers, ingesting your own PDFs and running the Navigator agent — all of them call an LLM (the Lab's paid reader needs an OpenAI key specifically). Grab a **free** [Google AI Studio](https://aistudio.google.com/apikey) or [Groq](https://console.groq.com/keys) key, drop it in `.env`, restart, and you're done. Or run fully offline with [Ollama](#-provider-matrix).
+## Contents
 
-<details>
-<summary>Prefer not to install Docker Desktop? Other ways to run it</summary>
+1. [Overview](#1-overview)
+2. [Quick start](#2-quick-start)
+3. [User interface](#3-user-interface)
+4. [MCP server, CLI and HTTP API](#4-mcp-server-cli-and-http-api)
+5. [Architecture](#5-architecture)
+6. [Development and quality](#6-development-and-quality)
+7. [Known limitations](#7-known-limitations)
+8. [Documentation](#8-documentation)
+9. [Contributing](#9-contributing)
+10. [Licence](#10-licence)
+11. [Author and contact](#11-author-and-contact)
+
+## 1. Overview
+
+### 1.1 Capabilities
+
+| Capability | What it does |
+| --- | --- |
+| Ingestion | Reads a text-based PDF, extracts entities and relationships per chunk with a theme-specific prompt, embeds the entities, merges duplicates, and writes the graph to Neo4j together with the source passages and their embeddings. |
+| Themes | Groups the entity graph into communities (Louvain) and writes a title and a summary for each. |
+| Retrieval | Seeds from a vector index and a full-text index, adds each seed's 1-hop relationships, reasoning paths between the seeds and source excerpts. Corpus-level questions are answered from theme summaries. Available on its own as `POST /api/retrieve` and the MCP tool `synapse_retrieve`. |
+| Chat | Streams an answer generated from the retrieved context. |
+| GraphRAG Navigator | A ReAct agent that answers by walking the graph with six deterministic tools, guided by a procedural graph. Implements Procedural Graphs (Lu, Chen, Wu, Arık, [arXiv:2609.09153](https://arxiv.org/abs/2609.09153)). |
+| Procedural evolution | Refines a procedural graph from question and answer pairs: Navigator runs on them are scored by F1 or EM, and a candidate is kept only when its validation score does not drop. API and CLI only. |
+| Synapse Lab | Runs up to 8 retrieval arms over the same questions and token budgets, reads every context with one OpenAI reader model and one prompt, and ranks the arms by $ per 100 correct answers. |
+| Client package | MCP server (13 tools), CLI and async Python client over the HTTP API. |
+
+### 1.2 Model calls per operation
+
+API cost depends on the number of calls to a chat model or to the Lab's reader model.
+
+| Operation | Model calls | API key needed |
+| --- | --- | --- |
+| Seed the demo graph (`make demo`) | 0 | no |
+| Knowledge view, search, Inspector, Procedures view | 0 | no |
+| Retrieval (`POST /api/retrieve`, CLI `retrieve`, MCP `synapse_retrieve`) | 0 | no |
+| Theme rebuild | 1 per theme; derived titles when no provider is configured | no (model-written summaries need one) |
+| PDF ingestion | 1 per chunk (at most 40 chunks per document by default), then 1 per theme for the rebuild | yes |
+| Chat answer | 1 streamed call per question | yes |
+| Navigator question | 1 per step, at most `AGENT_MAX_STEPS` (8) or the request's `max_steps` (1 to 20); twice that with generative guidance | yes |
+| Procedural evolution | bounded by the request's `max_llm_calls` (default `EVOLUTION_MAX_LLM_CALLS`, 400; the CLI sends `--max-llm-calls` or its printed upper bound); refused before any call if the cap cannot pay for the baseline evaluation and one full round | yes |
+| Lab estimate, Lab run in `retrieve` mode | 0 | no |
+| Lab run in `realtime` or `batch` mode | at most 1 reader call per arm, budget and question (identical requests are sent once), within the `max_usd` cap | `OPENAI_API_KEY` |
+
+Embeddings run locally by default (fastembed, `BAAI/bge-small-en-v1.5`, 384 dimensions) and need
+no API key. The full cost model is in [docs/finops.md](./docs/finops.md).
+
+## 2. Quick start
+
+### 2.1 Requirements
+
+| Requirement | Detail |
+| --- | --- |
+| Docker Engine or Docker Desktop | with Docker Compose v2 (`docker compose`) |
+| git, make | any version; each `make` target is a short command in the [Makefile](./Makefile) |
+| Network access on the first run | pulls `neo4j:5-community`, `python:3.12-slim` and `node:20-alpine`, the APOC plugin, the pip and npm packages, and the fastembed model |
+
+| Port | Service | Override |
+| --- | --- | --- |
+| 3000 | Web UI | `FRONTEND_PORT` (also add the new origin, for example `http://localhost:3001`, to `CORS_ORIGINS` and recreate the backend) |
+| 8000 | Backend API, OpenAPI UI at `/docs` | `BACKEND_PORT` (also set `NEXT_PUBLIC_API_URL` and rebuild the frontend) |
+| 7474, 7687 | Neo4j Browser, Neo4j Bolt | none |
+| 8765 | MCP server over streamable HTTP at `/mcp` (opt-in profile `mcp`) | `MCP_PORT` |
+
+### 2.2 First run without an API key
+
+The repository ships a pre-extracted demo graph, "A Brief History of Artificial Intelligence
+(demo)": 53 entities of 11 types and 106 relationships
+([backend/scripts/demo_graph.json](./backend/scripts/demo_graph.json)). The seeder writes it with
+the same schema, embedding and write code that a live ingest uses. It skips LLM extraction,
+entity resolution, source passages and themes.
+
+1. Clone the repository and create the environment file. No edits are needed for this step.
+
+   ```bash
+   git clone https://github.com/ahmedmaaloul/synapse.git
+   cd synapse
+   cp .env.example .env
+   ```
+
+   To use a Neo4j password other than `synapse_secret`, set `NEO4J_PASSWORD` in `.env` before the
+   first start: Neo4j applies it only when it initialises the empty data volume.
+
+2. Build and start Neo4j, the backend and the frontend.
+
+   ```bash
+   make up        # docker compose up -d --build
+   ```
+
+3. Seed the demo graph. This deletes every `:Entity`, `:Community` and `:Chunk` node in the
+   stack's Neo4j before writing; procedural graphs are kept. If it prints `Cannot reach Neo4j`,
+   wait until `docker compose ps` reports `neo4j` and `backend` as healthy and run it again.
+
+   ```bash
+   make demo      # docker compose exec -T backend python -m scripts.seed_demo --clear
+   ```
+
+4. Open the web UI at <http://localhost:3000> and the OpenAPI UI at <http://localhost:8000/docs>.
+   The Neo4j Browser is at <http://localhost:7474> (user `neo4j`, password from `NEO4J_PASSWORD`).
+
+5. Query the graph without a model. Retrieval makes no LLM call:
+
+   ```bash
+   curl -s -X POST http://localhost:8000/api/retrieve \
+     -H 'Content-Type: application/json' \
+     -d '{"query": "How is Ada Lovelace connected to the Analytical Engine?", "k": 8, "max_context_chars": 2000}'
+   ```
+
+Stop the stack with `make down`; the graph stays in the `neo4j_data` volume.
+
+### 2.3 What works without a key
+
+With `.env` as copied (`LLM_PROVIDER=gemini`, `GOOGLE_API_KEY` empty):
+
+| Feature | Without a key | Notes |
+| --- | --- | --- |
+| Knowledge view, search, type filter, Inspector | works | The counter reads `53 N / 106 E`. |
+| Themes | works, with derived titles | Empty after seeding. The refresh icon in the Themes panel ("Rebuild themes") builds 4 themes whose titles join three member names. |
+| Procedures view | works | Both bundled procedural graphs are seeded when the backend starts. |
+| Retrieval (`POST /api/retrieve`, CLI `retrieve`, MCP `synapse_retrieve`) | works | No source excerpts on the demo graph, which has no passages. |
+| Chat | partial | Citations and reasoning paths appear; the answer text reads "Generation failed: ...". |
+| Navigator, PDF upload | no | Both need a chat model. |
+| Lab estimate, Lab run in `retrieve` mode | works | No model call. On the demo graph only the Lab arms N1 (vocabulary null), Synapse GraphRAG and Synapse-Lean produce context ([3.6](#36-lab)). |
+| Lab run in `realtime` or `batch` mode | no | Needs `OPENAI_API_KEY`. |
+
+### 2.4 Connecting a model
+
+1. Set the provider and its key in `.env`. The screenshots in this README used:
+
+   ```bash
+   LLM_PROVIDER=openai
+   OPENAI_API_KEY=<your key>
+   OPENAI_CHAT_MODEL=gpt-5-nano
+   OPENAI_REASONING_EFFORT=minimal
+   ```
+
+2. Recreate the backend container. Compose reads `.env` only when it creates a container, so
+   `docker compose restart` keeps the old values.
+
+   ```bash
+   docker compose up -d --force-recreate backend
+   curl -s http://localhost:8000/api/about      # reports llm_provider and embedding_provider
+   ```
+
+| Provider | `LLM_PROVIDER` | Credentials | In the default image |
+| --- | --- | --- | --- |
+| Google Gemini | `gemini` | `GOOGLE_API_KEY` | yes |
+| Anthropic | `claude` | `ANTHROPIC_API_KEY` | yes |
+| OpenAI | `openai` | `OPENAI_API_KEY` | yes |
+| Azure OpenAI | `azure_openai` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_CHAT_DEPLOYMENT` | yes |
+| Google Vertex AI | `vertex` | `VERTEX_PROJECT` and Application Default Credentials | no |
+| AWS Bedrock | `bedrock` | `BEDROCK_REGION` and the AWS credential chain | no |
+| Groq | `groq` | `GROQ_API_KEY` | no |
+| Mistral AI | `mistral` | `MISTRAL_API_KEY` | no |
+| Ollama | `ollama` | a reachable Ollama server (`OLLAMA_BASE_URL`) | yes |
+| OpenAI-compatible endpoint | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL`, and an API key for hosted gateways | yes |
+
+Providers marked "no" need the SDKs in
+[backend/requirements-providers.txt](./backend/requirements-providers.txt). Default models,
+the embedding providers (`EMBEDDING_PROVIDER`), the main backend settings (every setting is listed
+in `.env.example`) and the pinned versions are documented in
+[docs/configuration.md](./docs/configuration.md).
+
+## 3. User interface
+
+The web UI has four areas: the left sidebar (document upload, Themes, Clear Database), the graph
+panel with its view switch **Knowledge | Procedures | Lab**, the chat panel with its mode switch
+**Chat | Navigator**, and the Inspector, which opens on the right when a node is selected.
+
+All screenshots were taken on 2026-09-26 on an isolated local stack seeded with the demo graph
+only. Chat model: OpenAI gpt-5-nano with `OPENAI_REASONING_EFFORT=minimal`. Embeddings: fastembed.
+
+### 3.1 Knowledge view and document upload
+
+Figure 1 shows the Knowledge view: the entity graph with node search, a type filter and a
+node and edge counter. To ingest a PDF (a chat model is required), choose an extraction theme in
+the **Knowledge Base** drop-down of the sidebar (not the Themes panel; the drop-down preselects
+Personal CV / Resume), click **Upload Document** and follow the progress bar. The theme selects
+the extraction schema: Personal CV / Resume, Technology (Wiki / Docs), Generic / Other,
+Medical / Scientific, Business / Legal, or AI Safety / Evals
+([docs/ai-safety.md](./docs/ai-safety.md)). The same ingest over HTTP:
 
 ```bash
-make demo-local            # seed from a local venv (needs: docker compose up -d neo4j)
-python -m scripts.seed_demo --validate-only   # from backend/ — checks the fixture, touches nothing
-EMBEDDING_PROVIDER=fake python -m scripts.seed_demo --clear   # 100% offline, no model download
+curl -F file=@paper.pdf -F theme=Generic http://localhost:8000/api/upload   # returns a job_id
+curl -N http://localhost:8000/api/upload/<job_id>/events                    # progress as SSE
 ```
 
-Or click **[Open in GitHub Codespaces](https://codespaces.new/ahmedmaaloul/synapse)** — the
-[devcontainer](./.devcontainer/devcontainer.json) installs Python 3.12, Node 20 and every backend
-dependency, and forwards ports 3000/8000/8765/7474/7687 for you.
+**Clear Database** deletes the whole knowledge graph at once, without a confirmation dialog.
+Procedural graphs are kept.
 
-</details>
+### 3.2 Themes
 
----
+![Themes panel with the theme "Origins of Artificial Intelligence" expanded, showing its summary and member chips, and its 15 members ringed in amber in the graph while the other nodes are dimmed](./docs/screenshots/themes.png)
 
-## 🤖 Use it from Claude, Cursor & any MCP client
+*Figure 2. The theme "Origins of Artificial Intelligence" (15 members) expanded: its
+model-written summary and member chips. Its members are ringed in amber in the graph. The demo
+graph yields 4 themes of 18, 15, 11 and 9 members.*
 
-Synapse ships an **[MCP](https://modelcontextprotocol.io) server** — the `synapse-graphrag` package, published to PyPI by the release workflow — so the graph you just built is a tool any agent host can call. It is a thin client over the same HTTP API the UI uses: keep the stack running (`make up`, `make demo`) and register it.
+Themes are Louvain communities computed with networkx; communities with fewer than 3 members are
+dropped. Each theme gets one LLM call that writes a title and a summary of 2 to 3 sentences.
+Themes are rebuilt after every upload and on demand. Chat questions about the corpus as a whole
+are answered from these summaries.
 
-**Claude Code** — one line:
+### 3.3 Inspector
+
+![Inspector panel on the right showing the entity Charles Babbage with label, type PERSON, an empty Aliases field, the source document name and a one-sentence description](./docs/screenshots/inspector.png)
+
+*Figure 3. The entity Charles Babbage selected. The Inspector shows the label, the type PERSON
+and the stored properties: aliases, source document and description.*
+
+### 3.4 Chat
+
+A chat question passes through three stages:
+
+1. **Routing.** English regular-expression cues send the question to *local* search or, for
+   corpus-level questions, to *global* search over the theme summaries. No LLM call.
+2. **Retrieval.** Local search takes up to 8 seed entities from the vector and full-text indexes,
+   each with its 1-hop relationships, adds reasoning paths between the top seeds within a 2-hop
+   neighbourhood, and appends source excerpts (up to 4,000 characters).
+3. **Streaming.** The browser receives, over Server-Sent Events, the citations, the reasoning
+   paths and the sources, then the answer token by token.
+
+In local mode, the chips under "Grounded in" are the seed entities (up to 8) that retrieval placed
+in the prompt; their neighbours and the entities on the reasoning paths are in the prompt too,
+without a chip. For a corpus-level question the chips are the themes used. The chips show what
+retrieval selected, not what the answer used.
+
+### 3.5 Procedures and the Navigator
+
+A procedural graph is a small directed graph of steps. Each transition carries an optional
+condition, a guidance text and pitfalls. The graphs are stored in the same Neo4j database, and
+every save creates a new version. Two graphs are bundled and seeded at backend startup:
+`graphrag-navigator` (11 nodes, 14 edges) for the Navigator, and `mcp-host` (11 nodes, 18 edges)
+for MCP hosts.
+
+![Procedures view showing the procedural graph graphrag-navigator drawn left to right from Start to End with action, reasoning and status nodes, a legend of node types and edge relations, and a Versions panel with one live version](./docs/screenshots/procedures.png)
+
+*Figure 4. The Procedures view with `graphrag-navigator`. Node shape and colour give the type
+(ACTION, REASONING, STATUS); edge colour gives the relation (LEADS_TO, TRIGGERS,
+PROVIDES_INPUT_FOR, CONVERGES_TO); dashed edges are conditional. The Versions panel lists v1,
+"seeded from the expert prior".*
+
+The **Navigator** mode of the chat panel runs a ReAct loop: each step is one LLM call that writes
+a thought and one action. Before each step the agent's last action is located on the procedural
+graph with the methods `start`, `exact`, `normalized` and `semantic`, tried in that order, and the
+transitions up to 2 hops ahead of the matched node are added to its prompt; if no method matches,
+the full graph is used. The tools make no LLM call:
+
+| Tool | Returns |
+| --- | --- |
+| `search_entities(query)` | Top 5 entities from hybrid vector and full-text search |
+| `neighbors(entity)` | Direct relations of an entity with their direction |
+| `read_sources(entity)` | Up to 3 source passages the entity was extracted from |
+| `search_passages(query)` | Top 3 source passages by semantic search |
+| `find_path(source, target)` | Shortest relation chain between two entities |
+| `answer(text)` | Submits the final answer and ends the run |
+
+![Procedures view with the last Navigator run overlaid as step-number badges on the visited nodes, and below it the Navigator trace ending with a step-limit notice, no answer, and a usage line](./docs/screenshots/procedures-navigator.png)
+
+*Figure 5. The same graph with the last Navigator run overlaid ("8 steps, 4 nodes"). Each visited
+node carries the number of the step that first reached it, with "+" when a later step reached it
+again. Below, the end of the trace: step 8 calls `neighbors(entity="Attention Is All You Need")`;
+its guidance came from an exact match of the step 7 action on the procedural graph ("PG: EXACT").
+The run stopped at the 8-step limit without an answer: 8 LLM calls, 11,809 input and 570 output
+tokens, 8.6 s. See [7. Known limitations](#7-known-limitations).*
+
+Procedural evolution has no UI. The CLI (`synapse-graphrag evolve`) prints an upper bound on its
+LLM calls and starts only after confirmation; `POST /api/procedures/{name}/evolve` starts at
+once, capped by `max_llm_calls`. The data model, the localisation cascade, the guidance modes and
+the evolution algorithm are described in [docs/procedural-graphs.md](./docs/procedural-graphs.md).
+
+### 3.6 Lab
+
+The Lab runs several retrieval approaches ("arms") over the same questions and the same graph,
+packs each arm's evidence into the same token budgets with one packer, and has one reader model
+answer from every context with one prompt. It measures, on your own questions, whether a graph
+context is worth its tokens compared with passage retrieval.
+
+| Family | Arm | Evidence | Reference |
+| --- | --- | --- | --- |
+| Evidence floors | `null_closed_book` (N0) | none; the reader answers from its own knowledge | Synapse control |
+| | `null_vocabulary` (N1) | every entity name in the graph, question ignored | Synapse control |
+| | `null_random` (N2) | seeded random passages at the same budget | Synapse control |
+| Passage baselines | `bm25` | Neo4j full-text index over passages | [Robertson and Zaragoza](https://doi.org/10.1561/1500000019) |
+| | `dense` | vector index over passages | [Lewis et al.](https://arxiv.org/abs/2005.11401) |
+| Graph arms | `synapse_d` (Synapse GraphRAG) | the shipped retrieval path of [3.4](#34-chat), split into units | [Edge et al.](https://arxiv.org/abs/2404.16130) |
+| | `synapse_lean` (Synapse-Lean) | PathRAG-style flow-pruned paths with a LiteRAG-style hub penalty | [PathRAG](https://arxiv.org/abs/2502.14902), [LiteRAG](https://arxiv.org/abs/2609.10239) |
+| | `ppr` | passages ranked by Personalized PageRank over an entity and passage graph, without HippoRAG 2's LLM triple filter | [HippoRAG 2](https://arxiv.org/abs/2502.14802) |
+
+No arm calls an LLM while retrieving. `synapse_lean` and `ppr` re-implement the methods of the
+cited papers on Synapse's graph; they do not use the authors' code.
+
+![Lab Estimate tab: arm picker, dataset, budgets, realtime mode and reader model on the left; on the right the upper bound fitting the cap, four summary tiles and a per-arm, per-budget cost table](./docs/screenshots/lab-estimate.png)
+
+*Figure 6. Estimate tab. Realtime mode, reader gpt-5-nano, the 9 questions of the demo test
+split, all 8 arms at budgets 500, 2k and 4k: 198 reader calls (N0 sends the same prompt at every
+budget, so it is read once per question, not three times), point estimate $0.027, upper bound
+$0.067 against a cap of $0.50. The estimate calls no model.*
+
+A run is configured in three steps: pick arms, a dataset (the bundled demo set, an uploaded JSON
+or JSONL file, or HotpotQA once its dev set is in the local cache, fetched with
+`python -m benchmarks.public.hotpotqa` in `backend/`, and its paragraphs are ingested) and
+budgets; click **Estimate**; then **Run**, which stays disabled until a current estimate fits the
+cap.
+
+| Mode | Reader calls | Cost |
+| --- | --- | --- |
+| `retrieve` (default) | none | $0 with the local embedder; reports context tokens and whether the gold answer reached the context |
+| `realtime` | at most one per arm, budget and question; identical requests, such as N0 at every budget, are sent once | each request's worst case is reserved against the cap before it is sent; the run stops before exceeding it |
+| `batch` | through the OpenAI Batch API | half the listed price; collected later with **Check batch** in the Lab or `lab resume` |
+
+![Lab Results tab of a finished realtime run on 9 demo questions: a leaderboard ranked by dollars per 100 correct answers with F1, EM, token and delta columns, and a Pareto chart of F1 against reader cost per question](./docs/screenshots/lab-results.png)
+
+*Figure 7. Results of a realtime run on the demo test split (n = 9), reader gpt-5-nano, spent
+$0.0012 of a $0.05 cap. Arms: N0, N1, Synapse-Lean and Synapse GraphRAG at budgets 500 and 2k;
+the arms that read passages (N2, `bm25`, `dense` and `ppr`) were left out because the demo graph
+has no passages. N0 (closed-book) scores 77.8 F1 because the demo questions ask about well-known
+facts. Every difference from N0 is marked "n.s.": none both exceeds the effect floor (11.1 points
+with 9 questions) and has a 95% paired-bootstrap confidence interval that excludes zero. The
+figure demonstrates the UI; it is not a result.*
+
+Paid runs are ranked by $ per 100 correct answers (cost-of-pass,
+[Erol et al.](https://arxiv.org/abs/2504.13359)). Each row is compared, whatever the sign of the
+difference, with N0, with N2 at the same budget and, for a graph arm, with the better of `bm25`
+and `dense` at the same budget. A comparison needs the compared arm in the run: otherwise the
+cell shows a dash, as in the Δ N2 column of Figure 7, and the graph premium column is left out
+when no row has one. A difference is marked as an effect only when it exceeds a one-question
+effect floor and its paired-bootstrap 95% confidence interval excludes zero, and as "n.s."
+otherwise. Every run is written to `backend/lab_runs/<run_id>/` and can be re-scored without
+Neo4j or a model. Details: [docs/lab.md](./docs/lab.md).
+
+## 4. MCP server, CLI and HTTP API
+
+### 4.1 Installing the client package
+
+`packages/synapse-graphrag` contains an MCP server, a CLI and an async Python client. All three
+talk to the backend over HTTP. The package needs Python 3.11 or later, installs the commands
+`synapse-graphrag` and `synapse-mcp`, and is not published on PyPI. Install it from the
+repository:
 
 ```bash
-claude mcp add synapse -e SYNAPSE_URL=http://localhost:8000 -- uvx synapse-graphrag mcp
+pip install ./packages/synapse-graphrag                    # from a checkout
+pip install "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag"
 ```
 
-> Until the first PyPI release is out, run it straight from the repo instead of `uvx synapse-graphrag mcp`:
-> `uvx --from "git+https://github.com/ahmedmaaloul/synapse#subdirectory=packages/synapse-graphrag" synapse-graphrag mcp`
-> — or `pip install ./packages/synapse-graphrag` from a checkout and use `synapse-mcp` as the command.
+### 4.2 Registering the MCP server
 
-**Claude Desktop / Cursor** — add to `claude_desktop_config.json` or `.cursor/mcp.json`:
+The server needs a running backend (`make up`) and reads its address from `SYNAPSE_URL`.
+
+Claude Code:
+
+```bash
+claude mcp add synapse -e SYNAPSE_URL=http://localhost:8000 -- \
+  uvx --from "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag" synapse-graphrag mcp
+```
+
+Claude Desktop or Cursor (`claude_desktop_config.json` or `.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "synapse": {
       "command": "uvx",
-      "args": ["synapse-graphrag", "mcp"],
+      "args": [
+        "--from",
+        "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag",
+        "synapse-graphrag",
+        "mcp"
+      ],
       "env": { "SYNAPSE_URL": "http://localhost:8000" }
     }
   }
 }
 ```
 
-Then ask your assistant *"What does the Synapse graph say about the Analytical Engine?"* — it calls `synapse_retrieve`, reads the subgraph and answers with entity citations. `synapse-graphrag install-config --client cursor` (or `claude-code`, `claude-desktop`, `vscode`, `windsurf`) prints the exact snippet for each client.
+Over streamable HTTP instead of stdio, `docker compose --profile mcp up -d` serves
+<http://localhost:8765/mcp>. Neither this transport nor the backend has authentication; see
+[DEPLOYMENT.md](./DEPLOYMENT.md) before exposing either. Per-host setup:
+[docs/mcp.md](./docs/mcp.md#install-per-client). Its snippets use the PyPI form
+`uvx synapse-graphrag mcp`; until the package is on PyPI, replace it with the `uvx --from`
+command above.
 
-| Tool | What it does | Writes? |
-| --- | --- | :--: |
-| `synapse_retrieve` | Budgeted GraphRAG context — subgraph, reasoning paths, source chunks — with **no LLM call** on the Synapse side | |
-| `synapse_ask` | A full answer generated by *Synapse's* LLM (a second LLM bill — prefer `synapse_retrieve`) | |
-| `synapse_ingest_pdf` | Ingest a local PDF into the graph, following the job to completion | ✅ |
-| `synapse_communities` | Corpus-level themes: Louvain communities with their LLM summaries | |
-| `synapse_find_entities` | Case-insensitive substring search over entity labels and types | |
-| `synapse_graph_stats` | Node/edge counts, by entity type and relationship type | |
-| `synapse_status` | Health, readiness, version and the active providers | |
-| `synapse_clear_graph` | Wipe the knowledge graph (procedural graphs are kept) — refuses unless called with `confirm=true` | ⚠️ |
-| `synapse_procedures` | The [procedural graphs](#-procedural-memory-agents-that-learn-how-to-use-the-graph) the backend keeps, with version and score | |
-| `synapse_procedure_guidance` | Call before each step of a multi-step task: the procedural subgraph around your last action (default graph `mcp-host`, built on these tools) — `raw` mode makes **no LLM call** | |
-| `synapse_record_trajectory` | Record a finished run (its steps and an honest score in [0, 1]) against a procedural graph | ✅ |
-| `synapse_agent_ask` | The backend's GraphRAG Navigator agent answers by walking the graph step by step (backend LLM calls — one per step) | |
-| `synapse_lab_runs` | [Synapse Lab](#-synapse-lab-compare-retrieval-approaches-on-your-own-data) results: the list of runs, or one run's leaderboard report. Read-only: no tool starts or pays for a run | |
+### 4.3 MCP tools
 
-### 💸 FinOps: budgeted context, not a second LLM bill
-
-A tool that *answers* the question makes the host model pay to read an answer another model already paid to write. Synapse's default tool is **retrieval-only**: `synapse_retrieve` returns the ranked subgraph, reasoning paths and source excerpts and lets the host model do the one generation it was going to do anyway. Every call is budgeted — `max_context_chars` (default `SYNAPSE_MAX_CONTEXT_CHARS=6000`) truncates at the last line boundary within the budget (a hard cut only if that boundary would waste more than 40 % of it) and marks the cut — and every response carries a `usage` block (`context_chars`, `context_tokens_est`, `truncated`, `cached`, …) so an agent, or a bill, can see exactly what was consumed. Repeated queries are served from a TTL cache (`SYNAPSE_CACHE_TTL`, 300 s by default) without touching the backend. The same knob is on the CLI: `synapse-graphrag retrieve "…" --budget 2000 --json`.
-
-**Over HTTP instead of stdio** (shared servers, Docker, remote hosts):
-
-```bash
-docker compose --profile mcp up -d      # → http://localhost:8765/mcp  (streamable HTTP)
-```
-
-Full guide — per-client setup, transports, tool reference, cost model, troubleshooting and security: **[docs/mcp.md](./docs/mcp.md)**.
-
-Working on AI safety? Ingest with `--theme "AI Safety"` (risks, failure modes, mitigations, evaluations, incidents, policies — each risk labelled *demonstrated* or *hypothesised*) and use the `safety_brief` prompt: **[docs/ai-safety.md](./docs/ai-safety.md)**. The full cost model behind the budget knobs: **[docs/finops.md](./docs/finops.md)**.
-
----
-
-## 🧭 Procedural memory: agents that learn *how* to use the graph
-
-The knowledge graph is *semantic* memory: what your documents say. It says nothing about *how* to
-use it: which lookup comes first, when a bridge entity has been found, when the evidence is enough
-to answer. Synapse adds **procedural memory**, an implementation of *Procedural Graphs* (Lu, Chen,
-Wu, Arık — [arXiv:2609.09153](https://arxiv.org/abs/2609.09153)).
-
-A procedural graph is a small directed graph of tool actions, reasoning steps and statuses. Every
-transition carries a **condition**, **guidance** and **pitfalls**. It lives in the same Neo4j as the
-entities it helps navigate, and every change is versioned and can be rolled back.
-
-- **Online.** An agent's last action places it on a node, and it is shown the transitions up to two
-  hops ahead. By default the guidance is that **raw subgraph: zero extra LLM calls**. The paper
-  instead has a guidance LLM rewrite it at every step. Its localized generative guidance cost
-  +33 % to +55 % total tokens over no graph (GDPval, ALFWorld). Raw guidance is Synapse's own
-  choice, and a hypothesis to measure rather than a result.
-- **Offline.** The paper's self-evolution loop refines the graph from scored question/answer
-  pairs: roll out, let an LLM propose edits, and keep a candidate only if the validation score does
-  not drop. It is a search, not a guaranteed gain: in the paper's HotpotQA study, evolving the
-  expert graph (what `evolve --mode static` does) scored 76.34 F1 at 10,658 tokens per question,
-  *below* the unevolved expert graph (76.61 at 9,046). Of the modes Synapse implements, only
-  evolution from scratch (`--mode scratch`) beat it (78.79).
-
-```mermaid
-flowchart LR
-    Q[💬 Question] --> S{{Navigator step<br/>Thought → Action}}
-    S -->|last action| L[Localize on the<br/>procedural graph · 2 hops]
-    PG[(Procedural graph<br/>conditions · guidance · pitfalls)] --> L
-    L -->|guidance · raw = no LLM call| S
-    S -->|deterministic tool| KG[(Knowledge graph<br/>entities · relations · passages)]
-    KG -->|observation| S
-    S --> A[💡 Answer + step trace]
-    QA[📋 QA pairs] --> EV[Self-evolution<br/>rollouts → refiner → validation gate]
-    EV -->|new version if the score holds| PG
-```
-
-The built-in consumer is the **GraphRAG Navigator**, a ReAct agent that answers by walking
-Synapse's own graph with six deterministic tools, steered by the `graphrag-navigator` graph (in
-the UI: *Chat | Navigator*, and *Knowledge | Procedures* to see the graph). MCP hosts get
-guidance for their own work through `synapse_procedure_guidance` and the `follow_procedure`
-prompt, on a second bundled graph, `mcp-host`, whose steps are the real `synapse_*` tool names:
-a host's own calls place it on the graph by exact name.
-
-```bash
-synapse-graphrag procedures show graphrag-navigator    # the bundled expert strategy, transition by transition
-synapse-graphrag agent "Who designed the machine that Ada Lovelace wrote a program for?"   # step trace + usage
-# evolve on the bundled demo QA set: a cap under one round, (9+6+9)×8 + 1 = 193 calls, is refused; prints the bound, asks first
-synapse-graphrag evolve graphrag-navigator \
-    --train backend/benchmarks/procedural/demo_qa.json --train-split train \
-    --val   backend/benchmarks/procedural/demo_qa.json --val-split val \
-    --rounds 1 --batch-size 6 --max-llm-calls 200
-```
-
-`agent` and `evolve` need an LLM key on the backend. The `procedures …` commands make no LLM call,
-except `procedures guide --mode generative`. The demo graph has no source chunks, so on it the
-Navigator's `read_sources` and `search_passages` return nothing. We have
-**not** reproduced the paper's numbers: a [cost-capped harness](./backend/benchmarks/procedural/README.md)
-compares systems on Synapse's own Navigator (no graph vs raw vs generative guidance), which is
-not a reproduction of the paper's tables. The data model, the localization cascade, Algorithm 1 as implemented, the
-API / MCP / CLI reference, costs and limitations are in
-**[docs/procedural-graphs.md](./docs/procedural-graphs.md)**.
-
----
-
-## 🧪 Synapse Lab: compare retrieval approaches on your own data
-
-Is a GraphRAG context worth its tokens on *your* documents, or would BM25 do as well for less?
-The **Synapse Lab** answers that on your own questions. It runs eight retrieval approaches
-("arms") over the same graph and packs every arm's evidence into the same token budgets with
-**one shared packer**. **One reader** then answers from it with **one prompt**, and the arms are
-ranked by **$ per 100 correct answers**, always next to three evidence floors.
-
-| Family | Arms | Sources |
+| Tool | Purpose | Backend LLM calls |
 | --- | --- | --- |
-| **Evidence floors** | `null_closed_book` (N0: no evidence) · `null_vocabulary` (N1: every entity name, question ignored) · `null_random` (N2: random passages at the same budget) | Synapse null controls |
-| **Passage baselines** | `bm25` (Lucene BM25) · `dense` (vector RAG over the same passages) | [Robertson & Zaragoza](https://doi.org/10.1561/1500000019) · [Lewis et al.](https://arxiv.org/abs/2005.11401) |
-| **Graph arms** | `synapse_d` (the shipped path) · `synapse_lean` (PathRAG-style flow-pruned paths with a LiteRAG-style hub penalty) · `ppr` (HippoRAG-2-style Personalized PageRank, without the LLM filter) | [Edge et al.](https://arxiv.org/abs/2404.16130) · [PathRAG](https://arxiv.org/abs/2502.14902) · [LiteRAG](https://arxiv.org/abs/2609.10239) · [HippoRAG 2](https://arxiv.org/abs/2502.14802) |
+| `synapse_retrieve` | Context, citations, reasoning paths, source excerpts and a usage block, cut to `max_context_chars` (default 6000) | 0 |
+| `synapse_ask` | An answer generated by the backend's model | 1 |
+| `synapse_ingest_pdf` | Ingests a PDF from the MCP server's file system | 1 per chunk, plus themes |
+| `synapse_communities`, `synapse_find_entities`, `synapse_graph_stats`, `synapse_status` | Themes, entity search, graph statistics, health and active providers | 0 |
+| `synapse_clear_graph` | Deletes the knowledge graph; refuses unless `confirm=true` | 0 |
+| `synapse_procedures`, `synapse_procedure_guidance`, `synapse_record_trajectory` | Procedural graphs: list, guidance for the next step, store a finished run | 0 (guidance in `generative` mode: 1) |
+| `synapse_agent_ask` | Runs the Navigator | 1 per step (2 with `guidance="generative"`) |
+| `synapse_lab_runs` | Lists Lab runs or returns one run's report; never starts a run | 0 |
 
-Every arm retrieves with **0 LLM calls**. The "-style" arms are re-implementations over
-Synapse's own graph, not the authors' code, and [the guide](./docs/lab.md#the-arms) lists what
-each one leaves out.
+Prompts: `answer_with_graph`, `safety_brief` and `follow_procedure`. Resource: `synapse://about`.
 
-- **$0 by default.** Retrieve-only mode calls no model. It reports context tokens, units by kind,
-  whether the gold answer reached the context and, on HotpotQA, gold-paragraph recall, with the
-  floors in the same table.
-- **Paid runs are estimated, capped and re-checked.** `realtime`, or the OpenAI **Batch API at
-  half price**, prints a point estimate and an upper bound first and needs a hard `--max-usd`.
-  The run is re-priced on its measured contexts before the first call, and realtime reads are
-  metered call by call.
-- **A gain is called only when it holds up.** Gain above N0 and N2, and the graph premium over the
-  best passage baseline at the same budget, come with a paired-bootstrap 95% CI and a one-question
-  effect floor; anything else is "too close to call". F1-vs-$ and F1-vs-tokens Pareto frontiers
-  show what each point of F1 costs.
-- **Every run is a directory**: a manifest (git SHA, arm config hashes, dataset sha256, price dates,
-  estimate vs actual), every packed context with its hash, the requests and the answers. Runs
-  resume after a crash and re-score without Neo4j or a model.
+### 4.4 CLI and Python client
 
 ```bash
-synapse-graphrag lab arms                                # the eight arms and their sources
-synapse-graphrag lab run --budgets 500,2k,4k --yes       # retrieve-only on the demo questions: free
-synapse-graphrag lab upload my_questions.jsonl           # your own {question, answer} pairs
-synapse-graphrag lab run --dataset qa-file:my_questions.jsonl --mode batch \
-    --budgets 500,2k,4k --max-usd 1.00                   # prints the estimate, asks, submits at half price
-synapse-graphrag lab resume RUN_ID                       # collects the batch and scores it
+synapse-graphrag status
+synapse-graphrag retrieve "How is Ada Lovelace connected to the Analytical Engine?" --budget 2000 --json
+synapse-graphrag procedures show graphrag-navigator --text
+synapse-graphrag lab estimate --mode realtime --budgets 500,2k,4k --max-usd 0.10
 ```
 
-In the UI it is the third view: *Knowledge | Procedures | **Lab***. Agents can read results with
-the read-only `synapse_lab_runs` MCP tool; nothing an agent can call starts a paid run. Arms,
-packer, metrics, spend controls, Batch ingest and limitations:
-**[docs/lab.md](./docs/lab.md)**.
+`evolve` and `lab run` print their estimate first and start only with `--yes` or an interactive
+`y`; `lab resume` asks the same way when resuming would spend. `ask`, `agent` and `ingest` call
+the backend's model without asking. The async client:
 
----
+```python
+import asyncio
 
-## ✨ Why it's interesting
+from synapse_graphrag import SynapseClient
 
-- **Real GraphRAG, not keyword lookup.** Retrieval seeds from a **Neo4j vector index** over entity embeddings *and* a full-text index, then expands each seed to its 1-hop neighborhood so the model reasons over *relationships*, not isolated facts.
-- **Measured, not vibes.** A [retrieval eval harness](#-retrieval-evaluation) scores the pipeline — **Hit@1 88% · Recall@8 100% · MRR 0.92** on paraphrased queries that keyword search would miss.
-- **Genuinely pluggable AI.** **Ten chat providers and nine embedding providers** behind one small factory, chosen by a single env var — from OpenAI and Bedrock to a laptop running Ollama. No code change, no rebuild.
-- **Streamed everything.** Ingestion progress and chat answers both stream over **Server-Sent Events**; answers arrive token-by-token with the grounding entities highlighted live in the graph.
-- **Callable from any agent.** An MCP server, CLI and Python client ([`synapse-graphrag`](./docs/mcp.md)) expose the graph to Claude, Cursor, VS Code and friends — and the retrieval-only `synapse_retrieve` tool returns **budgeted** context with `usage` metadata, so a host that already has an LLM never pays for a second generation.
-- **Procedural memory, not just facts.** [Procedural Graphs](./docs/procedural-graphs.md) (arXiv:2609.09153) store *how* to navigate the graph next to the graph itself: step-local guidance with **zero extra LLM calls** by default, a ReAct navigator agent to use it, and the paper's self-evolution loop with versioned, rollback-able history — plus a cost-capped harness to measure whether it helps, instead of claiming it does.
-- **A FinOps leaderboard for retrieval.** The [Synapse Lab](#-synapse-lab-compare-retrieval-approaches-on-your-own-data) runs BM25, dense passages, Synapse's graph arms and PathRAG- and HippoRAG-2-style arms side by side on your own questions, under the same token budgets, ranked by **$ per 100 correct answers** next to three evidence floors. Retrieve-only runs cost nothing; paid runs are estimated, capped and resumable.
-- **Tested & CI'd.** 1,900+ hermetic unit tests plus integration tests against a **real Neo4j service container** in GitHub Actions, and frontend typecheck/lint/build on every push.
 
----
+async def main() -> None:
+    async with SynapseClient("http://localhost:8000") as client:
+        r = await client.retrieve("Who designed the Analytical Engine?", k=8, max_context_chars=2000)
+        print(r.mode, r.usage)
+        print(r.context)
 
-## 🧠 How it works
+
+asyncio.run(main())
+```
+
+### 4.5 HTTP API
+
+The backend serves an OpenAPI UI at `/docs`. Routes are mounted under `/api`, except the health
+checks.
+
+| Method and path | Purpose |
+| --- | --- |
+| `POST /api/upload`, `GET /api/upload/{job_id}/events` | PDF ingest; progress as SSE |
+| `GET /api/graph-data`, `DELETE /api/graph` | The entity graph; delete everything except the procedural graphs |
+| `GET /api/communities`, `POST /api/communities/rebuild` | Themes |
+| `POST /api/chat` | Retrieval and a streamed answer (SSE) |
+| `POST /api/retrieve` | Retrieval only: `{query, k, max_context_chars}` returns `{mode, context, citations, paths, sources, usage}` |
+| `POST /api/agent/ask` | Navigator run |
+| `/api/procedures/...` | Procedural graphs: read, write, versions, rollback, guidance, trajectories, evolution |
+| `/api/lab/...` | Arms, models, datasets, QA upload, estimate, runs, run events, resume |
+| `GET /health`, `GET /health/ready`, `GET /api/about` | Liveness, readiness, version, licence and active providers |
+
+## 5. Architecture
 
 ```mermaid
 flowchart LR
-    PDF[📄 PDF] --> P[Parse + chunk<br/>sentence-aware]
-    P --> LLM[LLM extraction<br/>any of 10 providers]
-    LLM --> D[Dedupe + canonicalize]
-    D --> E[Embed entities]
-    E --> W[(Neo4j<br/>+ vector index)]
-
-    Q[💬 Question] --> H{Hybrid retrieval}
-    W --> H
-    H -->|vector seeds| X[Expand 1-hop<br/>neighborhood]
-    H -->|full-text seeds| X
-    X --> G[LLM generation<br/>streamed + cited]
-    G --> A[💡 Grounded answer]
-    X --> R["🔌 /api/retrieve<br/>budgeted context · no LLM"]
-    R --> M[🤖 MCP host · CLI · SDK]
+    UI["Web UI, Next.js, port 3000"] -->|"HTTP and SSE"| API["Backend, FastAPI, port 8000"]
+    CLI["synapse-graphrag CLI"] -->|HTTP| API
+    HOST["MCP host"] -->|"stdio or streamable HTTP"| MCP["synapse-mcp"]
+    MCP -->|HTTP| API
+    API -->|Bolt| DB[("Neo4j 5 with APOC")]
+    API --> LLM["Chat provider, LLM_PROVIDER"]
+    API --> EMB["Embeddings, fastembed by default"]
+    API --> OAI["OpenAI API, Lab reader only"]
 ```
 
-Ingestion runs as a background job that streams progress; retrieval interleaves semantic and lexical seeds, preserves the vector ranking, and returns the entities that grounded the answer as citations. The retrieval step is also exposed on its own as **`POST /api/retrieve`** — context, citations, reasoning paths and source chunks under a `max_context_chars` budget, with `usage` metadata and no LLM call — which is what the MCP server and CLI build on. A second, step-by-step path — the GraphRAG Navigator agent steered by a procedural graph (`POST /api/agent/ask`) — is described [above](#-procedural-memory-agents-that-learn-how-to-use-the-graph). The [Lab](#-synapse-lab-compare-retrieval-approaches-on-your-own-data) puts this retrieval side by side with passage baselines and other graph approaches on your own questions. See **[ARCHITECTURE.md](./ARCHITECTURE.md)** for the full design.
+Ingestion: the upload request runs step 1, and a background job runs steps 2 to 6:
 
----
+1. Extract text with pypdf (no OCR) and split it into windows of up to 1,000 characters, ending on
+   a sentence boundary where possible, with 200 characters of overlap, keeping the first
+   `MAX_CHUNKS`.
+2. Extract entities and relationships with one LLM call per chunk, using the theme's schema. A
+   chunk that fails yields an empty extraction and does not fail the document.
+3. Deduplicate, embed the entities, and merge near-duplicates within the document.
+4. Write entities and relationships, and store the source passages as `:Chunk` nodes linked to
+   the entities extracted from them.
+5. Merge near-duplicates across documents, with candidates from the vector index. Resolution uses
+   no LLM: both the embedding cosine (0.93) and the name similarity (0.87) must pass, and the
+   types must match.
+6. Rebuild the themes.
 
-## 🔌 Provider matrix
-
-Set **one** env var. Everything else has a working default — see [`.env.example`](./.env.example) for the per-provider details, and [`backend/app/services/llm_provider.py`](./backend/app/services/llm_provider.py) for the factory itself.
-
-| Provider | `LLM_PROVIDER=` | Credential needed | Free tier? | Install |
-| --- | --- | --- | :--: | --- |
-| **Google Gemini** *(easiest)* | `gemini` | `GOOGLE_API_KEY` — [AI Studio](https://aistudio.google.com/apikey) | ✅ | included |
-| **Anthropic Claude** | `claude` | `ANTHROPIC_API_KEY` — [console](https://console.anthropic.com/) | ❌ paid credits | included |
-| **OpenAI** | `openai` | `OPENAI_API_KEY` — [platform](https://platform.openai.com/api-keys) | ❌ paid credits | included |
-| **Azure OpenAI** | `azure_openai` | `AZURE_OPENAI_API_KEY` + `_ENDPOINT` + `_CHAT_DEPLOYMENT` | ❌ Azure subscription | included |
-| **Google Vertex AI** | `vertex` | `VERTEX_PROJECT` + [ADC](https://cloud.google.com/docs/authentication/application-default-credentials) (no key) | ⚠️ GCP trial credits | `make providers` |
-| **AWS Bedrock** | `bedrock` | `BEDROCK_REGION` + the standard AWS credential chain | ❌ pay per token | `make providers` |
-| **Groq** *(fastest)* | `groq` | `GROQ_API_KEY` — [console](https://console.groq.com/keys) | ✅ rate-limited | `make providers` |
-| **Mistral AI** | `mistral` | `MISTRAL_API_KEY` — [console](https://console.mistral.ai/api-keys/) | ⚠️ free experiment tier | `make providers` |
-| **Ollama** *(local & private)* | `ollama` | none — `ollama pull mistral` on the host | ✅ free forever | included |
-| **Any OpenAI-compatible API** | `openai_compatible` | `OPENAI_COMPATIBLE_BASE_URL` (+ key for hosted gateways) | depends | included |
-
-> **`openai_compatible` is the escape hatch.** It is `ChatOpenAI` pointed at a custom `base_url`, so it already covers **OpenRouter**, **Together**, **DeepSeek**, **Fireworks**, **vLLM**, **LM Studio** and **llama.cpp's server** — with *zero* extra dependencies. If your provider speaks `/v1/chat/completions`, it works today.
-
-`make providers` runs `pip install -r backend/requirements-providers.txt` — the heavier first-party cloud SDKs (`langchain-google-vertexai`, `langchain-aws`, `langchain-groq`, `langchain-mistralai`, `langchain-cohere`) that are kept out of the default image so it stays small.
-
-### Embedding providers
-
-Embeddings are chosen independently of the chat model. The default needs **no API key and no GPU**.
-
-| `EMBEDDING_PROVIDER=` | Default model | Dims → `EMBEDDING_DIM` | Credential | Install |
-| --- | --- | :--: | --- | --- |
-| `fastembed` *(default)* | `BAAI/bge-small-en-v1.5` | **384** | none — runs locally | included |
-| `gemini` | `models/text-embedding-004` | 768 | `GOOGLE_API_KEY` | included |
-| `ollama` | `nomic-embed-text` | 768 | none — local | included |
-| `openai` | `text-embedding-3-small` | 1536 | `OPENAI_API_KEY` | included |
-| `azure_openai` | your deployment | match your model | `AZURE_OPENAI_*` + `_EMBEDDING_DEPLOYMENT` | included |
-| `vertex` | `text-embedding-005` | 768 | `VERTEX_PROJECT` + ADC | `make providers` |
-| `bedrock` | `amazon.titan-embed-text-v2:0` | 1024 | `BEDROCK_REGION` + AWS chain | `make providers` |
-| `cohere` | `embed-english-v3.0` | 1024 | `COHERE_API_KEY` | `make providers` |
-| `fake` | deterministic hash | `EMBEDDING_DIM` | none — offline dev & tests | included |
-
-> ⚠️ **`EMBEDDING_DIM` must match the model** — it sizes the Neo4j vector index. Switching embedding providers means re-ingesting (or re-running `make demo`) so all vectors share one space.
-
----
-
-## 📊 Retrieval evaluation
-
-Shipping RAG without measuring retrieval is flying blind. `backend/eval/` seeds a fixture graph and scores how well retrieval surfaces the *right* entities for **paraphrased** questions (deliberately no lexical overlap, so keyword-only search fails).
-
-```bash
-docker compose up -d neo4j
-make eval        # writes backend/eval/results.md
-```
-
-| Metric | Score |
-| --- | --- |
-| **Hit@1** | 88% |
-| **Recall@8** | 100% |
-| **Precision@8** | 17%* |
-| **MRR** | 0.917 |
-
-<sub>*Precision@8 is low by construction — most queries have only 1–2 relevant entities, so returning 8 candidates for graph highlighting caps precision. Hit@1 / MRR are the quality signal.</sub>
-
----
-
-## 🍴 Why fork this?
-
-Because most GraphRAG repos are notebooks. This one is a running product with the boring parts already solved.
-
-- **Swap the whole AI layer with one env var.** Ten chat backends and nine embedding backends behind [one small factory](./backend/app/services/llm_provider.py). Benchmark Gemini vs. Groq vs. your own vLLM box without touching application code.
-- **A real vector GraphRAG reference implementation.** Neo4j native vector *and* full-text indexes, interleaved seeding, 1-hop expansion, streamed citations that map back to graph nodes. Not a `similarity_search()` wrapper.
-- **A test suite and CI you can build on.** 1,900+ hermetic backend tests (no network, no DB, no LLM), integration tests against a live Neo4j service container, ruff + eslint + tsc, and all three Docker image builds — all green on every push.
-- **Docs that respect your time.** [ARCHITECTURE.md](./ARCHITECTURE.md) explains *why*, [DEPLOYMENT.md](./DEPLOYMENT.md) gets it online, [CONTRIBUTING.md](./CONTRIBUTING.md) walks you through your first PR, and every env var is documented in [`.env.example`](./.env.example).
-- **A clean seam to extend.** Provider branches are lazily imported and validate credentials *before* touching an SDK — which is why a new provider is a self-contained ~20-line change plus a test.
-
-### Add a provider — the best first PR
-
-Adding an AI provider is small, self-contained, and immediately useful to someone else. There's a
-**[step-by-step walkthrough with real function names](./CONTRIBUTING.md#add-a-new-ai-provider-in-20-lines)**
-in CONTRIBUTING.md.
-
-👉 **[Open a provider request](https://github.com/ahmedmaaloul/synapse/issues/new?template=provider_request.yml)** — whether you want to build it or just want it to exist. Together AI, Nvidia NIM, Hugging Face TGI, Cerebras, xAI, Perplexity, watsonx… all fair game.
-
-Other good entry points: the [roadmap](#-roadmap) below, anything labelled [`good first issue`](https://github.com/ahmedmaaloul/synapse/labels/good%20first%20issue), and [bug reports](https://github.com/ahmedmaaloul/synapse/issues/new?template=bug_report.yml).
-
----
-
-## 🧪 Testing & CI
-
-```bash
-make test        # backend unit tests — hermetic (no DB / network / LLM)
-make test-int    # integration tests against a live Neo4j
-make eval        # retrieval quality harness
-make lint        # ruff + eslint + tsc
-make fmt         # ruff --fix + ruff format
-make mcp-test    # synapse-graphrag package: ruff + pytest
-```
-
-Every push runs [CI](./.github/workflows/ci.yml): backend lint + unit tests, **integration tests against a real Neo4j 5 service container**, frontend eslint/typecheck/build, lint/tests/build of the `synapse-graphrag` package, and all three Docker image builds. Pushing a `v*` tag runs the [release workflow](./.github/workflows/release.yml): version and changelog checks, GHCR images, a GitHub Release and (opt-in) PyPI publishing — see [CONTRIBUTING.md](./CONTRIBUTING.md#cutting-a-release).
-
----
-
-## 🛠️ Tech stack
-
-| Layer | Tech |
-| --- | --- |
-| **Frontend** | Next.js 16, React 19, TailwindCSS 4, `react-force-graph`, `react-markdown` |
-| **Backend** | FastAPI, LangChain, async Neo4j driver, `pypdf`, SSE |
-| **AI** | 10 pluggable chat providers · 9 pluggable embedding providers · local `fastembed` default |
-| **Database** | Neo4j 5 (Bolt + APOC + native vector & full-text indexes) |
-| **Agents** | MCP server (stdio + streamable HTTP), CLI and async Python client — `synapse-graphrag` · GraphRAG Navigator (ReAct) steered by Procedural Graphs |
-| **Lab** | `tiktoken` token budgets · `networkx` Personalized PageRank · OpenAI Batch API · seeded paired bootstrap |
-| **Infra** | Docker Compose, GitHub Actions (CI + tag-driven releases to GHCR / PyPI), Codespaces devcontainer |
-
----
-
-## 📁 Project structure
+The same retrieval function serves `/api/chat`, `/api/retrieve`, the MCP server and the Lab arm
+`synapse_d`. [ARCHITECTURE.md](./ARCHITECTURE.md) explains the design decisions.
 
 ```text
-synapse/
-├── backend/
-│   ├── app/
-│   │   ├── main.py                 # FastAPI app: CORS, lifespan, health/readiness, /api/about
-│   │   ├── config.py               # typed settings (every provider, one Literal)
-│   │   ├── neo4j_driver.py         # async driver + connectivity check + one-transaction write batches
-│   │   ├── routers/                # upload (SSE jobs) · chat (SSE) + retrieve (JSON) · graph + communities · procedures + agent · lab
-│   │   ├── data/procedural/        # bundled expert priors, seeded at startup — graphrag-navigator.json (the Navigator) · mcp-host.json (MCP hosts)
-│   │   ├── lab/                    # 🧪 Synapse Lab: arms · packer · reader · metrics · estimate · runner · batch · ingest
-│   │   └── services/
-│   │       ├── llm_provider.py     # ⭐ the pluggable chat + embeddings factory
-│   │       ├── graph_builder.py    # extract → dedupe → embed → write
-│   │       ├── graph_schema.py     # vector + full-text index bootstrap (+ procedural constraints)
-│   │       ├── chat_engine.py      # hybrid GraphRAG retrieval, multi-hop paths, budgeting, streaming
-│   │       ├── entity_resolution.py# embedding + fuzzy-name duplicate merging
-│   │       ├── communities.py      # Louvain communities + LLM summaries (global search)
-│   │       ├── chunk_store.py      # source chunks (text units) linked to entities
-│   │       ├── procedural_graph.py # 🧭 Procedural Graphs: the pure data structure, edits, validation, serializers
-│   │       ├── procedural_store.py # procedural memory in Neo4j: versions, rollback, rejections, trajectories
-│   │       ├── procedural_guidance.py # step-local guidance: localization cascade, raw / generative modes
-│   │       ├── graph_agent.py      # the GraphRAG Navigator: a ReAct agent over deterministic graph tools
-│   │       ├── procedural_evolution.py # offline self-evolution (the paper's Algorithm 1), LLM-call budget
-│   │       ├── qa_metrics.py       # SQuAD / HotpotQA EM + F1
-│   │       ├── pdf_parser.py       # sentence-aware chunking
-│   │       └── jobs.py             # in-memory SSE job bus
-│   ├── scripts/seed_demo.py        # zero-API-key demo graph seeder (`make demo`)
-│   ├── tests/                      # hermetic unit tests + integration tests
-│   ├── eval/                       # retrieval eval harness + results
-│   ├── benchmarks/                 # GraphRAG vs vector RAG harness · public/ HotpotQA & 2Wiki loaders · procedural/ Procedural Graphs harness
-│   ├── lab_runs/                   # Lab run directories + uploaded QA files (gitignored)
-│   ├── requirements.txt            # batteries-included providers
-│   └── requirements-providers.txt  # opt-in cloud SDKs (`make providers`)
-├── frontend/
-│   └── src/app/
-│       ├── lib/                    # typed API client, types, constants
-│       └── components/             # GraphPanel · ProceduralPanel · LabPanel (arms · estimate · leaderboard · Pareto) · ChatPanel (Chat | Navigator) · FileUpload · Inspector · ThemesPanel
-├── packages/
-│   └── synapse-graphrag/           # 🤖 MCP server · CLI · async Python client (PyPI: synapse-graphrag)
-├── scripts/                        # release checks (versions, changelog) + branch-protection ruleset
-├── docs/mcp.md                     # MCP / CLI / SDK guide
-├── docs/procedural-graphs.md       # procedural memory: guidance, the Navigator, self-evolution, limits
-├── docs/lab.md                     # Synapse Lab: arms, packer, leaderboard metrics, spend controls, Batch
-├── docs/finops.md                  # cost model: where a GraphRAG dollar goes, and the knob for each
-├── docs/ai-safety.md               # the `AI Safety` theme and `safety_brief` prompt
-├── .devcontainer/                  # one-click Codespaces environment
-├── .github/
-│   └── workflows/                  # ci.yml · release.yml (tag → GHCR images, GitHub Release, PyPI)
-├── docker-compose.yml              # neo4j + backend + frontend (+ `--profile mcp`)
-└── ARCHITECTURE.md · DEPLOYMENT.md · CONTRIBUTING.md · CHANGELOG.md
+backend/app/         FastAPI app: routers, services (ingestion, retrieval, themes, procedural memory), lab/
+backend/scripts/     demo seed and demo graph
+backend/tests/       unit tests and tests/integration
+frontend/src/app/    Next.js UI
+packages/synapse-graphrag/   MCP server, CLI, Python client (Apache-2.0)
+docs/                reference documentation and screenshots
 ```
 
----
+## 6. Development and quality
 
-## 🤝 Contributing
+| Suite | Command | Size | External dependencies |
+| --- | --- | --- | --- |
+| Backend unit | `make test` | 2,149 tests collected, including the 108 in `tests/integration`; those that need Neo4j or the fastembed model are skipped unless `SYNAPSE_IT=1` | none: fake embedder, no database, no network, no LLM |
+| Backend integration | `make test-int` | 108 tests | a Neo4j at `localhost:7687` that the suite wipes, and the fastembed model |
+| Client package | `make mcp-test` | 218 tests, plus ruff | none |
+| Lint | `make lint` | ruff (backend), ESLint and `tsc --noEmit` (frontend); there are no frontend tests | none |
 
-PRs are genuinely welcome — and the project is structured so a first contribution is easy to land.
+Sizes were measured at commit `def7fab`. CI ([ci.yml](./.github/workflows/ci.yml)) runs five jobs
+on every push to `main` and every pull request: backend lint and unit tests; backend integration
+tests against a Neo4j service container; frontend lint, typecheck and build; client package lint,
+tests and build; Docker image builds. A pushed `v*` tag builds the release: images on GHCR and a
+GitHub Release with the client wheel and sdist.
 
-```bash
-make providers   # optional: the extra provider SDKs
-make test        # what CI runs
-make lint
-```
+These operations delete data without asking. Run them only against a Neo4j instance you can lose:
 
-Start with **[CONTRIBUTING.md](./CONTRIBUTING.md)** (dev setup, conventions, and the
-[add-a-provider walkthrough](./CONTRIBUTING.md#add-a-new-ai-provider-in-20-lines)), and read the
-[Code of Conduct](./CODE_OF_CONDUCT.md). Security issues go to [SECURITY.md](./SECURITY.md).
+| Operation | Deletes |
+| --- | --- |
+| `make demo`, `make demo-local` | All `:Entity`, `:Community` and `:Chunk` nodes |
+| `make benchmark` | All `:Entity`, `:Community` and `:Chunk` nodes at `localhost:7687` |
+| `make eval`, `make test-int` | Every node at `localhost:7687`, procedural graphs included |
+| **Clear Database** in the UI, `DELETE /api/graph` | Every node except the procedural graphs |
+| `docker compose down -v` | The Neo4j data and log volumes |
 
-**Zero-setup contributing:** [![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-181717?logo=github)](https://codespaces.new/ahmedmaaloul/synapse) — Python 3.12, Node 20, all dependencies, ports forwarded, `.env` pre-created. Nothing to install locally.
+**Evaluation status.** A retrieval smoke test ([backend/eval](./backend/eval/)) and a small
+retrieval benchmark ([backend/benchmarks](./backend/benchmarks/results.md), 14 multi-hop
+questions over 34 passages) are in the repository. In that benchmark, a plain passage baseline matches the shipped
+graph path on every metric while reading less text. The repository contains no result that
+shows graph retrieval ahead of passage retrieval at a matched context budget; the Lab exists to
+measure that trade-off on your own data.
 
----
+Local development, the Codespaces devcontainer, per-subsystem test counts, the release procedure
+and the full evaluation table: [docs/development.md](./docs/development.md).
 
-## 🗺️ Roadmap
+## 7. Known limitations
 
-- [x] Multi-hop retrieval (2+ hop reasoning paths)
-- [x] Entity resolution with embedding-similarity merging
-- [x] MCP server, CLI & Python client (`synapse-graphrag`)
-- [x] `AI Safety` extraction theme + `safety_brief` MCP prompt
-- [x] Procedural memory — Procedural Graphs: step-local guidance, the GraphRAG Navigator agent, self-evolution with version history & rollback
-- [x] Synapse Lab — retrieval approaches side by side on your own data: evidence floors, one packer, one reader, a $-per-correct leaderboard, OpenAI Batch reader & ingest
-- [ ] More Lab arms, each cited and labelled "-style" when it is a re-implementation
-- [ ] A Lab reader on non-OpenAI providers (today the reader and Batch mode use the OpenAI API)
-- [ ] Measure procedural guidance on HotpotQA with the navigator (tokens per correct answer) — a comparison between systems, not a reproduction of the paper's tables
-- [ ] Learn from recorded agent trajectories (today they are stored, but evolution learns only from its own rollouts)
-- [ ] Publish to the MCP Registry & PyPI (trusted publishing)
-- [ ] Per-answer cost accounting across providers (FinOps)
-- [ ] Per-document management (list / delete individual sources)
-- [ ] Ingest `.docx` / `.md` / raw text and URLs
-- [ ] Hosted live demo
-- [ ] More providers — [request one](https://github.com/ahmedmaaloul/synapse/issues/new?template=provider_request.yml)
+This section lists the most important limitations. The complete list is in
+[docs/known-limitations.md](./docs/known-limitations.md).
 
----
+- **No authentication.** The backend and the MCP HTTP transport have no authentication and no
+  rate limiting. Anyone who can reach port 8000 can upload documents, delete the graph and spend
+  the configured API keys: chat, ingestion and the Navigator call the chat model, and a Lab run
+  spends `OPENAI_API_KEY` up to a `max_usd` cap that the caller chooses (at most 100,000 USD).
+  Docker Compose publishes ports 3000, 8000, 7474 and 7687 on all host interfaces, and Neo4j
+  keeps the password `synapse_secret` unless `NEO4J_PASSWORD` is changed before the first start.
+- **Single process.** Ingest jobs, theme rebuilds and Lab job state live in one process. Jobs are
+  lost on restart, and the stack is not built for more than one backend replica.
+- **Ingestion.** PDF only, no OCR. Text beyond `MAX_CHUNKS` (40 chunks, at most 32,200
+  characters) is dropped, and the UI does not report the cut. The upload form preselects the
+  theme Personal CV / Resume; choose the theme that fits the document before uploading. Themes are
+  rebuilt from scratch after every upload, so the cost of an ingest grows with the corpus.
+  Individual documents cannot be listed or deleted.
+- **Identity by name.** An entity is identified by its exact name; two same-named entities of
+  different types become one node.
+- **Embedding model fixed at the first start.** The Neo4j vector indexes are created once with
+  `EMBEDDING_DIM` dimensions and never resized. Switching `EMBEDDING_PROVIDER` or `EMBEDDING_DIM`
+  later means `docker compose down -v`, which deletes all data including evolved procedural graph
+  versions, and re-ingesting ([docs/configuration.md](./docs/configuration.md#2-embedding-model)).
+  The Gemini embedding default `models/text-embedding-004` is listed by Google as shut down; with
+  `EMBEDDING_PROVIDER=gemini`, set `GEMINI_EMBEDDING_MODEL` and `EMBEDDING_DIM`.
+- **Retrieval.** Query routing uses English regular expressions. Seeds have no relevance floor, and
+  retrieval uses only the current question, not earlier turns. `/api/chat` applies no overall
+  context budget.
+- **Navigator with small models.** When the screenshots were taken (2026-09-26), gpt-5-nano at
+  minimal reasoning effort stopped at the 8-step limit without an answer in 3 of 3 runs on 2-hop
+  and 3-hop demo questions (an observation, not a benchmark). Raise `AGENT_MAX_STEPS` (or
+  `max_steps`, 1 to 20, per request) or use a stronger model; every step is one LLM call.
+- **Procedural Graphs.** The results of the Procedural Graphs paper have not been reproduced, and
+  no procedural benchmark results are published.
+- **Lab.** The reader and Batch mode use the OpenAI API only. Prices come from a hand-recorded
+  table and are never fetched. Answers are scored by Exact Match and F1 only. The ranking column,
+  $ per 100 correct, counts reader dollars only; the extraction cost of the graph that N1 and the
+  graph arms read enters only an amortized cost-of-pass, and only when it is passed with
+  `--ingest-usd` (CLI or API).
+- **Demo graph.** It has no source passages, so the arms that read passages (N2, `bm25`, `dense`,
+  `ppr`) and the tools `read_sources` and `search_passages` return nothing on it.
+- **Distribution.** The client package is not on PyPI. The published `v0.4.0` artefacts (GitHub
+  Release, GHCR images) predate the current licences, Procedural Graphs and the Lab, which exist
+  only on `main`.
 
-## 📄 Licensing
+## 8. Documentation
 
-Synapse is **source-available**: free for noncommercial use, licensed for commercial use — and the
-client package is Apache-2.0.
+| Document | Content |
+| --- | --- |
+| [docs/configuration.md](./docs/configuration.md) | Chat and embedding providers, backend settings, pinned versions |
+| [docs/mcp.md](./docs/mcp.md) | MCP server, CLI and Python client: per-host setup, transports, tools |
+| [docs/procedural-graphs.md](./docs/procedural-graphs.md) | Procedural memory, the Navigator and evolution |
+| [docs/lab.md](./docs/lab.md) | Synapse Lab: arms, packer, reader, metrics, spend controls, run directories |
+| [docs/finops.md](./docs/finops.md) | Cost model: where LLM and embedding calls happen and the setting for each |
+| [docs/ai-safety.md](./docs/ai-safety.md) | The "AI Safety" extraction theme and the `safety_brief` prompt |
+| [docs/development.md](./docs/development.md) | Local development, tests, CI, releases, evaluation status |
+| [docs/known-limitations.md](./docs/known-limitations.md) | All known limitations by area |
+| [ARCHITECTURE.md](./ARCHITECTURE.md), [DEPLOYMENT.md](./DEPLOYMENT.md) | Design decisions; hosted deployment and the MCP server behind a proxy |
+| [CHANGELOG.md](./CHANGELOG.md) | Changes per version, including `[Unreleased]` |
 
-### ✅ Free for noncommercial use under [PolyForm Noncommercial 1.0.0](./LICENSE) — no permission, no cost, no registration
+## 9. Contributing
 
-Personal projects, research, study, teaching, hobby and amateur pursuits, and use by universities,
-public research organisations, charities and the other nonprofits the license names (public-safety,
-health and environmental organisations), and government institutions. Use it, **fork it**, study it,
-modify it, self-host it and contribute back. There is no copyleft, so you may keep your changes
-private. What it asks in return: keep the license and the attribution — the `Required Notice:` line
-at the top of [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE) — with every copy.
+- Read [CONTRIBUTING.md](./CONTRIBUTING.md) and the [Code of Conduct](./CODE_OF_CONDUCT.md).
+  Before a pull request, run `make test`, `make lint` and, for package changes, `make mcp-test`.
+- Report bugs and request providers through the
+  [issue forms](https://github.com/ahmedmaaloul/synapse/issues/new/choose).
+- Every pull request asks you to accept the [Contributor License Agreement](./CLA.md). You keep
+  your copyright and allow the maintainer to distribute the contribution under the PolyForm
+  Noncommercial licence, the commercial licence and, for the client package, Apache-2.0.
 
-### 💼 A commercial license is needed if…
+## 10. Licence
 
-…you use it **at or for a business** — in production or internally, on-prem or as SaaS — or **ship it
-inside a product**. Under this license, use by or for a company is commercial even when it is purely
-internal and nothing is ever redistributed: "we only run it on our own servers" still needs a license.
-Attribution is required either way (see [`NOTICE`](./NOTICE)).
+The Synapse core is source-available, not open source. The client package is licensed separately
+under Apache-2.0.
 
-### 🤖 The client package is Apache-2.0
+| Part | Licence |
+| --- | --- |
+| Core: backend, frontend, scripts, documentation | [PolyForm Noncommercial 1.0.0](./LICENSE), see also [NOTICE](./NOTICE) |
+| Client package `packages/synapse-graphrag` (MCP server, CLI, Python client) | [Apache-2.0](./packages/synapse-graphrag/LICENSE) |
+| Commit `91ee2f2` (version 0.2.0) and the commits before it | MIT |
+| The commits after `91ee2f2` up to and including tag `v0.4.0` (versions 0.3.0 and 0.4.0) | AGPL-3.0-or-later |
 
-[`packages/synapse-graphrag/`](./packages/synapse-graphrag/) — the MCP server, CLI and Python SDK — is
-licensed under [Apache-2.0](./packages/synapse-graphrag/LICENSE) so agents and products can talk to
-Synapse with no obligations beyond Apache's. The backend it talks to is what the two paragraphs above
-are about.
+**Noncommercial use needs no commercial licence.** [LICENSE](./LICENSE) permits personal use for
+research, experiment and testing for the benefit of public knowledge, personal study, private
+entertainment, hobby projects, amateur pursuits or religious observance, without any anticipated
+commercial application, and use by charitable organisations, educational institutions, public
+research organisations, public safety or health organisations, environmental protection
+organisations and government institutions. Anyone who
+receives a copy from you must also receive the licence terms (or their URL) and the
+`Required Notice:` line at the top of `LICENSE`; keeping `LICENSE` and `NOTICE` intact does both.
 
-**Only Ahmed Maaloul can grant a commercial license.** Email **<ahmed.maaloul@proton.me>** with the
-subject `[Commercial License] <your company>`. Startups and academic spin-outs: say so, pricing is
-flexible, and evaluation licenses are available on request. Full details and FAQ:
-**[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md)**. Versions released before this change stay as
-published — MIT up to commit `91ee2f2`, AGPL-3.0-or-later for 0.3.0 and 0.4.0.
+**Commercial use needs a commercial licence**, which only Ahmed Maaloul can grant.
+[COMMERCIAL-LICENSE.md](./COMMERCIAL-LICENSE.md) explains the licensor's reading: use at or for a
+for-profit business, including purely internal use, is commercial. Where that page and `LICENSE`
+differ, `LICENSE` applies. The Apache-2.0 client package can be embedded in any software,
+commercial or not, with no obligations beyond Apache-2.0's; the Synapse backend it talks to stays
+under the core licence, so commercial use of that backend still needs a commercial licence.
 
-<sub>Plain-English summary, not legal advice. [`LICENSE`](./LICENSE) is the binding document.</sub>
+This section is a summary, not legal advice. The licence files are binding.
 
----
+## 11. Author and contact
 
-<div align="center">
+Synapse is written and maintained by Ahmed Maaloul
+([github.com/ahmedmaaloul](https://github.com/ahmedmaaloul)).
 
-**Synapse** — created and maintained by **[Ahmed Maaloul](https://github.com/ahmedmaaloul)**
-&lt;ahmed.maaloul@proton.me&gt;
+| Purpose | Contact |
+| --- | --- |
+| Bugs and feature requests | [GitHub issues](https://github.com/ahmedmaaloul/synapse/issues) |
+| Security reports | <ahmed.maaloul@proton.me>, subject `[SECURITY] Synapse: <short summary>`, or a private GitHub security advisory; see [SECURITY.md](./SECURITY.md) |
+| Commercial licensing | <ahmed.maaloul@proton.me>, subject `[Commercial License] <your company>` |
 
-Copyright © 2026 Ahmed Maaloul · SPDX-License-Identifier: `PolyForm-Noncommercial-1.0.0` (core) · client `Apache-2.0`
-· <https://github.com/ahmedmaaloul/synapse>
-
-If this saved you time, a ⭐ helps other people find it.
-
-</div>
+Copyright (c) 2026 Ahmed Maaloul. SPDX: `PolyForm-Noncommercial-1.0.0` (core), `Apache-2.0`
+(client package).

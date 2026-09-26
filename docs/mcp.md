@@ -3,12 +3,13 @@
 `synapse-graphrag` is the client side of Synapse: an **MCP server**, a **CLI** and an **async
 Python client**, all thin HTTP wrappers over the backend's REST/SSE API. Nothing in the package
 talks to Neo4j or to an LLM directly. The backend keeps the credentials, the schema and the
-retrieval logic, and the package gives every agent host the same twelve tools: eight over the
-knowledge graph, and four over [procedural memory](./procedural-graphs.md).
+retrieval logic, and the package gives every agent host the same thirteen tools: eight over the
+knowledge graph, four over [procedural memory](./procedural-graphs.md) and one read-only tool over
+[Synapse Lab](./lab.md) runs (`synapse_lab_runs`).
 
 | | |
 | --- | --- |
-| PyPI | `synapse-graphrag` (module `synapse_graphrag`) · Python ≥ 3.11 · runtime deps: `mcp`, `httpx`, `pydantic` |
+| Package | `synapse-graphrag` (module `synapse_graphrag`), not yet published on PyPI · Python ≥ 3.11 · runtime deps: `mcp`, `httpx`, `pydantic` |
 | Source | [`packages/synapse-graphrag/`](../packages/synapse-graphrag/) |
 | Console scripts | `synapse-graphrag` (CLI) · `synapse-mcp` (MCP server) |
 | Docker image | `ghcr.io/ahmedmaaloul/synapse-mcp` — see [Docker](#docker) |
@@ -232,9 +233,10 @@ docker run --rm synapse-mcp ls /app/LICENSE /app/NOTICE
 
 ## Tools reference
 
-All twelve tools are namespaced `synapse_*`. This section covers the eight that work on the
+All thirteen tools are namespaced `synapse_*`. This section covers the eight that work on the
 knowledge graph; the four procedural-memory tools are in the
-[next section](#procedural-memory-tools).
+[next section](#procedural-memory-tools), and `synapse_lab_runs` (read-only; lists Lab runs or
+returns one run's report, and never starts a run) is described in [lab.md](./lab.md).
 
 - **Read-only tools** are annotated `readOnlyHint=true`, so hosts can call them without a
   confirmation prompt. All of them except `synapse_ask` and `synapse_agent_ask`, which bill
@@ -816,7 +818,8 @@ All optional; the CLI and the MCP server read the same ones.
 - **Retrieval returns nothing / obviously wrong neighbours after switching embedding providers.**
   `EMBEDDING_DIM` must match the model (fastembed 384, Gemini/Vertex 768, Titan/Cohere 1024,
   OpenAI `text-embedding-3-small` 1536) and every vector must come from the same model —
-  re-ingest, or `make demo` to re-seed. See the README's embedding table.
+  re-ingest, or `make demo` to re-seed. See the embedding table and the switching procedure in
+  [configuration.md](./configuration.md#2-embedding-model).
 - **The host says the server started but lists no tools.** With stdio, anything written to
   stdout breaks the protocol; `synapse-mcp` logs to stderr only, so this usually means a wrapper
   script printed something. Run `synapse-mcp --help` in a terminal to make sure the entry point

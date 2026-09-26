@@ -75,7 +75,7 @@ Verify: `curl https://synapse-backend.fly.dev/health/ready` → `{"neo4j":"up"}`
 
 Any of the ten providers works — set `LLM_PROVIDER` plus that provider's
 credentials as secrets (full list in [`.env.example`](./.env.example) and the
-[README provider matrix](./README.md#-provider-matrix)).
+[provider table](./docs/configuration.md#1-chat-model)).
 
 | If you want… | Set | Notes |
 | --- | --- | --- |

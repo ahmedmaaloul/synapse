@@ -22,7 +22,13 @@ Requires a running Synapse backend (`make up` in the repo, default `http://local
 
 ## 60-second install
 
-The server runs from PyPI with [`uv`](https://docs.astral.sh/uv/) — nothing to clone.
+The package is not published on PyPI yet. Until it is, run the server from the repository with
+[`uv`](https://docs.astral.sh/uv/), without cloning it:
+`uvx --from "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag" synapse-graphrag mcp`.
+The short forms in the snippets below and in the output of `install-config`
+(`uvx synapse-graphrag mcp`, `pipx install synapse-graphrag`, `pip install synapse-graphrag`)
+work only once the package is on PyPI. Until then, pass the `--from` argument above to `uvx`, and
+install with `pip install "git+https://github.com/ahmedmaaloul/synapse.git#subdirectory=packages/synapse-graphrag"`.
 `synapse-graphrag install-config --client <name>` prints the exact snippet for each host.
 
 **Claude Code**

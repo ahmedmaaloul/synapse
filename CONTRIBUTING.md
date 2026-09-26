@@ -191,8 +191,11 @@ forgetting step 2 fails CI on its own.
 
 - **`.env.example`** — a new commented block: which vars are required, which are optional, and the
   link to get a key. Match the existing grouping.
-- **`README.md`** — one row in the [provider matrix](./README.md#-provider-matrix): provider, env
-  value, credential, free tier, install.
+- **`docs/configuration.md`** — one row in the [chat provider table](./docs/configuration.md#1-chat-model):
+  provider, env value, required settings, model setting and default, JSON mode, default image.
+- **`README.md`** — one row in the provider table of
+  [2.4 Connecting a model](./README.md#24-connecting-a-model): provider, env value, credentials,
+  default image.
 - **`backend/requirements-providers.txt`** — only if the SDK is heavy or optional. Pin it exactly,
   and add a comment saying which version of `langchain-core` it resolves against. See
   [the dependency constraint](#the-dependency-constraint-you-must-respect).
@@ -223,7 +226,7 @@ Same shape, one extra step, because embedding construction is cached.
 4. `_load_embeddings()` — add matching keyword parameters (with defaults) and your branch.
    ⚠️ This function is `@lru_cache`d, so **only hashable primitives** may be parameters — that's
    exactly why the settings object is exploded into scalars rather than passed whole.
-5. Document the **embedding dimension** everywhere: `.env.example`, the README embeddings table, and
+5. Document the **embedding dimension** everywhere: `.env.example`, the [embedding table](./docs/configuration.md#2-embedding-model), and
    the error message. `EMBEDDING_DIM` sizes the Neo4j vector index, and a mismatch breaks retrieval
    silently — this is the single most common way to get an embedding provider wrong.
 
