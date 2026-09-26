@@ -3,7 +3,7 @@
                              ATTRIBUTION NOTICE
 ================================================================================
 
-Synapse — a GraphRAG knowledge-graph explorer (FastAPI + Neo4j + Next.js)
+Synapse, a GraphRAG knowledge-graph explorer (FastAPI + Neo4j + Next.js)
 
 Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
 
@@ -93,7 +93,7 @@ CLIENT PACKAGE
 --------------------------------------------------------------------------------
 
 The client package in packages/synapse-graphrag/ — the synapse-graphrag MCP
-server, CLI and Python SDK, published to PyPI as "synapse-graphrag" — is
+server, CLI and Python SDK (Python package "synapse-graphrag") — is
 licensed separately under the Apache License, Version 2.0
 (SPDX: Apache-2.0), so that agents and products can talk to Synapse with no
 obligations beyond Apache's. It ships its own LICENSE and NOTICE files in

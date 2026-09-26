@@ -11,7 +11,7 @@ Report privately to:
 
 **ahmed.maaloul@proton.me** (Ahmed Maaloul)
 
-Use the subject line `[SECURITY] Synapse — <short summary>`. If you
+Use the subject line `[SECURITY] Synapse: <short summary>`. If you
 prefer, you may instead use GitHub's private
 [Security Advisories](https://github.com/ahmedmaaloul/synapse/security/advisories/new)
 flow on the canonical repository.
@@ -71,9 +71,8 @@ minor versions are not backported.
 | Version | Supported |
 | --- | --- |
 | `main` (unreleased) | Yes |
-| 1.x (latest minor) | Yes |
-| 1.x (older minors) | No — please upgrade |
-| < 1.0 (pre-release) | No |
+| 0.4.x (latest release) | Yes |
+| < 0.4 | No, please upgrade |
 
 If you run a fork or a modified deployment, you are responsible for applying
 upstream security fixes to your own build.

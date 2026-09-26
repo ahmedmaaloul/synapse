@@ -15,7 +15,7 @@ const spaceGrotesk = Space_Grotesk({
   display: "swap",
 });
 
-const SITE_TITLE = "Synapse — GraphRAG Knowledge Explorer";
+const SITE_TITLE = "Synapse · GraphRAG Knowledge Explorer";
 const SITE_DESCRIPTION =
   "Turn documents into a queryable Neo4j knowledge graph and chat with it using vector-grounded GraphRAG.";
 const SITE_URL = "https://github.com/ahmedmaaloul/synapse";
