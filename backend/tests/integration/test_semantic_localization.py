@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Calibration check: semantic localization with the REAL default embedder.
 
 The unit tests use a keyword embedder, so they cannot tell whether

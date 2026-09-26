@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Procedural Guidance (the online half of Procedural Graphs)
+Synapse: Procedural Guidance (the online half of Procedural Graphs)
 
 At every step of a multi-step task the agent is shown the part of its
 Procedural Graph that matters *now* (Lu, Chen, Wu, Arık — "Procedural Graphs:

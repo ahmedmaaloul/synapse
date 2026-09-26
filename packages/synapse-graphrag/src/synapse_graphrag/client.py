@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — async Python client
+Synapse: async Python client
 
 One implementation of the backend's wire format, shared by the MCP server and
 the CLI: the JSON endpoints, the Server-Sent-Events streams behind ``/api/chat``

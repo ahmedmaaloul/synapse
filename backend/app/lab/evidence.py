@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the evidence shape every arm returns.
+Synapse Lab: the evidence shape every arm returns.
 
 An arm never renders a prompt and never cuts to a budget. It returns a list of
 *ranked units* — one fact, one relation, one path, one source excerpt — each

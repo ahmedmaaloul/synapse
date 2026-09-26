@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — token & cost accounting for the public benchmark
+Synapse: token & cost accounting for the public benchmark
 
 The internal benchmark (``benchmarks/run_benchmark.py``) is free: it ships a
 pre-computed extraction and never calls a model. The HotpotQA harness cannot be,

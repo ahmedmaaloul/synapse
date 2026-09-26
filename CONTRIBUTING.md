@@ -270,7 +270,7 @@ Then open the PR using the [template](./.github/PULL_REQUEST_TEMPLATE.md) — it
   ```python
   # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
   # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-  # Synapse — https://github.com/ahmedmaaloul/synapse
+  # Synapse (https://github.com/ahmedmaaloul/synapse)
   ```
 
   Files under `packages/synapse-graphrag/` — the Apache-2.0 client package — use

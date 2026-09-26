@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Procedural Graphs benchmark (does procedural memory help the Navigator?)
+Synapse: Procedural Graphs benchmark (does procedural memory help the Navigator?)
 
 WHY THIS EXISTS. Synapse implements Procedural Graphs (Lu, Chen, Wu, Arık,
 "Procedural Graphs: Self-Evolving Execution Structures for LLM Agents",

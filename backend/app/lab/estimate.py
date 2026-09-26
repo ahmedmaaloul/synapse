@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the dry-run estimator. Free: no model, no Neo4j, no network.
+Synapse Lab: the dry-run estimator. Free: no model, no Neo4j, no network.
 
 Before any spend, a Lab run is priced per PHASE and per (arm × budget) CELL:
 

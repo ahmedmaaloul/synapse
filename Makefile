@@ -1,4 +1,4 @@
-# Synapse — developer task runner
+# Synapse: developer task runner
 # Copyright (c) 2026 Ahmed Maaloul · PolyForm-Noncommercial-1.0.0
 # https://github.com/ahmedmaaloul/synapse
 #

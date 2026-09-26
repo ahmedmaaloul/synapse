@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the ONE packer: ranked evidence units in, budgeted context out.
+Synapse Lab: the ONE packer: ranked evidence units in, budgeted context out.
 
 Every arm's evidence goes through this function and nothing else, so the arms
 are compared on what they retrieve, never on how it is laid out or measured.

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Zero-API-Key Demo Seeder
+Synapse: Zero-API-Key Demo Seeder
 
 Loads a hand-curated, pre-extracted knowledge graph (``demo_graph.json`` — a
 brief history of AI, from Babbage's Analytical Engine to GraphRAG) straight into

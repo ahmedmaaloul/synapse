@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Entity Resolution
+Synapse: Entity Resolution
 
 LLM extraction is *locally* consistent but *globally* sloppy: chunk 1 says
 "Ahmed", chunk 7 says "Ahmed Maaloul"; one paragraph writes "Postgres", the next

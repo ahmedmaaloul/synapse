@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — MCP server
+Synapse: MCP server
 
 Exposes a Synapse knowledge graph to any Model Context Protocol host: Claude
 Code, Claude Desktop, Cursor, VS Code, Windsurf, or anything that speaks stdio

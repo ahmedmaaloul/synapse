@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Tests for offline self-evolution (Algorithm 1 of arXiv:2609.09153).
 
 Hermetic: ``run`` is a fake agent whose answers depend on the graph it is

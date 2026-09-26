@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Pluggable LLM Provider
+Synapse: Pluggable LLM Provider
 
 A single factory that returns a LangChain chat model or embeddings object for the
 configured backend. This is what makes the AI layer *hot-swappable* between:

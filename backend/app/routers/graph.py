@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Graph Router
+Synapse: Graph Router
 
 Serves graph data for the force-graph visualization, exposes the Louvain
 *communities* (the corpus-level "themes" that power global search), and supports

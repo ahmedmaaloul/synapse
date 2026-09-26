@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """The Lab's OpenAI Batch runner, against a fake Batch service.
 
 Hermetic: ``FakeBatchService`` stands in for ``AsyncOpenAI`` (files.create /

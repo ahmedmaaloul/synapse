@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 #
 # Release pipeline. Pushing a `vX.Y.Z` tag (see CONTRIBUTING.md, "Cutting a
 # release") builds and publishes everything for that version:

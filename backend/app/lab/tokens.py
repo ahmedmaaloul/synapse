@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — token counting with a real tokenizer, and honesty when there isn't one.
+Synapse Lab: token counting with a real tokenizer, and honesty when there isn't one.
 
 A token budget is only a budget if it is measured in the reader's own units.
 ``chat_engine`` budgets in characters because it hands context to somebody

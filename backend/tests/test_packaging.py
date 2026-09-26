@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Regression tests for packaging, attribution, and the shared DB fixture.
 
 Three defects these lock down:
@@ -183,7 +183,7 @@ class TestContainerAttribution:
 SPDX_HEADER = (
     "# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0",
     "# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>",
-    "# Synapse — https://github.com/ahmedmaaloul/synapse",
+    "# Synapse (https://github.com/ahmedmaaloul/synapse)",
 )
 _SKIP_DIRS = {"__pycache__", ".venv", "venv", ".pytest_cache", ".ruff_cache", "node_modules"}
 

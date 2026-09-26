@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-synapse-graphrag — MCP server, CLI and async client for Synapse.
+synapse-graphrag: MCP server, CLI and async client for Synapse.
 
 Synapse turns documents into a Neo4j knowledge graph and answers questions with
 GraphRAG. This package is the *client side*: a thin HTTP layer over the backend

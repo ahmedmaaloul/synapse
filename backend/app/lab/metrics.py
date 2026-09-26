@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — leaderboard metrics: quality, what it cost, and what it beat.
+Synapse Lab: leaderboard metrics: quality, what it cost, and what it beat.
 
 Pure and offline: everything here reads stored per-question rows, so a run can
 be re-scored as often as you like without Neo4j or a model.

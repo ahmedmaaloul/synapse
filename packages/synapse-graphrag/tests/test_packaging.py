@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Packaging and attribution invariants.
 
 This package is Apache-2.0 on its own — the backend it talks to is not — so the
@@ -24,7 +24,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SPDX_HEADER = (
     "# SPDX-License-Identifier: Apache-2.0\n"
     "# Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>\n"
-    "# Synapse — https://github.com/ahmedmaaloul/synapse\n"
+    "# Synapse (https://github.com/ahmedmaaloul/synapse)\n"
 )
 
 

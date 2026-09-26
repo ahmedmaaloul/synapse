@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — GraphRAG Navigator (a ReAct agent that walks the knowledge graph)
+Synapse: GraphRAG Navigator (a ReAct agent that walks the knowledge graph)
 
 ``/api/chat`` answers in one shot: retrieve a subgraph, then generate. That is
 the right shape for most questions, but it leaves no room for a *strategy*:

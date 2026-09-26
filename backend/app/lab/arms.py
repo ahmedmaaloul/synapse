@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the arms: retrieval approaches compared side by side.
+Synapse Lab: the arms: retrieval approaches compared side by side.
 
 Every arm answers ONE question the same way: ``await arm.retrieve(question,
 k=..., seed=...)`` returns an :class:`~app.lab.evidence.Evidence` of RANKED

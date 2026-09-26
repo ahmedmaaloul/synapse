@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 #
 # BUILD CONTEXT IS THE REPO ROOT, like the backend and frontend images, so
 # compose, CI and the release workflow build all three the same way. The image

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — GraphRAG vs. vector RAG on HotpotQA (a PUBLIC benchmark)
+Synapse: GraphRAG vs. vector RAG on HotpotQA (a PUBLIC benchmark)
 
 WHY THIS EXISTS. ``benchmarks/run_benchmark.py`` is honest about its own fatal
 limitation: 34 passages and 14 questions, written by the same process that built

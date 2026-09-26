@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — compare retrieval approaches side by side on your own data.
+Synapse Lab: compare retrieval approaches side by side on your own data.
 
 FinOps first: every arm is scored on answer quality AND on what it costs, next
 to three evidence floors (closed-book, vocabulary null, random context) so a

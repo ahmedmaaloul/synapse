@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — QA answer metrics (Exact Match / token F1)
+Synapse: QA answer metrics (Exact Match / token F1)
 
 The procedural-graph evolution loop accepts or rejects a candidate graph on a
 validation *score*, and the benchmark compares systems on the same number, so

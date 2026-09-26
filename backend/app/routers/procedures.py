@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Procedures Router (procedural memory + the GraphRAG Navigator)
+Synapse: Procedures Router (procedural memory + the GraphRAG Navigator)
 
 The HTTP face of Procedural Graphs (Lu, Chen, Wu, Arık, arXiv:2609.09153).
 The client package, the MCP server, the CLI and the UI all code against these

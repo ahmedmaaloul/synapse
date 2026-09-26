@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — GraphRAG vs. vector RAG benchmark
+Synapse: GraphRAG vs. vector RAG benchmark
 
 Answers the only question that matters for a GraphRAG project: *does the graph
 actually buy you anything?* Five retrieval systems — reported as seven rows,

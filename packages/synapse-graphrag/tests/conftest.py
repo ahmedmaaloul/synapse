@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Shared fixtures — a fake Synapse backend behind ``httpx.MockTransport``.
 
 Hermetic by construction: no network, no Neo4j, no LLM. The fake speaks the

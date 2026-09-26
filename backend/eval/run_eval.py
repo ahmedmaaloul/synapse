@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Retrieval Evaluation Harness
+Synapse: Retrieval Evaluation Harness
 
 Measures how well hybrid GraphRAG retrieval surfaces the *right* entities for a
 question. Seeds a fixture graph into Neo4j, runs ``retrieve_subgraph`` for each

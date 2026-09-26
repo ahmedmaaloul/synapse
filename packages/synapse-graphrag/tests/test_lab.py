@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """The Synapse Lab through the client and ``synapse-graphrag lab`` against a fake backend.
 
 The fake speaks routers/lab.py's wire format (see ``conftest.py``). What matters

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Procedural Graph self-evolution (offline; Algorithm 1)
+Synapse: Procedural Graph self-evolution (offline; Algorithm 1)
 
 A hand-written procedure encodes one person's intuition about how to use the
 graph. This module learns the procedure from outcomes instead. It implements

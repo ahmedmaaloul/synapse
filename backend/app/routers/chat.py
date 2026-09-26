@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Chat Router
+Synapse: Chat Router
 
 GraphRAG conversational endpoint. Streams Server-Sent Events so the client
 receives, in order: a ``citations`` event (entities that ground the answer),

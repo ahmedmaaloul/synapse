@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the OpenAI Batch API runner: half price, 24-hour window, resumable.
+Synapse Lab: the OpenAI Batch API runner: half price, 24-hour window, resumable.
 
 The Batch API takes a JSONL file of ``chat.completions`` requests, runs it
 within 24 hours and bills it at HALF the realtime rate

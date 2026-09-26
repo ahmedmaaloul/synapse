@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 // Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-// Synapse — https://github.com/ahmedmaaloul/synapse
+// Synapse (https://github.com/ahmedmaaloul/synapse)
 //
-// Synapse Lab — pure formatting and geometry helpers shared by the Lab view.
+// Synapse Lab: pure formatting and geometry helpers shared by the Lab view.
 
 import type { LabBudget, LabFrontierPoint } from "./types";
 

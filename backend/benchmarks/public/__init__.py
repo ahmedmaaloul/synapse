@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Evaluation against *public* benchmarks — corpora and questions from outside Synapse.
 
 ``benchmarks/`` (the sibling package) is honest but self-authored: 34 passages and

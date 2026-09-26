@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Head-to-head benchmark: Synapse GraphRAG vs. naive vector RAG.
 
 See ``benchmarks/README.md`` for the methodology and ``run_benchmark.py`` for

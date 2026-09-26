@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — command-line interface (``synapse-graphrag``)
+Synapse: command-line interface (``synapse-graphrag``)
 
 A thin argparse front-end over :class:`synapse_graphrag.client.SynapseClient`
 for people and scripts: check the backend, ask a question, pull budgeted

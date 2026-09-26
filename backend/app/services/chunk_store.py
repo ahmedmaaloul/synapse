@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Chunk Store (source text units)
+Synapse: Chunk Store (source text units)
 
 Extraction distills prose into ~15-word entity ``description`` fields and then
 throws the source text away. An honest benchmark showed exactly what that costs:

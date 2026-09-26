@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """2WikiMultihopQA (dev): acquisition, deterministic capped sampling, and a thin
 runner that scores it with the EXACT HotpotQA harness — a replication study.
 

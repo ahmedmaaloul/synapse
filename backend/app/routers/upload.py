@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Upload Router
+Synapse: Upload Router
 
 Ingestion is a background job: ``POST /api/upload`` validates + parses the PDF,
 starts extraction in the background, and returns a ``job_id`` immediately. The

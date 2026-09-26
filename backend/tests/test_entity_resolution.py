@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """Tests for entity resolution: clustering, canonical choice, Cypher merge, ingest wiring.
 
 Fully hermetic — no network, no LLM, no Neo4j. Embeddings are hand-written unit

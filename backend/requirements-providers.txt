@@ -1,4 +1,4 @@
-# Synapse — OPTIONAL AI provider SDKs
+# Synapse: OPTIONAL AI provider SDKs
 # ============================================
 # These are NOT needed to run Synapse. requirements.txt already ships the
 # "batteries-included" providers:

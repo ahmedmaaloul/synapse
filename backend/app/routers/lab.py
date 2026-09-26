@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse — Lab Router (compare retrieval approaches on your own data, FinOps-first)
+Synapse: Lab Router (compare retrieval approaches on your own data, FinOps-first)
 
 The HTTP face of ``app.lab``. The client package, the CLI and the UI code
 against these routes, so their names and shapes are a contract:

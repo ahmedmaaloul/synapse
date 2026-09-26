@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — ingest a corpus with its extraction calls sent through the Batch API.
+Synapse Lab: ingest a corpus with its extraction calls sent through the Batch API.
 
 The expensive half of building a graph is extraction: one LLM call per
 paragraph. The Batch API runs those calls at half price within 24 hours, so

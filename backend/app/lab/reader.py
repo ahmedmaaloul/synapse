@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # Copyright (c) 2026 Ahmed Maaloul <ahmed.maaloul@proton.me>
-# Synapse — https://github.com/ahmedmaaloul/synapse
+# Synapse (https://github.com/ahmedmaaloul/synapse)
 """
-Synapse Lab — the reader: ONE short-answer prompt for every arm.
+Synapse Lab: the reader: ONE short-answer prompt for every arm.
 
 Every arm's packed context is read by the same model, with the same system
 prompt, the same user template and the same output cap, so a difference in
